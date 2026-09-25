@@ -19,9 +19,19 @@ export const TABLE_TOUR: TourStep[] = [
     body: "Desk and board is where you plan and build. Floor and register is the exchange: every commodity book, the movers list, and a ticket to buy or sell. Both rooms feed the same sealed window, and nothing either room does takes effect until the countdown reaches zero.",
   },
   {
+    anchor: "first-moves",
+    title: "What the desk wants next",
+    body: "Sixty four orders and an empty ledger is the hardest moment in the game, so this panel names one thing at a time and takes you to the plot that can do it. It reads your own books, so it disappears the moment there is nothing left to nag about. If you never see it, you are already ahead of it.",
+  },
+  {
     anchor: "desk",
     title: "The operations desk",
-    body: "Every order in the game, sorted into planning, commerce, capital, labor, city hall and night work. Open one, fill in its fields, and seal it. The price beside each order is what it will cost at settlement. Seal as many as you like in a window, and the tick plays them all at once.",
+    body: "Every order in the game, sorted into planning, commerce, capital, labor, city hall and night work. Open one, fill in its fields, and seal it. The price beside each order is what it will cost at settlement. Seal as many as you like in a window, and the tick plays them all at once. The count on each phase tab reads as sealed over available, so a brass 2 over 11 means you have two orders in that phase.",
+  },
+  {
+    anchor: "queue",
+    title: "This window's desk",
+    body: "Your own sealed orders, listed under the desk you sealed them from, each with a button to pull it back. Rivals see the count and not the contents, which is the only reason a sealed window stays interesting.",
   },
   {
     anchor: "board",
@@ -32,11 +42,6 @@ export const TABLE_TOUR: TourStep[] = [
     anchor: "inspector",
     title: "The plot inspector",
     body: "Click any plot on the board and it opens here. Condition, particulate, what the plant draws, what it ships, what it wastes, the crew and its wage model. The buttons along the bottom seal a build, a retrofit, a scrubber, an insurance policy, escrow, a tender envelope, or a raid on somebody else's deed.",
-  },
-  {
-    anchor: "queue",
-    title: "This window's desk",
-    body: "Your own sealed orders, listed together, each with a button to pull it back. Rivals see the count and not the contents, which is the only reason a sealed window stays interesting.",
   },
   {
     anchor: "register",
@@ -59,6 +64,17 @@ export const TABLE_TOUR: TourStep[] = [
     body: "Only present while the tick is forced. It closes the window immediately, resolves the turn and prints the paper, which is how a table gets tested without waiting for the interval.",
   },
 ];
+
+/**
+ * The reminder for a director who has already been around the room, which is
+ * the four stops that move with the window. Every line here is the line the
+ * long walk uses, so the two cannot drift apart as the copy changes.
+ */
+const RECAP_ANCHORS = ["strip", "views", "desk", "board"];
+
+export const TABLE_RECAP: TourStep[] = TABLE_TOUR.filter((step) =>
+  RECAP_ANCHORS.includes(step.anchor),
+);
 
 export const LOBBY_TOUR: TourStep[] = [
   {

@@ -67,7 +67,7 @@ export function LobbyViewPanel({ lobby }: { lobby: LobbyView }) {
           ) : null}
           <button
             type="button"
-            onClick={startTour}
+            onClick={() => startTour()}
             className="border border-edge px-2 py-[2px] tracking-[0.14em] text-dim uppercase hover:text-ink"
           >
             Take the tour

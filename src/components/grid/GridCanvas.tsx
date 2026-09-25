@@ -6,7 +6,7 @@ import {
   BAND_TIERS,
   PLOT_COUNT,
   RECIPES,
-  TERRAIN_BANDS,
+  bandCensus,
   spriteStyle,
 } from "@/domain/constants";
 import type { CSSProperties } from "react";
@@ -294,19 +294,7 @@ export function GridCanvas({ state, selectedTileId, onSelect, highlightPlayerId 
 
 /** The bands, outermost first, with what each one will take. */
 export function ringLegend(): { ring: number; name: string; count: number; tiers: number[] }[] {
-  const counts = new Map<number, number>();
-  for (let x = 0; x < BOARD; x += 1) {
-    for (let y = 0; y < BOARD; y += 1) {
-      const ring = Math.min(Math.max(Math.abs(x - 5), Math.abs(y - 5)), 5);
-      counts.set(ring, (counts.get(ring) ?? 0) + 1);
-    }
-  }
-  return [...TERRAIN_BANDS]
+  return [...bandCensus()]
     .reverse()
-    .map((band) => ({
-      ring: band.ring,
-      name: band.name,
-      count: counts.get(band.ring) ?? 0,
-      tiers: BAND_TIERS[band.terrain],
-    }));
+    .map((band) => ({ ...band, tiers: BAND_TIERS[band.terrain] }));
 }
