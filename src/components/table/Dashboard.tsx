@@ -22,6 +22,8 @@ import { OrdersBoard } from "@/components/panes/OrdersBoard";
 import { StatusStrip } from "@/components/panes/StatusStrip";
 import { NewspaperModal } from "@/components/newspaper/NewspaperModal";
 import { useTableSync } from "@/components/table/useTableSync";
+import { Tour, startTour } from "@/components/tour/Tour";
+import { TABLE_TOUR } from "@/components/tour/steps";
 import { Button, KeyValue, Meter, Notice, Panel } from "@/components/ui/primitives";
 import { cancelOrderAction, forceTickAction, queueOrderAction } from "@/server/actions";
 import {
@@ -141,10 +143,7 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
     [state],
   );
 
-  const held = useMemo(
-    () => (me ? holdingsByFamily(state, me.id) : []),
-    [state, me],
-  );
+  const held = useMemo(() => (me ? holdingsByFamily(state, me.id) : []), [state, me]);
 
   const idle = state.tiles.filter((tile) => tile.lastIdle !== null).length;
   const leaderRow = leader(state);
@@ -152,7 +151,9 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
   if (!me) return null;
 
   return (
-    <div className="mx-auto max-w-[1780px] p-3">
+    <div className="mx-auto max-w-[1780px] p-2 sm:p-3">
+      <Tour name="table" steps={TABLE_TOUR} />
+
       <StatusStrip
         state={state}
         meId={meId}
@@ -187,7 +188,7 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
         </div>
       ) : null}
 
-      <div className="mt-2 flex gap-1">
+      <div data-tour="views" className="mt-2 flex flex-wrap items-center gap-1">
         {(["DESK", "FLOOR"] as const).map((id) => (
           <button
             key={id}
@@ -200,199 +201,243 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
             {id === "DESK" ? "Desk and board" : "Floor and register"}
           </button>
         ))}
+        <button
+          type="button"
+          onClick={startTour}
+          className="ml-auto border border-edge px-3 py-1 text-[10px] tracking-[0.16em] text-dim uppercase hover:text-ink"
+        >
+          Take the tour
+        </button>
       </div>
 
       {view === "DESK" ? (
-        <div className="mt-3 grid gap-3 xl:grid-cols-[380px_minmax(0,1fr)_360px]">
-          <div className="min-h-[560px]">
+        /*
+         * Three columns only where there is room for three. A laptop gets two:
+         * the desk down the left, and the board, the register and the inspector
+         * stacked down the right so the grid can have the width it needs.
+         */
+        <div className="mt-3 grid items-start gap-3 lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)] 2xl:grid-cols-[360px_minmax(0,1fr)_340px]">
+          <div
+            data-tour="desk"
+            className="order-2 min-w-0 space-y-3 lg:order-none lg:col-start-1 lg:row-span-2 lg:row-start-1 2xl:col-start-1 2xl:row-span-1 2xl:row-start-1"
+          >
             <OrderDesk
               state={state}
               player={me}
               queued={optimistic.length}
               onQueue={handleOrder}
             />
+            <div data-tour="queue">
+              <OrdersBoard orders={optimistic} onCancel={handleCancel} />
+            </div>
           </div>
 
-          <div className="min-w-0 space-y-3">
-            <Panel
-              title="Industrial grid"
-              aside={`${BOARD} by ${BOARD} · ${PLOT_COUNT} plots · wind ${windLabel(state.game.wind)}`}
-            >
-              <div className="overflow-x-auto">
+          <div className="order-1 min-w-0 space-y-3 lg:order-none lg:col-start-2 lg:row-start-1 2xl:col-start-2 2xl:row-start-1">
+            <div data-tour="board">
+              <Panel
+                title="Industrial grid"
+                aside={`${BOARD} by ${BOARD} · ${PLOT_COUNT} plots · wind ${windLabel(state.game.wind)}`}
+              >
                 <GridCanvas
                   state={state}
                   selectedTileId={selectedTileId}
                   highlightPlayerId={meId}
                   onSelect={setSelectedTileId}
                 />
-              </div>
-              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 border-t border-rule pt-2">
-                {ringLegend().map((entry) => (
-                  <span key={entry.ring} className="text-[10px] text-faint">
-                    {entry.name} <span className="text-dim">{entry.count}</span>{" "}
-                    <span className="text-edge">tier {entry.tiers.join("/")}</span>
-                  </span>
-                ))}
-                <span className="text-[10px] text-faint">
-                  grid load <span className="text-dim">{Math.round(state.game.gridLoad)}</span> MW
-                </span>
-                <span className="text-[10px] text-faint">
-                  standing idle <span className={idle > 0 ? "text-rust" : "text-dim"}>{idle}</span>
-                </span>
-              </div>
-            </Panel>
-
-            <OrdersBoard orders={optimistic} onCancel={handleCancel} />
-
-            <Panel title="Houses on the register" aside="net worth, plots, output">
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr className="border-b border-rule">
-                    {["House", "Charter", "Worth", "Plots", "Plants", "Morale", "Out"].map((head) => (
-                      <th
-                        key={head}
-                        className="py-1 text-left text-[9px] tracking-[0.14em] text-faint uppercase last:text-right"
-                      >
-                        {head}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {ranked.map((entry) => (
-                    <tr key={entry.player.id} className="border-b border-rule/40">
-                      <td className="py-1 text-[11px]">
-                        <span
-                          className="mr-1.5 inline-block h-2 w-3 align-middle"
-                          style={{ background: ownerColor(state, entry.player.id) }}
-                        />
-                        <span className={entry.player.id === meId ? "text-ink" : "text-dim"}>
-                          {entry.player.name}
-                        </span>
-                      </td>
-                      <td className="py-1 text-[10px] text-faint">
-                        {entry.player.archetype.toLowerCase().replace(/_/g, " ")}
-                      </td>
-                      <td className="tabular py-1 text-[11px] text-brass">
-                        {formatMoney(entry.worth)}
-                      </td>
-                      <td className="tabular py-1 text-[11px] text-dim">{entry.plots}</td>
-                      <td className="tabular py-1 text-[11px] text-dim">{entry.plants}</td>
-                      <td className="tabular py-1 text-[11px] text-dim">
-                        {entry.morale.toFixed(0)}
-                      </td>
-                      <td className="tabular py-1 text-right text-[11px] text-bile">
-                        {formatMoney(entry.output)}
-                      </td>
-                    </tr>
+                <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 border-t border-rule pt-2">
+                  {ringLegend().map((entry) => (
+                    <span key={entry.ring} className="text-[10px] text-faint">
+                      {entry.name} <span className="text-dim">{entry.count}</span>{" "}
+                      <span className="text-edge">tier {entry.tiers.join("/")}</span>
+                    </span>
                   ))}
-                </tbody>
-              </table>
-            </Panel>
+                  <span className="text-[10px] text-faint">
+                    grid load <span className="text-dim">{Math.round(state.game.gridLoad)}</span> MW
+                  </span>
+                  <span className="text-[10px] text-faint">
+                    standing idle <span className={idle > 0 ? "text-rust" : "text-dim"}>{idle}</span>
+                  </span>
+                </div>
+              </Panel>
+            </div>
+
+            <div data-tour="register">
+              <Panel title="Houses on the register" aside="net worth, plots, output">
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse">
+                    <thead>
+                      <tr className="border-b border-rule">
+                        {[
+                          ["House", ""],
+                          ["Charter", "hidden sm:table-cell"],
+                          ["Worth", ""],
+                          ["Plots", ""],
+                          ["Plants", "hidden md:table-cell"],
+                          ["Morale", "hidden md:table-cell"],
+                        ].map(([head, hide]) => (
+                          <th
+                            key={head}
+                            className={`py-1 text-left text-[9px] tracking-[0.14em] text-faint uppercase ${hide}`}
+                          >
+                            {head}
+                          </th>
+                        ))}
+                        <th className="py-1 text-right text-[9px] tracking-[0.14em] text-faint uppercase">
+                          Out
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {ranked.map((entry) => (
+                        <tr key={entry.player.id} className="border-b border-rule/40">
+                          <td className="py-1 text-[11px]">
+                            <span
+                              className="mr-1.5 inline-block h-2 w-3 align-middle"
+                              style={{ background: ownerColor(state, entry.player.id) }}
+                            />
+                            <span className={entry.player.id === meId ? "text-ink" : "text-dim"}>
+                              {entry.player.name}
+                            </span>
+                          </td>
+                          <td className="hidden py-1 text-[10px] text-faint sm:table-cell">
+                            {entry.player.archetype.toLowerCase().replace(/_/g, " ")}
+                          </td>
+                          <td className="tabular py-1 text-[11px] text-brass">
+                            {formatMoney(entry.worth)}
+                          </td>
+                          <td className="tabular py-1 text-[11px] text-dim">{entry.plots}</td>
+                          <td className="tabular hidden py-1 text-[11px] text-dim md:table-cell">
+                            {entry.plants}
+                          </td>
+                          <td className="tabular hidden py-1 text-[11px] text-dim md:table-cell">
+                            {entry.morale.toFixed(0)}
+                          </td>
+                          <td className="tabular py-1 text-right text-[11px] text-bile">
+                            {formatMoney(entry.output)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </Panel>
+            </div>
 
             {devTick ? (
-              <Panel title="Development desk" aside="TICK_DEV_MODE">
-                <p className="mb-2 text-[11px] text-dim">
-                  The window is normally twenty four hours. This closes it now, runs the tick, and
-                  prints the paper.
-                </p>
-                <Button tone="brass" full disabled={busy} onClick={handleForceTick}>
-                  {busy ? "Resolving" : "Close the window and resolve"}
-                </Button>
-              </Panel>
+              <div data-tour="tick">
+                <Panel title="Development desk" aside="TICK_DEV_MODE">
+                  <p className="mb-2 text-[11px] text-dim">
+                    The window is normally twenty four hours. This closes it now, runs the tick, and
+                    prints the paper.
+                  </p>
+                  <Button tone="brass" full disabled={busy} onClick={handleForceTick}>
+                    {busy ? "Resolving" : "Close the window and resolve"}
+                  </Button>
+                </Panel>
+              </div>
             ) : null}
           </div>
 
-          <div className="space-y-3">
-            <TileInspector state={state} player={me} tile={selectedTile} onOrder={handleOrder} />
+          <div className="order-3 grid min-w-0 items-start gap-3 md:grid-cols-2 lg:order-none lg:col-start-2 lg:row-start-2 2xl:col-start-3 2xl:row-start-1 2xl:grid-cols-1">
+            <div data-tour="inspector" className="min-w-0">
+              <TileInspector state={state} player={me} tile={selectedTile} onOrder={handleOrder} />
+            </div>
 
-            <Panel title="Your book" aside={`${formatMoney(netWorthOf(state, me.id))} net`}>
-              <Meter label="Cash" value={me.cash} max={5_000_000} readout={formatMoney(me.cash)} />
-              <Meter
-                label="Offshore"
-                value={me.offshoreCash}
-                max={5_000_000}
-                tone="rust"
-                readout={formatMoney(me.offshoreCash)}
-              />
-              <Meter
-                label="Debt"
-                value={me.debt}
-                max={5_000_000}
-                tone="blood"
-                readout={me.debt > 0 ? `${formatMoney(me.debt)} · ${me.debtAge} turns` : "clear"}
-              />
-              <Meter label="Standing" value={me.pr} tone="verdigris" readout={me.pr.toFixed(0)} />
-              <KeyValue
-                label="Charter"
-                value={me.archetype.toLowerCase().replace(/_/g, " ")}
-                tone="dim"
-              />
-              <KeyValue
-                label="Wage scale"
-                value={formatPercent(me.wageScale, 0)}
-                tone={me.wageScale > 1 ? "rust" : "dim"}
-              />
-              <KeyValue
-                label="Shell licenses"
-                value={`${me.shellLicenses}`}
-                tone={me.shellLicenses > 0 ? "brass" : "dim"}
-              />
-              <KeyValue
-                label="Patents held"
-                value={`${state.patents.filter((patent) => patent.ownerId === me.id).length}`}
-              />
-              <KeyValue
-                label="Insurance in force"
-                value={`${state.insurance.filter((policy) => policy.playerId === me.id).length} policies`}
-              />
-              <KeyValue
-                label="Short book"
-                value={`${state.shorts.filter((short) => short.playerId === me.id).length} positions`}
-              />
-              <KeyValue
-                label="Forwards open"
-                value={`${state.futures.filter((contract) => contract.playerId === me.id).length} contracts`}
-              />
-              <KeyValue
-                label="Table leader"
-                value={leaderRow ? leaderRow.name : "no clear leader"}
-                tone="dim"
-              />
-            </Panel>
+            <div data-tour="book" className="min-w-0">
+              <Panel title="Your book" aside={`${formatMoney(netWorthOf(state, me.id))} net`}>
+                <Meter label="Cash" value={me.cash} max={5_000_000} readout={formatMoney(me.cash)} />
+                <Meter
+                  label="Offshore"
+                  value={me.offshoreCash}
+                  max={5_000_000}
+                  tone="rust"
+                  readout={formatMoney(me.offshoreCash)}
+                />
+                <Meter
+                  label="Debt"
+                  value={me.debt}
+                  max={5_000_000}
+                  tone="blood"
+                  readout={me.debt > 0 ? `${formatMoney(me.debt)} · ${me.debtAge} turns` : "clear"}
+                />
+                <Meter label="Standing" value={me.pr} tone="verdigris" readout={me.pr.toFixed(0)} />
+                <KeyValue
+                  label="Charter"
+                  value={me.archetype.toLowerCase().replace(/_/g, " ")}
+                  tone="dim"
+                />
+                <KeyValue
+                  label="Wage scale"
+                  value={formatPercent(me.wageScale, 0)}
+                  tone={me.wageScale > 1 ? "rust" : "dim"}
+                />
+                <KeyValue
+                  label="Shell licenses"
+                  value={`${me.shellLicenses}`}
+                  tone={me.shellLicenses > 0 ? "brass" : "dim"}
+                />
+                <KeyValue
+                  label="Patents held"
+                  value={`${state.patents.filter((patent) => patent.ownerId === me.id).length}`}
+                />
+                <KeyValue
+                  label="Insurance in force"
+                  value={`${state.insurance.filter((policy) => policy.playerId === me.id).length} policies`}
+                />
+                <KeyValue
+                  label="Short book"
+                  value={`${state.shorts.filter((short) => short.playerId === me.id).length} positions`}
+                />
+                <KeyValue
+                  label="Forwards open"
+                  value={`${state.futures.filter((contract) => contract.playerId === me.id).length} contracts`}
+                />
+                <KeyValue
+                  label="Table leader"
+                  value={leaderRow ? leaderRow.name : "no clear leader"}
+                  tone="dim"
+                />
+              </Panel>
+            </div>
 
-            <Panel title="Goods on hand" aside={`${held.length} families`}>
-              {held.length === 0 ? (
-                <p className="text-[11px] text-faint">
-                  The warehouses are empty. Nothing in the yard, nothing to sell.
-                </p>
-              ) : (
-                <div className="space-y-1">
-                  {held.map((row) => (
-                    <div
-                      key={row.family}
-                      className="flex items-baseline justify-between border-b border-rule/40 py-0.5"
-                    >
-                      <span className="text-[10px] text-faint">{FAMILY_LABEL[row.family]}</span>
-                      <span className="tabular text-[11px] text-ink">
-                        {formatUnits(row.units)}
-                        <span className="ml-2 text-brass">{formatMoney(row.value)}</span>
-                      </span>
-                    </div>
-                  ))}
-                  <p className="pt-1 text-[10px] text-faint">
-                    {TRADEABLE.length} commodities on the board, {FAMILY_ORDER.length} families.
+            <div className="min-w-0 md:col-span-2 2xl:col-span-1">
+              <Panel title="Goods on hand" aside={`${held.length} families`}>
+                {held.length === 0 ? (
+                  <p className="text-[11px] text-faint">
+                    The warehouses are empty. Nothing in the yard, nothing to sell.
                   </p>
-                </div>
-              )}
-            </Panel>
+                ) : (
+                  <div className="space-y-1">
+                    {held.map((row) => (
+                      <div
+                        key={row.family}
+                        className="flex items-baseline justify-between border-b border-rule/40 py-0.5"
+                      >
+                        <span className="text-[10px] text-faint">{FAMILY_LABEL[row.family]}</span>
+                        <span className="tabular text-[11px] text-ink">
+                          {formatUnits(row.units)}
+                          <span className="ml-2 text-brass">{formatMoney(row.value)}</span>
+                        </span>
+                      </div>
+                    ))}
+                    <p className="pt-1 text-[10px] text-faint">
+                      {TRADEABLE.length} commodities on the board, {FAMILY_ORDER.length} families.
+                    </p>
+                  </div>
+                )}
+              </Panel>
+            </div>
           </div>
         </div>
       ) : (
-        <div className="mt-3 grid gap-3 xl:grid-cols-[minmax(0,1fr)_360px]">
-          <Exchange state={state} player={me} onOrder={handleOrder} />
+        <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,340px)] 2xl:grid-cols-[minmax(0,1fr)_360px]">
+          {/* A flex column, so the book keeps its own scroll region inside a
+              column that is as tall as the panels beside it. */}
+          <div className="flex min-w-0 flex-col">
+            <Exchange state={state} player={me} onOrder={handleOrder} />
+          </div>
 
-          <div className="space-y-3">
+          <div className="min-w-0 space-y-3">
             <Panel title="The desk this window" aside={`${optimistic.length} sealed`}>
               {optimistic.length === 0 ? (
                 <p className="text-[11px] text-faint">
@@ -502,6 +547,11 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
         <p className="text-[10px] text-faint">
           {RESOURCE_LABEL.POWER} is bought by the tick, not by you. Waste that cannot be held spills
           onto your own plots, and the inspectors fine the air, not the intention.
+        </p>
+        <p className="pt-1">
+          <Button tone="quiet" onClick={startTour}>
+            Walk the room again
+          </Button>
         </p>
       </footer>
     </div>

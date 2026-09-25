@@ -19,6 +19,7 @@ const BRIEF: string[] = [
   `${TENDERS_PER_TURN} plots go to sealed tender every window. The highest envelope wins and pays a dollar above the second highest.`,
   "Sixty four orders on the card, from maintenance contracts to injunctions, cartel pools and midnight discharges.",
   "Live tables: a rival sealing an order, a stranger taking a chair and a window closing all land on your desk as they happen.",
+  "A guided walk-around runs the first time you sit down at a table, and can be called up again from the desk at any point.",
 ];
 
 export default async function LobbyPage({
@@ -32,17 +33,19 @@ export default async function LobbyPage({
   const joinable = await listJoinableTables();
 
   return (
-    <main className="mx-auto max-w-7xl px-4 py-8">
+    <main className="mx-auto max-w-7xl px-3 py-6 sm:px-4 sm:py-8">
       <header className="relative border-b-2 border-double border-edge pb-4">
         <Plate name="seal" scale={3} className="absolute top-0 right-0 hidden lg:block" />
         <p className="text-[10px] tracking-[0.3em] text-faint uppercase">
           Live multiplayer industrial empire and corporate warfare
         </p>
-        <h1 className="mt-1 font-slab text-[52px] leading-none font-extrabold tracking-tight text-ink">
+        <h1 className="mt-1 font-slab text-[36px] leading-none font-extrabold tracking-tight text-ink sm:text-[46px] lg:text-[52px]">
           Conglomerate
         </h1>
-        <p className="mt-1 font-slab text-[22px] leading-none text-brass">Gilded Age</p>
-        <Plate name="rule" scale={3} className="mt-2 block" />
+        <p className="mt-1 font-slab text-[18px] leading-none text-brass sm:text-[22px]">
+          Gilded Age
+        </p>
+        <Plate name="rule" scale={3} className="mt-2 block max-w-full" />
         <div className="mt-3 grid gap-x-8 gap-y-1 md:grid-cols-2">
           {BRIEF.map((line) => (
             <p key={line} className="text-[12px] text-dim">

@@ -64,7 +64,7 @@ function renderMarkdown(source: string) {
     }
     if (line.startsWith("## ")) {
       blocks.push(
-        <h3 key={`h-${key++}`} className="mb-2 font-slab text-[24px] leading-[1.1] font-extrabold uppercase">
+        <h3 key={`h-${key++}`} className="mb-2 font-slab text-[18px] leading-[1.1] font-extrabold uppercase sm:text-[24px]">
           {line.slice(3)}
         </h3>,
       );
@@ -104,11 +104,11 @@ export function NewspaperModal({
   return (
     <Modal open={open} onOpenChange={onOpenChange} title={`The Daily Rag, turn ${issue.turn}`} width="max-w-3xl" bare>
       <div className="bg-news text-newsink">
-        <div className="border-b-4 border-double border-newsink/70 px-6 pt-5 pb-2 text-center">
+        <div className="border-b-4 border-double border-newsink/70 px-4 pt-4 pb-2 text-center sm:px-6 sm:pt-5">
           <p className="font-mono text-[9px] tracking-[0.4em] uppercase">
             Printed every turn, sold on the corner
           </p>
-          <h1 className="font-slab text-[40px] leading-none font-extrabold tracking-tight">
+          <h1 className="font-slab text-[28px] leading-none font-extrabold tracking-tight sm:text-[40px]">
             The Daily Rag
           </h1>
           <Plate name="rule" scale={2} className="mx-auto mt-1.5 block" />
@@ -119,10 +119,10 @@ export function NewspaperModal({
           </div>
         </div>
 
-        <article className="px-6 py-5">{renderMarkdown(issue.contentMarkdown)}</article>
+        <article className="px-4 py-4 sm:px-6 sm:py-5">{renderMarkdown(issue.contentMarkdown)}</article>
 
         {issue.scandals.length > 0 ? (
-          <div className="border-t-2 border-newsink/60 px-6 py-4">
+          <div className="border-t-2 border-newsink/60 px-4 py-4 sm:px-6">
             <h4 className="mb-2 font-mono text-[10px] tracking-[0.24em] uppercase">
               Index of the accused
             </h4>
@@ -139,7 +139,7 @@ export function NewspaperModal({
           </div>
         ) : null}
 
-        <div className="flex items-center justify-between gap-4 border-t border-newsink/40 px-6 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-4 border-t border-newsink/40 px-4 py-3 sm:px-6">
           <span className="flex items-center gap-2 font-mono text-[9px] tracking-[0.2em] uppercase">
             <Plate name="seal" scale={1} />
             Filed {new Date(issue.createdAt).toLocaleString("en-US")}

@@ -15,7 +15,6 @@ export function OrdersBoard({
     <Panel
       title="This turn's desk"
       aside={`${orders.length} order${orders.length === 1 ? "" : "s"} queued`}
-      className="mt-3"
     >
       {orders.length === 0 ? (
         <Empty>

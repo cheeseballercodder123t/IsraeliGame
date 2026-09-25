@@ -1,4 +1,4 @@
-# Conglomerate: Gilded Age — Architecture Review for Multiplayer
+# Conglomerate: Gilded Age architecture review for multiplayer
 
 A read of how game state, interactions, persistence and communication work today, and what
 would have to change for human players to share a table. Written from the code as it stands
@@ -10,7 +10,7 @@ would have to change for human players to share a table. Written from the code a
 
 ```
 src/domain/           pure rulebook. No framework, no database, no clock.
-  types.ts            GameState, Player, Tile, Order, GameEvent — plain serializable data
+  types.ts            GameState, Player, Tile, Order, GameEvent: plain serializable data
   tick.ts             resolveTurnTick(state, { now }) → { state, events }   (the whole game)
   orders/             64-order catalog + six phase handlers
   content/            commodities, recipes, charters, board bands, sprites, event kinds
@@ -49,10 +49,10 @@ orders that arrived from more than one human.
 | `market[]`, `history[]` | 75 commodity books + per-turn price history |
 | `shorts[]`, `futures[]`, `supplies[]`, `patents[]`, `insurance[]`, `cartels[]`, `tariffs[]`, `injunctions[]`, `municipal[]`, `convertibles[]` | the paper instruments |
 | `events[]` | last ~400 typed events of the current window |
-| `queue[]` | `QueuedOrder[]` — **the interaction channel**: every order any player has sealed for this window |
+| `queue[]` | `QueuedOrder[]`: **the interaction channel**: every order any player has sealed for this window |
 | `scandals[]` | lines the paper may print this tick |
 
-Everything — including every other player's cash, plots and queued orders — is in the
+Everything, including every other player's cash, plots and queued orders, is in the
 document, and the whole document is shipped to every seated client on every render. There is
 no per-player redaction. (The README calls this deliberate: "everyone at the table sees
 everyone at the table, including offshore reserves. Sunlight is part of the punishment.")
@@ -67,23 +67,23 @@ everyone at the table, including offshore reserves. Sunlight is part of the puni
   reloading. Then it slices out the viewer's `pending` orders and returns the view to the RSC.
 - **Write path.** Every mutation happens inside a guarded write. `commit(gameId, mutate)`
   (src/server/game.ts) reads the freshest snapshot, hands it to the mutator, and writes it back
-  only while `game.revision` still matches what it read — re-running the mutator against the new
+  only while `game.revision` still matches what it read, re-running the mutator against the new
   snapshot when another writer got there first. What each mutation does:
-  - `queueOrder(gameId, playerId, input)` — validates via a zod schema **derived from the
+  - `queueOrder(gameId, playerId, input)` validates via a zod schema **derived from the
     same order catalog the UI renders** (src/server/orders.ts), then appends one
     `QueuedOrder` through `store.appendOrder`, which never reads or rewrites a rival's desk.
-  - `cancelOrder` — checks ownership, then `store.removeOrder`, for the same reason.
-  - `joinMatch` / `claimSeat` — takes a chair inside `commit`, so two people reaching for the
+  - `cancelOrder` checks ownership, then calls `store.removeOrder`, for the same reason.
+  - `joinMatch` and `claimSeat` take a chair inside `commit`, so two people reaching for the
     last seat do not both get it.
-  - `advanceTurn(state)` — enqueues bot orders, runs `resolveTurnTick`, composes the
+  - `advanceTurn(state)` enqueues bot orders, runs `resolveTurnTick`, composes the
     newspaper, and writes state + issue under the revision guard, so one resolver wins and the
     others report `TurnOutcome.alreadyResolved` instead of running the window twice.
 - **Turn timing.** Four resolution paths exist and all funnel into `advanceTurn`:
-  1. `POST /api/tick` — called by the pg_cron sweep (every minute, `x-tick-secret` header),
+  1. `POST /api/tick`, called by the pg_cron sweep (every minute, `x-tick-secret` header),
      either for one `gameId` or as a sweep over every ACTIVE game past due.
-  2. `forceTickAction` — the dev "close the window" button, gated by `TICK_DEV_MODE`.
-  3. `resolveIfDue` — lazily, on any page load after the deadline.
-  4. `GET /api/table/[code]/summary` — the client heartbeat also resolves a due window, so a
+  2. `forceTickAction`, the dev "close the window" button, gated by `TICK_DEV_MODE`.
+  3. `resolveIfDue` runs lazily, on any page load after the deadline.
+  4. `GET /api/table/[code]/summary`, where the client heartbeat also resolves a due window, so a
      table whose players are all watching closes on the hour instead of waiting for a reload.
   Overlapping resolvers are safe now: the revision guard gives each window exactly one winner.
 
@@ -110,15 +110,15 @@ everyone at the table, including offshore reserves. Sunlight is part of the puni
 
 ## 4. How interactions are handled
 
-The interaction model is **async, queue-based, turn-batched** — not live commands:
+The interaction model is **async, queue-based, turn-batched**, not live commands:
 
 1. During a window, each player seals any number of orders (64 types across six phases).
    Orders carry `playerId`, `turn`, `createdAt`. They are *validated* immediately (zod,
-   affordability hints client-side) but *not applied* — money does not move yet.
+   affordability hints client-side) but *not applied*: money does not move yet.
 2. When the window closes, `resolveTurnTick` runs the queued orders through phase handlers
    (PLANNING → COMMERCE → CAPITAL → LABOR → POLITICS → COVERT), interleaved with weather,
    wear, labor, the grid, production, waste, the market, taxation, tenders and raids.
-3. Bot seats get their orders from `planBotTurn` at tick time — bots and humans submit into
+3. Bot seats get their orders from `planBotTurn` at tick time, and humans submit into
    the exact same queue. **A human seat is already indistinguishable from a bot seat at the
    engine level.** This is the single most important fact for multiplayer.
 4. The event log the tick produces feeds the newspaper, which is persisted per
@@ -129,9 +129,9 @@ and rejects non-seated users; queue cancellation checks `playerId` on the order.
 
 ## 5. Persistence
 
-`GameStore` (src/server/store/types.ts) — `createGame, getGame, getGameByCode, saveGame,
-listGames, appendOrder, removeOrder, listIssues, saveIssue, seedExists` — has three adapters
-picked at runtime (`getStore()`):
+`GameStore` (src/server/store/types.ts), which offers `createGame, getGame, getGameByCode,
+saveGame, listGames, appendOrder, removeOrder, listIssues, saveIssue, seedExists`, has three
+adapters picked at runtime (`getStore()`):
 
 | Adapter | When | Notes |
 | --- | --- | --- |
@@ -142,8 +142,8 @@ picked at runtime (`getStore()`):
 The interface now carries the concurrency contract that used to be missing. `saveGame` takes an
 optional expected revision and returns whether it landed; `appendOrder` and `removeOrder` are
 targeted writes that bump the revision without touching anything else. Each adapter enforces
-them differently — a per-table-file promise lock and a guarded read-back in the file store, a
-single conditional `UPDATE` plus queue-patching RPCs in `0004_sync.sql` for Supabase — but the
+them differently: a per-table-file promise lock and a guarded read-back in the file store, a
+single conditional `UPDATE` plus queue-patching RPCs in `0004_sync.sql` for Supabase. The
 callers above them are identical on every store.
 
 The schema already carries multiplayer scaffolding: RLS with `is_member_of(game_id)` /
@@ -155,7 +155,7 @@ client subscribes to any of it yet.
 
 | Channel | Exists? | Detail |
 | --- | --- | --- |
-| Server Actions + `revalidatePath` | yes | the only write channel. `revalidatePath` marks `/table/[code]` stale for everyone, but only the acting client receives the fresh RSC payload — the action itself notifies nobody |
+| Server Actions + `revalidatePath` | yes | the only write channel. `revalidatePath` marks `/table/[code]` stale for everyone, but only the acting client receives the fresh RSC payload, and the action itself notifies nobody |
 | Lazy resolution on render | yes | anyone loading after the deadline triggers the tick |
 | pg_cron → `/api/tick` | yes (dormant without Supabase) | minute sweep, secret header |
 | Polling the table summary | yes | `useTableSync` every 5s while visible and on focus; `router.refresh()` only when the revision actually moved |
@@ -217,9 +217,9 @@ return values to their caller only; other clients are never notified.
    hundred bytes, and a refresh only happens when the revision actually moved. Workable at 12
    seats; a partial or versioned read path is the next thing to buy if tables get busier.
 
-### Recommended plan, in order of leverage
+### Recommended plan, in the order worth doing
 
-**Phase 1 — Lobby and joining (server only, small).**
+**Phase 1: lobby and joining (server only, small).**
 - Let `startMatch` create `LOBBY` tables with human seats unfilled; backfill bots at the
   first tick (`enqueueBotOrders` already runs there).
 - Add `JOIN_TABLE`/seat-reservation handling in `joinMatch`: take an empty human seat or
@@ -228,7 +228,7 @@ return values to their caller only; other clients are never notified.
 - Flip status to `ACTIVE` on first tick. `openTable` already handles a not-yet-seated
   viewer as `no-seat`; give it a "table open, N/12 seats" lobby view.
 
-**Phase 2 — Concurrent-write safety (server only, medium). — SHIPPED**
+**Phase 2: concurrent-write safety (server only, medium). Shipped.**
 - `revision` on `Game`; `saveGame(state, expected)` is conditional in all three adapters, and
   `supabase/migrations/0004_sync.sql` adds `save_game_state_rev` for the Postgres path.
 - Queue mutations go through `appendOrder`/`removeOrder`, implemented as single-statement
@@ -237,7 +237,7 @@ return values to their caller only; other clients are never notified.
 - `advanceTurn` is guarded by the same revision: one resolver wins, the rest see
   `alreadyResolved`. `commit()` supplies the optimistic retry for joins and seat claims.
 
-**Phase 3 — Live sync for seated players. — SHIPPED**
+**Phase 3: live sync for seated players. Shipped.**
 - `GET /api/table/[code]/summary` returns `{revision, currentTurn, nextTickAt, status, present}`,
   the last from a small in-process roster (src/server/presence.ts) stamped by page renders and
   heartbeats. It also resolves a due window, which is what makes the deadline land for players
@@ -249,7 +249,7 @@ return values to their caller only; other clients are never notified.
 - Supabase Realtime remains the upgrade: the publication already carries `game_states`, and the
   same hook could subscribe instead of polling when `NEXT_PUBLIC_SUPABASE_*` is set.
 
-**Phase 4 — Identity and views.**
+**Phase 4: identity and views.**
 - Swap `session.ts` to Supabase Auth (its docstring names the seam); `players.userId`
   becomes a real auth uuid and RLS starts doing its job.
 - If hidden information is ever wanted: keep the canonical state server-side and introduce a
