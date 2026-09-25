@@ -184,6 +184,8 @@ export interface Player {
   /** Temporary valuation lift, cleared at the next tick. */
   valuationBonus: number;
   strikeImmunityTurn: number;
+  /** Carries the table's chair count on one seat while the lobby gathers. */
+  lobbySeat: number | null;
   /** Morale that a pizza party defers to the following tick. */
   pizzaPending: number;
   companyTown: boolean;

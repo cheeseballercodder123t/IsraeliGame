@@ -34,12 +34,14 @@ export class MemoryStore implements GameStore {
       seed: input.seed,
       tickIntervalHours: input.tickIntervalHours,
       nextTickAt: input.nextTickAt,
-      players: input.seats.map((seat) => ({
+      status: input.status,
+      players: input.seats.map((seat, index) => ({
         id: crypto.randomUUID(),
         userId: seat.userId,
         name: seat.name,
         archetype: seat.archetype,
         isBot: seat.isBot,
+        lobbySeat: index === 0 && input.lobbySeats ? input.lobbySeats : null,
       })),
     });
     reg.games.set(state.game.id, state);
@@ -70,6 +72,7 @@ export class MemoryStore implements GameStore {
       status: state.game.status,
       nextTickAt: state.game.nextTickAt,
       players: state.players.length,
+      humans: state.players.filter((p) => !p.isBot).length,
     }));
   }
 

@@ -8,11 +8,14 @@ import {
   DEV_TICK,
   advanceTurn,
   cancelOrder,
+  claimSeatByCode,
+  fillWithBots,
   joinMatch,
   loadGameByCode,
   playerOf,
   queueOrder,
   startMatch,
+  startTable,
 } from "@/server/game";
 
 const ARCHETYPE_IDS: Archetype[] = ["TECH_MESSIAH", "ROBBER_BARON", "PE_VULTURE", "KLEPTOCRAT"];
@@ -45,6 +48,57 @@ export async function joinTableAction(formData: FormData): Promise<void> {
   redirect(`/table/${code}`);
 }
 
+/**
+ * Takes a chair at a table from the lobby view. The session carries the
+ * house, the chair choice carries the charter, and the seat may be a bot's.
+ */
+export async function claimSeatAction(
+  code: string,
+  archetype: Archetype,
+): Promise<{ ok: boolean; error?: string }> {
+  const session = await ensureSession();
+  const seated = await claimSeatByCode(code, session, archetype);
+  if (!seated) return { ok: false, error: "No chair to take at this table." };
+  revalidatePath(`/table/${code.toUpperCase()}`);
+  return { ok: true };
+}
+
+/**
+ * Opens the window: the table leaves the lobby, the bench fills the
+ * remaining chairs, and the first tick is scheduled from now.
+ */
+export async function startTableAction(
+  code: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const session = await readSession();
+  if (!session) return { ok: false, error: "No session." };
+
+  const result = await startTable(code.toUpperCase(), session.userId);
+  if (result.ok) revalidatePath(`/table/${code.toUpperCase()}`);
+  return result;
+}
+
+/**
+ * Opens the window now and hands every remaining chair to an automated
+ * director, which is how a table is played solo the way it always was.
+ */
+export async function fillWithBotsAction(
+  code: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const session = await readSession();
+  if (!session) return { ok: false, error: "No session." };
+
+  const state = await loadGameByCode(code.toUpperCase());
+  if (!state) return { ok: false, error: "No such table." };
+  if (state.game.status !== "LOBBY") return { ok: false, error: "The table is already running." };
+  const seated = state.players.find((p) => !p.isBot && p.userId === session.userId);
+  if (!seated) return { ok: false, error: "Only a seated house can open the window." };
+
+  await fillWithBots(state);
+  revalidatePath(`/table/${code.toUpperCase()}`);
+  return { ok: true };
+}
+
 export async function queueOrderAction(
   code: string,
   input: unknown,
@@ -54,6 +108,9 @@ export async function queueOrderAction(
 
   const state = await loadGameByCode(code);
   if (!state) return { ok: false, error: "No such table." };
+  if (state.game.status === "LOBBY") {
+    return { ok: false, error: "The window is not open yet. Open the table first." };
+  }
 
   const me = playerOf(state, session.userId);
   if (!me) return { ok: false, error: "You are not seated at this table." };
@@ -90,6 +147,9 @@ export async function forceTickAction(code: string): Promise<{ ok: boolean; erro
 
   const state = await loadGameByCode(code);
   if (!state) return { ok: false, error: "No such table." };
+  if (state.game.status === "LOBBY") {
+    return { ok: false, error: "The table is still a lobby. Open the window first." };
+  }
 
   await advanceTurn(state);
   revalidatePath(`/table/${code}`);

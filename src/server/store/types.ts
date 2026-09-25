@@ -16,6 +16,8 @@ export interface SeatSpec {
   archetype: Archetype;
   /** Bots are played by the server on each tick. */
   isBot: boolean;
+  /** Carries the table's chair count on its first seat while gathering. */
+  lobbySeat?: number | null;
 }
 
 export interface CreateGameInput {
@@ -24,6 +26,10 @@ export interface CreateGameInput {
   tickIntervalHours: number;
   nextTickAt: string;
   seats: SeatSpec[];
+  /** Total chairs the table offers while it is still a lobby. */
+  lobbySeats?: number;
+  /** Tables open as LOBBY while humans still have seats to take. */
+  status?: GameState["game"]["status"];
 }
 
 export interface GameSummary {
@@ -33,6 +39,8 @@ export interface GameSummary {
   status: GameState["game"]["status"];
   nextTickAt: string;
   players: number;
+  /** Seats held by people; the rest of a full table is automated. */
+  humans: number;
 }
 
 export interface GameStore {

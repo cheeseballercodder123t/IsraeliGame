@@ -78,6 +78,7 @@ export class FileStore implements GameStore {
       status: state.game.status,
       nextTickAt: state.game.nextTickAt,
       players: state.players.length,
+      humans: state.players.filter((p) => !p.isBot).length,
     };
     const at = index.games.findIndex((game) => game.id === state.game.id);
     if (at >= 0) index.games[at] = entry;
@@ -92,12 +93,14 @@ export class FileStore implements GameStore {
       seed: input.seed,
       tickIntervalHours: input.tickIntervalHours,
       nextTickAt: input.nextTickAt,
-      players: input.seats.map((seat) => ({
+      status: input.status,
+      players: input.seats.map((seat, index) => ({
         id: crypto.randomUUID(),
         userId: seat.userId,
         name: seat.name,
         archetype: seat.archetype,
         isBot: seat.isBot,
+        lobbySeat: index === 0 && input.lobbySeats ? input.lobbySeats : null,
       })),
     });
     await this.saveGame(state);
@@ -132,9 +135,21 @@ export class FileStore implements GameStore {
 
   async listGames(): Promise<GameSummary[]> {
     const index = await this.readIndex();
-    return index.games
-      .slice()
-      .sort((a, b) => b.turn - a.turn || a.code.localeCompare(b.code));
+    const summaries: GameSummary[] = [];
+    for (const entry of index.games) {
+      const state = await this.getGame(entry.id);
+      if (!state) continue;
+      summaries.push({
+        id: state.game.id,
+        code: state.game.code,
+        turn: state.game.currentTurn,
+        status: state.game.status,
+        nextTickAt: state.game.nextTickAt,
+        players: state.players.length,
+        humans: state.players.filter((p) => !p.isBot).length,
+      });
+    }
+    return summaries.sort((a, b) => b.turn - a.turn || a.code.localeCompare(b.code));
   }
 
   async appendOrder(gameId: string, order: QueuedOrder): Promise<void> {

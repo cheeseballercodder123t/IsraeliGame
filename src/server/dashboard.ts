@@ -1,7 +1,15 @@
-import { listIssues, loadGameByCode, playerOf, resolveIfDue } from "@/server/game";
+import {
+  MIN_SEATS,
+  listIssues,
+  loadGameByCode,
+  openSeats,
+  playerOf,
+  resolveIfDue,
+  targetSeats,
+} from "@/server/game";
 import { readSession } from "@/server/session";
 import type { NewspaperRecord } from "@/server/store/types";
-import type { GameState, Player, QueuedOrder } from "@/domain/types";
+import type { Archetype, GameState, Player, QueuedOrder } from "@/domain/types";
 
 export interface TableView {
   state: GameState;
@@ -10,37 +18,96 @@ export interface TableView {
   pending: QueuedOrder[];
 }
 
-export interface TableMiss {
-  reason: "no-session" | "no-table" | "no-seat";
+export interface LobbySeatView {
+  id: string;
+  name: string;
+  archetype: Archetype;
+  isBot: boolean;
+  isMe: boolean;
 }
 
-export type TableResult = { ok: true; view: TableView } | { ok: false; miss: TableMiss };
+/** What a lobby looks like to whoever is looking, seated or not. */
+export interface LobbyView {
+  code: string;
+  status: GameState["game"]["status"];
+  seats: LobbySeatView[];
+  openSeats: number;
+  targetSeats: number;
+  minSeats: number;
+  me: LobbySeatView | null;
+}
+
+export interface TableMiss {
+  reason: "no-session" | "no-table";
+}
+
+export type TableResult =
+  | { kind: "table"; view: TableView }
+  | { kind: "lobby"; lobby: LobbyView }
+  | { kind: "miss"; miss: TableMiss };
+
+function lobbyOf(state: GameState, userId: string | null): LobbyView {
+  const seats: LobbySeatView[] = state.players.map((player) => ({
+    id: player.id,
+    name: player.name,
+    archetype: player.archetype,
+    isBot: player.isBot,
+    isMe: userId !== null && player.userId === userId,
+  }));
+  const mine = userId
+    ? seats.find((seat) => seat.isMe) ?? null
+    : null;
+  return {
+    code: state.game.code,
+    status: state.game.status,
+    seats,
+    openSeats: openSeats(state),
+    targetSeats: targetSeats(state),
+    minSeats: MIN_SEATS,
+    me: mine,
+  };
+}
 
 /**
- * Loads a table for the current session. Any turn whose window has closed is
- * resolved here before the page renders, so returning to a stale tab catches
- * the board up instead of showing yesterday's ledger.
+ * Loads a table for the current session. A table still gathering returns its
+ * lobby, which a person without a seat can look at and claim a chair from.
+ * Any turn whose window has closed is resolved here before the page renders,
+ * so returning to a stale tab catches the board up instead of showing
+ * yesterday's ledger.
  */
 export async function openTable(code: string): Promise<TableResult> {
   const session = await readSession();
-  if (!session) return { ok: false, miss: { reason: "no-session" } };
-
   const loaded = await loadGameByCode(code.toUpperCase());
-  if (!loaded) return { ok: false, miss: { reason: "no-table" } };
+  if (!loaded) return { kind: "miss", miss: { reason: "no-table" } };
+
+  if (loaded.game.status === "LOBBY") {
+    return { kind: "lobby", lobby: lobbyOf(loaded, session?.userId ?? null) };
+  }
+
+  if (!session) return { kind: "miss", miss: { reason: "no-session" } };
 
   const me = playerOf(loaded, session.userId);
-  if (!me) return { ok: false, miss: { reason: "no-seat" } };
+  if (!me) {
+    // A running table with an open chair still lets a newcomer in through
+    // the lobby door rather than a flat refusal.
+    if (openSeats(loaded) > 0) {
+      return { kind: "lobby", lobby: lobbyOf(loaded, session.userId) };
+    }
+    return { kind: "miss", miss: { reason: "no-table" } };
+  }
 
   const { state } = await resolveIfDue(loaded);
   const settled = playerOf(state, session.userId);
-  if (!settled) return { ok: false, miss: { reason: "no-seat" } };
+  if (!settled) {
+    return { kind: "lobby", lobby: lobbyOf(state, session.userId) };
+  }
 
   const issues = await listIssues(state.game.id);
   const pending = state.queue
     .filter((q) => q.playerId === settled.id && q.turn <= state.game.currentTurn)
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 
-  return { ok: true, view: { state, me: settled, issues, pending } };
+  return { kind: "table", view: { state, me: settled, issues, pending } };
 }
 
 export function secondsUntilTick(state: GameState, now = Date.now()): number {

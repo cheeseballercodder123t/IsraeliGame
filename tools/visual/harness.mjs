@@ -114,7 +114,16 @@ async function main() {
   await page.selectOption('select[name="seats"]', "5").catch(() => {});
   await page.click("button:has-text('OPEN THE TABLE')");
   await page.waitForURL(/\/table\//, { timeout: 60_000 });
-  await page.waitForTimeout(1800);
+  await page.waitForTimeout(1200);
+
+  // Tables gather in a lobby now; the host seats the bench and opens the
+  // window before the rest of the pass can play a match.
+  const openButton = page.locator("button:has-text('FILL THE EMPTY CHAIRS')");
+  if ((await openButton.count()) > 0) {
+    await shoot("02a-table-lobby");
+    await openButton.click();
+    await page.waitForTimeout(1800);
+  }
   await shoot("02-table-desk");
 
   const tableReport = await page.evaluate(collectReport);

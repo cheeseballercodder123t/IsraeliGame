@@ -1,4 +1,5 @@
 import { foundCompanyAction, joinTableAction } from "@/server/actions";
+import { listJoinableTables } from "@/server/game";
 import { CHARTER_TABLE, MAX_SEATS, MIN_SEATS } from "@/server/personas";
 import { storeKind } from "@/server/store";
 import { ragProvider } from "@/server/rag/llm";
@@ -27,6 +28,7 @@ export default async function LobbyPage({
   const { code, missing } = await searchParams;
   const store = storeKind();
   const rag = ragProvider();
+  const joinable = await listJoinableTables();
 
   return (
     <main className="mx-auto max-w-7xl px-4 py-8">
@@ -57,6 +59,33 @@ export default async function LobbyPage({
         <p className="mt-4 border border-blood px-3 py-2 text-[11px] text-blood">
           No table answers to the code {missing}.
         </p>
+      ) : null}
+
+      {joinable.length > 0 ? (
+        <section className="mt-4 border border-rule bg-steel p-3">
+          <h2 className="mb-2 text-[10px] tracking-[0.22em] text-dim uppercase">
+            Tables with a chair open
+          </h2>
+          <ul className="grid gap-1 md:grid-cols-2">
+            {joinable.map((table) => (
+              <li
+                key={table.code}
+                className="flex items-baseline justify-between gap-3 border-b border-rule/40 py-1 last:border-b-0"
+              >
+                <a
+                  href={`/table/${table.code}`}
+                  className="tabular text-[12px] tracking-[0.16em] text-brass hover:text-ink"
+                >
+                  {table.code}
+                </a>
+                <span className="text-[10px] text-faint">
+                  {table.status === "LOBBY" ? "gathering" : "in play"} · {table.humans} human ·{""}
+                  {table.players} seated · {table.open} open
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
       ) : null}
 
       <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
