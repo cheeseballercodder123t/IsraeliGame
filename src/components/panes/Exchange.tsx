@@ -123,11 +123,11 @@ export function Exchange({ state, player, onOrder }: ExchangeProps) {
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Find goods"
-            className="ml-auto w-36 border border-rule bg-pit px-1.5 py-[2px] text-[11px] text-ink placeholder:text-faint"
+            className="ml-auto w-full border border-rule bg-pit px-1.5 py-[2px] text-[11px] text-ink placeholder:text-faint sm:w-36"
           />
         </div>
 
-        <div className="mt-2 flex flex-wrap gap-3 text-[10px]">
+        <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-[10px]">
           <span className="text-faint uppercase">Movers</span>
           {movement.up.map((move) => (
             <span key={`u-${move.resource}`} className="text-bile">
@@ -142,28 +142,30 @@ export function Exchange({ state, player, onOrder }: ExchangeProps) {
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="min-h-0 flex-1 overflow-auto">
         <table className="w-full border-collapse">
           <thead className="sticky top-0 bg-plate">
             <tr>
               {[
-                "Goods",
-                "Family",
-                "Price",
-                "Base",
-                "Supply",
-                "Demand",
-                "Move",
-                "Held",
-                "Turn",
-              ].map((head) => (
+                ["Goods", ""],
+                ["Family", "hidden sm:table-cell"],
+                ["Price", ""],
+                ["Base", "hidden md:table-cell"],
+                ["Supply", "hidden lg:table-cell"],
+                ["Demand", "hidden lg:table-cell"],
+                ["Move", ""],
+                ["Held", ""],
+              ].map(([head, hide]) => (
                 <th
                   key={head}
-                  className="border-b border-rule px-2 py-1 text-left text-[9px] tracking-[0.14em] text-faint uppercase last:text-right"
+                  className={`border-b border-rule px-2 py-1 text-left text-[9px] tracking-[0.14em] text-faint uppercase ${hide}`}
                 >
                   {head}
                 </th>
               ))}
+              <th className="hidden border-b border-rule px-2 py-1 text-right text-[9px] tracking-[0.14em] text-faint uppercase sm:table-cell">
+                Turn
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -199,19 +201,19 @@ export function Exchange({ state, player, onOrder }: ExchangeProps) {
                     <span className="text-faint">{RESOURCE_ABBR[resource]}</span>
                     <span className="ml-1.5">{RESOURCE_LABEL[resource]}</span>
                   </td>
-                  <td className="px-2 py-[3px] text-[10px] text-faint">
+                  <td className="hidden px-2 py-[3px] text-[10px] text-faint sm:table-cell">
                     {FAMILY_LABEL[COMMODITIES[resource].family]}
                   </td>
                   <td className="tabular px-2 py-[3px] text-[11px] text-brass">
                     {formatPrice(market.price)}
                   </td>
-                  <td className="tabular px-2 py-[3px] text-[10px] text-faint">
+                  <td className="tabular hidden px-2 py-[3px] text-[10px] text-faint md:table-cell">
                     {formatPrice(market.basePrice)}
                   </td>
-                  <td className="tabular px-2 py-[3px] text-[10px] text-dim">
+                  <td className="tabular hidden px-2 py-[3px] text-[10px] text-dim lg:table-cell">
                     {formatUnits(market.supply)}
                   </td>
-                  <td className="tabular px-2 py-[3px] text-[10px] text-brass">
+                  <td className="tabular hidden px-2 py-[3px] text-[10px] text-brass lg:table-cell">
                     {formatUnits(market.demand)}
                   </td>
                   <td
@@ -225,7 +227,7 @@ export function Exchange({ state, player, onOrder }: ExchangeProps) {
                   <td className="tabular px-2 py-[3px] text-[11px] text-dim">
                     {formatUnits(getQty(state.inventory, player.id, resource))}
                   </td>
-                  <td className="px-2 py-[3px]">
+                  <td className="hidden px-2 py-[3px] sm:table-cell">
                     <Sparkline points={series} tone={delta >= 0 ? "#8a9a4a" : "#a9542a"} />
                   </td>
                 </tr>

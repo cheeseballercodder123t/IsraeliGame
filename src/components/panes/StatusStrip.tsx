@@ -10,7 +10,7 @@ import { formatMoney, formatPercent, countdown, ownerColor, windLabel } from "@/
 
 function Gauge({ label, value, readout, tone }: { label: string; value: number; readout: string; tone: string }) {
   return (
-    <div className="min-w-[104px] flex-1 px-3 py-1.5">
+    <div className="min-w-[86px] flex-1 px-2.5 py-1.5 sm:min-w-[104px] sm:px-3">
       <p className="text-[9px] tracking-[0.16em] text-faint uppercase">{label}</p>
       <p className={`tabular text-[13px] ${tone}`}>{readout}</p>
       <div className="mt-1 h-[3px] w-full bg-tar">
@@ -60,8 +60,11 @@ export function StatusStrip({
   const profile = charterOf(me.archetype);
 
   return (
-    <header className="flex flex-wrap items-stretch border border-rule bg-plate">
-      <div className="flex min-w-[190px] flex-col justify-center border-r border-rule px-3 py-1.5">
+    <header
+      data-tour="strip"
+      className="flex flex-wrap items-stretch border border-rule bg-plate"
+    >
+      <div className="flex min-w-[168px] flex-1 flex-col justify-center border-r border-rule px-3 py-1.5 sm:min-w-[190px] sm:flex-none">
         <p className="flex items-center gap-2 text-[9px] tracking-[0.16em] text-faint uppercase">
           Table {state.game.code}
           <span
@@ -72,9 +75,7 @@ export function StatusStrip({
                 : "The table could not be reached; this is the last state seen"
             }
           >
-            <span
-              className={`inline-block h-1.5 w-1.5 rounded-full ${live ? "bg-bile" : "bg-hazard"}`}
-            />
+            <span className={`inline-block h-1.5 w-1.5 ${live ? "bg-bile" : "bg-hazard"}`} />
             {live ? "live" : "stale"}
           </span>
         </p>
@@ -109,7 +110,7 @@ export function StatusStrip({
         tone={me.morale < 25 ? "text-blood" : "text-bile"}
       />
 
-      <div className="flex min-w-[150px] items-center justify-between gap-2 border-l border-rule px-3 py-1.5">
+      <div className="flex min-w-[150px] flex-1 items-center justify-between gap-2 border-l border-rule px-3 py-1.5 sm:flex-none">
         <div>
           <p className="text-[9px] tracking-[0.16em] text-faint uppercase">Window closes</p>
           <p className="tabular text-[13px] text-ink">{countdown(remaining)}</p>
@@ -118,6 +119,7 @@ export function StatusStrip({
         {onOpenRag && ragTurn ? (
           <button
             type="button"
+            data-tour="rag"
             onClick={onOpenRag}
             className="border border-edge px-2 py-1 text-[10px] tracking-[0.1em] text-dim uppercase hover:text-ink"
           >
@@ -138,9 +140,7 @@ export function StatusStrip({
                 style={{ background: ownerColor(state, player.id), opacity: player.id === meId ? 1 : 0.65 }}
               />
               <span
-                className={`inline-block h-1.5 w-1.5 rounded-full ${
-                  atDesk(player.id) ? "bg-bile" : "bg-tar"
-                }`}
+                className={`inline-block h-1.5 w-1.5 ${atDesk(player.id) ? "bg-bile" : "bg-tar"}`}
                 title={atDesk(player.id) ? "at the table now" : "away from the table"}
               />
               <span className={`text-[10px] ${player.id === meId ? "text-ink" : "text-faint"}`}>

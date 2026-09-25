@@ -513,8 +513,8 @@ export const blackmail: OrderHandler = (ctx, actor, raw) => {
   if (raw.type !== "BLACKMAIL") return;
   const target = playerById(ctx, raw.playerId);
   if (!target || target.id === actor.id) return;
-  const leverage = target.pr < 40 || target.offshoreCash > 0 || target.tips > 0;
-  if (!leverage) return;
+  const softTarget = target.pr < 40 || target.offshoreCash > 0 || target.tips > 0;
+  if (!softTarget) return;
   const cost = blackOpCharge(actor, BLACKMAIL_COST);
   if (cost === null) return;
   const demand = Math.min(Math.max(0, raw.amount), target.cash * 0.3);

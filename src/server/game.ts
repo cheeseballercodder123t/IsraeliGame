@@ -42,7 +42,7 @@ type CommitOutcome<T> =
   | { ok: false; error: string };
 
 /**
- * Read, decide, write — and try again when somebody else got there first.
+ * Read, decide, write, and try again when somebody else got there first.
  *
  * Every change to a table goes through here. The mutator is handed the
  * freshest snapshot and returns either a value to keep or an error to report;

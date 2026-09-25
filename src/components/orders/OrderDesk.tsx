@@ -309,10 +309,9 @@ function FieldControl({
         step={step}
         onChange={(event) => onChange(Number(event.target.value))}
       />
-      {field.max !== undefined && field.max - (field.min ?? 0) > 0 ? (
-        <input
-          type="range"
-          className="h-1 w-24"
+      {field.max !== undefined && field.max - (field.min ?? 0) > 0 ? (          <input
+            type="range"
+            className="h-1 w-16 sm:w-24"
           value={numeric}
           min={field.min ?? 0}
           max={field.max}
@@ -394,11 +393,11 @@ export function OrderDesk({ state, player, queued, onQueue }: OrderDeskProps) {
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Find an order"
-          className="ml-auto w-40 border border-rule bg-pit px-1.5 py-[3px] text-[11px] text-ink placeholder:text-faint"
+          className="ml-auto w-full border border-rule bg-pit px-1.5 py-[3px] text-[11px] text-ink placeholder:text-faint sm:w-40"
         />
       </div>
 
-      <ul className="mt-2 max-h-[420px] space-y-1 overflow-y-auto pr-1">
+      <ul className="mt-2 max-h-[52vh] space-y-1 overflow-y-auto pr-1 lg:max-h-[440px]">
         {specs.map((spec) => {
           const values = draft(spec);
           const open = openType === spec.type;
