@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ORDER_CATEGORIES,
   RESOURCE_LABEL,
@@ -25,6 +25,7 @@ import type {
   Order,
   OrderCategory,
   Player,
+  QueuedOrder,
   RollingStock,
 } from "@/domain/types";
 import { Button, Empty, Panel } from "@/components/ui/primitives";
@@ -327,15 +328,66 @@ function FieldControl({
 export interface OrderDeskProps {
   state: GameState;
   player: Player;
-  queued: number;
+  /** Orders already sealed into the window being played. */
+  sealed: QueuedOrder[];
   onQueue: (order: Order, label: string) => void;
 }
 
-export function OrderDesk({ state, player, queued, onQueue }: OrderDeskProps) {
+export function OrderDesk({ state, player, sealed, onQueue }: OrderDeskProps) {
   const [category, setCategory] = useState<OrderCategory>("PLANNING");
   const [openType, setOpenType] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const [query, setQuery] = useState("");
+  const list = useRef<HTMLUListElement | null>(null);
+  const search = useRef<HTMLInputElement | null>(null);
+
+  /** What is already sealed, counted by the phase it will run in. */
+  const sealedIn = useMemo(() => {
+    const counts: Partial<Record<OrderCategory, number>> = {};
+    for (const item of sealed) {
+      const spec = ORDER_SPECS[item.order.type as keyof typeof ORDER_SPECS];
+      if (!spec) continue;
+      counts[spec.category] = (counts[spec.category] ?? 0) + 1;
+    }
+    return counts;
+  }, [sealed]);
+
+  // An order opened near the bottom of the list would otherwise unfold past the
+  // edge of it, putting the seal button somewhere the eye has to hunt for.
+  useEffect(() => {
+    if (!openType) return;
+    const box = list.current;
+    const row = box?.querySelector<HTMLElement>(`[data-order="${openType}"]`);
+    if (!box || !row) return;
+    const shift = row.getBoundingClientRect().top - box.getBoundingClientRect().top;
+    if (shift > 0) box.scrollTop += shift - 8;
+    const settle = requestAnimationFrame(() =>
+      row.scrollIntoView({ block: "nearest", behavior: "smooth" }),
+    );
+    return () => cancelAnimationFrame(settle);
+  }, [openType]);
+
+  // Slash reaches the finder from anywhere on the desk, the way a clerk would
+  // expect, but never steals a slash meant for a field.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "/" || event.metaKey || event.ctrlKey || event.altKey) return;
+      const target = event.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "SELECT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      event.preventDefault();
+      search.current?.focus();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const specs = useMemo(() => {
     const list = ordersOfCategory(category);
@@ -365,11 +417,12 @@ export function OrderDesk({ state, player, queued, onQueue }: OrderDeskProps) {
   return (
     <Panel
       title="Operations desk"
-      aside={`${queued} queued · ${ORDER_SPEC_LIST.length} orders on the card`}
+      aside={`${sealed.length} sealed · ${ORDER_SPEC_LIST.length} orders on the card`}
     >
       <div className="flex flex-wrap items-center gap-1 border-b border-rule pb-2">
         {ORDER_CATEGORIES.map((id) => {
           const count = ordersOfCategory(id).length;
+          const taken = sealedIn[id] ?? 0;
           return (
             <button
               key={id}
@@ -378,6 +431,11 @@ export function OrderDesk({ state, player, queued, onQueue }: OrderDeskProps) {
                 setCategory(id);
                 setOpenType(null);
               }}
+              title={
+                taken > 0
+                  ? `${taken} of the ${count} orders in this phase are sealed`
+                  : `${count} orders in this phase`
+              }
               className={`border px-2 py-[3px] text-[10px] tracking-[0.1em] uppercase ${
                 id === category
                   ? "border-brass bg-plate text-ink"
@@ -385,19 +443,29 @@ export function OrderDesk({ state, player, queued, onQueue }: OrderDeskProps) {
               }`}
             >
               {CATEGORY_NAME[id]}
-              <span className="tabular ml-1 text-faint">{count}</span>
+              <span className="tabular ml-1">
+                {taken > 0 ? <span className="text-brass">{taken}</span> : null}
+                <span className="text-faint">
+                  {taken > 0 ? "/" : ""}
+                  {count}
+                </span>
+              </span>
             </button>
           );
         })}
-        <input
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Find an order"
-          className="ml-auto w-full border border-rule bg-pit px-1.5 py-[3px] text-[11px] text-ink placeholder:text-faint sm:w-40"
-        />
+        <label className="ml-auto flex w-full items-center gap-1 sm:w-44">
+          <input
+            ref={search}
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Find an order"
+            className="w-full border border-rule bg-pit px-1.5 py-[3px] text-[11px] text-ink placeholder:text-faint"
+          />
+          <span className="text-[10px] text-faint">/</span>
+        </label>
       </div>
 
-      <ul className="mt-2 max-h-[52vh] space-y-1 overflow-y-auto pr-1 lg:max-h-[440px]">
+      <ul ref={list} className="mt-2 max-h-[52vh] space-y-1 overflow-y-auto pr-1 lg:max-h-[440px]">
         {specs.map((spec) => {
           const values = draft(spec);
           const open = openType === spec.type;
@@ -405,7 +473,7 @@ export function OrderDesk({ state, player, queued, onQueue }: OrderDeskProps) {
           const cost = orderCost(state, player, order);
           const affordable = cost === null || cost <= player.cash;
           return (
-            <li key={spec.type} className="border border-rule">
+            <li key={spec.type} data-order={spec.type} className="border border-rule">
               <button
                 type="button"
                 onClick={() => setOpenType(open ? null : spec.type)}

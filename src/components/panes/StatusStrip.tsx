@@ -58,6 +58,17 @@ export function StatusStrip({
   if (!me) return null;
   const risk = auditRiskOf(me);
   const profile = charterOf(me.archetype);
+  const mineSealed = sealedBy(meId);
+
+  // How much of this window has already gone, which is what the tick will
+  // resolve against. The bar is deliberately the last thing in the strip to
+  // turn: a window that is nearly out is the one thing worth interrupting for.
+  const windowSeconds = Math.max(1, state.game.tickIntervalHours * 3600);
+  const spent = Math.min(100, Math.max(0, (1 - remaining / windowSeconds) * 100));
+  const late = remaining / windowSeconds < 0.25;
+  const imminent = remaining / windowSeconds < 0.1;
+  const windowTone = imminent ? "text-blood" : late ? "text-hazard" : "text-ink";
+  const windowFill = imminent ? "bg-blood" : late ? "bg-hazard" : "bg-brass";
 
   return (
     <header
@@ -110,11 +121,17 @@ export function StatusStrip({
         tone={me.morale < 25 ? "text-blood" : "text-bile"}
       />
 
-      <div className="flex min-w-[150px] flex-1 items-center justify-between gap-2 border-l border-rule px-3 py-1.5 sm:flex-none">
-        <div>
+      <div className="flex min-w-[164px] flex-1 items-center justify-between gap-2 border-l border-rule px-3 py-1.5 sm:flex-none">
+        <div className="min-w-0 flex-1">
           <p className="text-[9px] tracking-[0.16em] text-faint uppercase">Window closes</p>
-          <p className="tabular text-[13px] text-ink">{countdown(remaining)}</p>
-          <p className="tabular text-[10px] text-faint">worth {formatMoney(netWorthOf(state, meId))}</p>
+          <p className={`tabular text-[13px] ${windowTone}`}>{countdown(remaining)}</p>
+          <div className="mt-1 h-[3px] w-full bg-tar" title={`${Math.round(spent)}% of this window spent`}>
+            <div className={`h-full ${windowFill}`} style={{ width: `${spent}%` }} />
+          </div>
+          <p className="tabular mt-1 text-[10px] text-faint">
+            <span className={mineSealed > 0 ? "text-brass" : undefined}>{mineSealed} sealed</span> ·
+            worth {formatMoney(netWorthOf(state, meId))}
+          </p>
         </div>
         {onOpenRag && ragTurn ? (
           <button

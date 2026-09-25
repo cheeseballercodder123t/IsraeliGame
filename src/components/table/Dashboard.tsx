@@ -20,10 +20,11 @@ import { Exchange, holdingsByFamily } from "@/components/panes/Exchange";
 import { OrderDesk } from "@/components/orders/OrderDesk";
 import { OrdersBoard } from "@/components/panes/OrdersBoard";
 import { StatusStrip } from "@/components/panes/StatusStrip";
+import { FirstMoves } from "@/components/table/FirstMoves";
 import { NewspaperModal } from "@/components/newspaper/NewspaperModal";
 import { useTableSync } from "@/components/table/useTableSync";
 import { Tour, startTour } from "@/components/tour/Tour";
-import { TABLE_TOUR } from "@/components/tour/steps";
+import { TABLE_RECAP, TABLE_TOUR } from "@/components/tour/steps";
 import { Button, KeyValue, Meter, Notice, Panel } from "@/components/ui/primitives";
 import { cancelOrderAction, forceTickAction, queueOrderAction } from "@/server/actions";
 import {
@@ -62,6 +63,7 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
   const [ragOpen, setRagOpen] = useState(false);
   const [view, setView] = useState<"DESK" | "FLOOR">("DESK");
   const [errors, setErrors] = useState<string[]>([]);
+  const [receipt, setReceipt] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const latestIssue = issues[0] ?? null;
@@ -93,13 +95,55 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
       startTransition(async () => {
         applyOptimistic({ kind: "add", order: optimisticOrder });
         const result = await queueOrderAction(code, order);
-        if (!result.ok) {
+        if (result.ok) {
+          // A sealed order makes no noise on the board until the window closes,
+          // so the desk has to say out loud that it took it.
+          setReceipt(`${label} sealed into turn ${state.game.currentTurn}`);
+        } else {
           setErrors((current) => [...current, `${label}: ${result.error ?? "rejected"}`].slice(-4));
         }
       });
     },
     [applyOptimistic, code, meId, state.game.currentTurn],
   );
+
+  useEffect(() => {
+    if (!receipt) return;
+    const timer = setTimeout(() => setReceipt(null), 4000);
+    return () => clearTimeout(timer);
+  }, [receipt]);
+
+  // Desk, floor and the walk-around, from the keyboard. A dialog owns the keys
+  // while it is open, and so does any field being typed into.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      const target = event.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "SELECT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      if (document.querySelector('[role="dialog"]')) return;
+      const key = event.key.toLowerCase();
+      if (key === "d") {
+        event.preventDefault();
+        setView("DESK");
+      } else if (key === "f") {
+        event.preventDefault();
+        setView("FLOOR");
+      } else if (key === "t") {
+        event.preventDefault();
+        startTour();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const handleCancel = useCallback(
     (orderId: string) => {
@@ -152,7 +196,7 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
 
   return (
     <div className="mx-auto max-w-[1780px] p-2 sm:p-3">
-      <Tour name="table" steps={TABLE_TOUR} />
+      <Tour name="table" steps={TABLE_TOUR} recap={TABLE_RECAP} />
 
       <StatusStrip
         state={state}
@@ -180,6 +224,12 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
         </div>
       ) : null}
 
+      {receipt ? (
+        <div className="mt-2">
+          <Notice tone="ok">{receipt}</Notice>
+        </div>
+      ) : null}
+
       {me.frozenTurns > 0 ? (
         <div className="mt-2">
           <Notice tone="warn">
@@ -203,7 +253,7 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
         ))}
         <button
           type="button"
-          onClick={startTour}
+          onClick={() => startTour()}
           className="ml-auto border border-edge px-3 py-1 text-[10px] tracking-[0.16em] text-dim uppercase hover:text-ink"
         >
           Take the tour
@@ -221,12 +271,8 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
             data-tour="desk"
             className="order-2 min-w-0 space-y-3 lg:order-none lg:col-start-1 lg:row-span-2 lg:row-start-1 2xl:col-start-1 2xl:row-span-1 2xl:row-start-1"
           >
-            <OrderDesk
-              state={state}
-              player={me}
-              queued={optimistic.length}
-              onQueue={handleOrder}
-            />
+            <FirstMoves state={state} player={me} onShow={setSelectedTileId} />
+            <OrderDesk state={state} player={me} sealed={optimistic} onQueue={handleOrder} />
             <div data-tour="queue">
               <OrdersBoard orders={optimistic} onCancel={handleCancel} />
             </div>
@@ -547,6 +593,10 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
         <p className="text-[10px] text-faint">
           {RESOURCE_LABEL.POWER} is bought by the tick, not by you. Waste that cannot be held spills
           onto your own plots, and the inspectors fine the air, not the intention.
+        </p>
+        <p className="text-[10px] text-faint">
+          Keys: d for the desk and board, f for the floor and register, t for the walk-around, and
+          / anywhere on the desk to jump to an order by name.
         </p>
         <p className="pt-1">
           <Button tone="quiet" onClick={startTour}>

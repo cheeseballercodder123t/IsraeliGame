@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { chooseWalk, type TourMode } from "@/components/tour/walk";
 import { Button } from "@/components/ui/primitives";
 
 /**
@@ -25,9 +26,20 @@ export interface TourStep {
 /** Fires the tour from anywhere, including a plain button. */
 export const TOUR_START = "conglomerate:tour:start";
 
-export function startTour(): void {
+/**
+ * Starts the walk-around. With no argument a director who has already been
+ * walked around the room gets the short reminder and everybody else gets the
+ * whole script; "full" asks for the whole script either way.
+ */
+export function startTour(mode: TourMode = "auto"): void {
   if (typeof window === "undefined") return;
-  window.dispatchEvent(new Event(TOUR_START));
+  window.dispatchEvent(new CustomEvent(TOUR_START, { detail: { full: mode === "full" } }));
+}
+
+/** Reads the requested walk off the start event. Anything else means automatic. */
+function modeOf(event: Event): TourMode {
+  const detail = (event as CustomEvent<{ full?: boolean }>).detail;
+  return detail && detail.full === true ? "full" : "auto";
 }
 
 interface Box {
@@ -57,11 +69,14 @@ function clamp(value: number, low: number, high: number): number {
 export function Tour({
   name,
   steps,
+  recap,
   auto = true,
 }: {
   /** Distinguishes one tour's bookmark from another's. */
   name: string;
   steps: TourStep[];
+  /** The shorter walk for a director who has already been around the room. */
+  recap?: TourStep[];
   /** Run once on a first visit, then never again unless asked. */
   auto?: boolean;
 }) {
@@ -69,6 +84,10 @@ export function Tour({
   const [index, setIndex] = useState<number | null>(null);
   const [box, setBox] = useState<Box | null>(null);
   const [cardHeight, setCardHeight] = useState(220);
+  /** The stops being walked this time, which may be the short reminder. */
+  const [walk, setWalk] = useState<TourStep[]>(steps);
+  /** False while the reminder is running, so the card can offer the rest. */
+  const [whole, setWhole] = useState(true);
   const card = useRef<HTMLDivElement | null>(null);
   // The step lives in a ref as well as in state, so the interval that keeps
   // the ring on its panel can walk on without an effect re-registering every
@@ -79,16 +98,22 @@ export function Tour({
     stepRef.current = index;
   }, [index]);
 
-  /** The next step from `from` whose panel is actually on the page. */
-  const seek = useCallback(
-    (from: number): number | null => {
-      for (let at = from; at < steps.length; at += 1) {
-        if (document.querySelector(`[data-tour="${steps[at].anchor}"]`)) return at;
-      }
-      return null;
-    },
-    [steps],
-  );
+  /** The next stop from `from` whose panel is actually on the page. */
+  const seek = useCallback((from: number, script: TourStep[]): number | null => {
+    for (let at = from; at < script.length; at += 1) {
+      if (document.querySelector(`[data-tour="${script[at].anchor}"]`)) return at;
+    }
+    return null;
+  }, []);
+
+  /** Whether this browser has already been walked around this room. */
+  const seen = useCallback((): boolean => {
+    try {
+      return window.localStorage.getItem(bookmark) !== null;
+    } catch {
+      return false;
+    }
+  }, [bookmark]);
 
   const finish = useCallback(() => {
     setIndex(null);
@@ -99,15 +124,21 @@ export function Tour({
     }
   }, [bookmark]);
 
-  const begin = useCallback(() => {
-    const first = seek(0);
-    if (first === null) {
-      finish();
-      return;
-    }
-    setBox(null);
-    setIndex(first);
-  }, [finish, seek]);
+  const begin = useCallback(
+    (mode: TourMode) => {
+      const picked = chooseWalk(steps, recap, { full: mode === "full", seen: seen() });
+      setWalk(picked.script);
+      setWhole(picked.whole);
+      const first = seek(0, picked.script);
+      if (first === null) {
+        finish();
+        return;
+      }
+      setBox(null);
+      setIndex(first);
+    },
+    [finish, recap, seek, seen, steps],
+  );
 
   const go = useCallback(
     (direction: 1 | -1) => {
@@ -115,42 +146,32 @@ export function Tour({
       if (current === null) return;
       const target = current + direction;
       if (target < 0) return;
-      const next = target >= steps.length ? null : seek(target);
+      const next = target >= walk.length ? null : seek(target, walk);
       if (next === null) {
         finish();
         return;
       }
       setIndex(next);
     },
-    [finish, seek, steps.length],
+    [finish, seek, walk],
   );
 
-  const start = useCallback(() => {
-    begin();
+  useEffect(() => {
+    const onStart = (event: Event) => begin(modeOf(event));
+    window.addEventListener(TOUR_START, onStart);
+    return () => window.removeEventListener(TOUR_START, onStart);
   }, [begin]);
 
   useEffect(() => {
-    window.addEventListener(TOUR_START, start);
-    return () => window.removeEventListener(TOUR_START, start);
-  }, [start]);
-
-  useEffect(() => {
-    if (!auto) return;
-    let seen: string | null = null;
-    try {
-      seen = window.localStorage.getItem(bookmark);
-    } catch {
-      seen = null;
-    }
-    if (seen) return;
-    const timer = setTimeout(begin, 900);
+    if (!auto || seen()) return;
+    const timer = setTimeout(() => begin("auto"), 900);
     return () => clearTimeout(timer);
-  }, [auto, begin, bookmark]);
+  }, [auto, begin, seen]);
 
   // Ring the panel and keep the ring on it.
   useEffect(() => {
     if (index === null) return;
-    const step = steps[index];
+    const step = walk[index];
     if (!step) return;
     const selector = `[data-tour="${step.anchor}"]`;
     let misses = 0;
@@ -187,7 +208,7 @@ export function Tour({
       window.removeEventListener("resize", read);
       window.removeEventListener("scroll", read, true);
     };
-  }, [go, index, steps]);
+  }, [go, index, walk]);
 
   // Keyboard, so the walk does not need the mouse.
   useEffect(() => {
@@ -248,7 +269,7 @@ export function Tour({
   }, [box, cardHeight]);
 
   if (index === null || !box || !place) return null;
-  const step = steps[index];
+  const step = walk[index];
 
   return (
     <div
@@ -304,15 +325,26 @@ export function Tour({
       >
         <header className="flex items-center justify-between gap-2 border-b border-rule bg-plate px-3 py-1.5">
           <p className="tabular text-[10px] tracking-[0.2em] text-brass uppercase">
-            Step {index + 1} of {steps.length}
+            Step {index + 1} of {walk.length}
           </p>
-          <button
-            type="button"
-            onClick={finish}
-            className="text-[10px] tracking-[0.14em] text-dim uppercase hover:text-ink"
-          >
-            Leave the tour
-          </button>
+          <div className="flex items-center gap-3">
+            {whole ? null : (
+              <button
+                type="button"
+                onClick={() => begin("full")}
+                className="text-[10px] tracking-[0.14em] text-brass uppercase hover:text-ink"
+              >
+                The whole walk
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={finish}
+              className="text-[10px] tracking-[0.14em] text-dim uppercase hover:text-ink"
+            >
+              Leave the tour
+            </button>
+          </div>
         </header>
 
         <div className="px-3 py-2.5">
@@ -322,7 +354,7 @@ export function Tour({
 
         <div className="flex items-center justify-between gap-2 border-t border-rule px-3 py-2">
           <div className="flex gap-[3px]" aria-hidden>
-            {steps.map((entry, at) => (
+            {walk.map((entry, at) => (
               <span
                 key={entry.anchor}
                 className={`h-[3px] w-4 ${at === index ? "bg-brass" : at < index ? "bg-edge" : "bg-tar"}`}
@@ -334,7 +366,7 @@ export function Tour({
               Back
             </Button>
             <Button tone="brass" onClick={() => go(1)}>
-              {index === steps.length - 1 ? "Finish" : "Next"}
+              {index === walk.length - 1 ? "Finish" : "Next"}
             </Button>
           </div>
         </div>
