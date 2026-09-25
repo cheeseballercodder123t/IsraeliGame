@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { Dashboard } from "@/components/table/Dashboard";
+import { LobbyViewPanel } from "@/components/table/LobbyViewPanel";
 import { openTable } from "@/server/dashboard";
 import { DEV_TICK } from "@/server/game";
 
@@ -9,20 +10,22 @@ export default async function TablePage({ params }: { params: Promise<{ code: st
   const { code } = await params;
   const result = await openTable(code);
 
-  if (!result.ok) {
+  if (result.kind === "miss") {
     if (result.miss.reason === "no-table") notFound();
     redirect(`/?code=${encodeURIComponent(code.toUpperCase())}`);
   }
 
-  const { state, me, pending, issues } = result.view;
+  if (result.kind === "lobby") {
+    return <LobbyViewPanel lobby={result.lobby} />;
+  }
 
   return (
     <Dashboard
-      code={state.game.code}
-      state={state}
-      meId={me.id}
-      pending={pending}
-      issues={issues}
+      code={result.view.state.game.code}
+      state={result.view.state}
+      meId={result.view.me.id}
+      pending={result.view.pending}
+      issues={result.view.issues}
       devTick={DEV_TICK}
     />
   );

@@ -31,6 +31,8 @@ export interface NewPlayerSpec {
   name: string;
   archetype: Archetype;
   isBot?: boolean;
+  /** Chair count carried on the first seat of a gathering table. */
+  lobbySeat?: number | null;
 }
 
 export interface NewGameSpec {
@@ -40,6 +42,8 @@ export interface NewGameSpec {
   tickIntervalHours: number;
   nextTickAt: string;
   players: NewPlayerSpec[];
+  /** Tables open as LOBBY when humans still have seats to take. Defaults to ACTIVE. */
+  status?: Game["status"];
 }
 
 export function makeGameCode(seed: number): string {
@@ -62,6 +66,7 @@ export function newPlayer(
     name: string;
     archetype: Archetype;
     isBot: boolean;
+    lobbySeat?: number | null;
   },
   startingTurn = 1,
 ): Player {
@@ -91,6 +96,7 @@ export function newPlayer(
     insuranceActive: false,
     valuationBonus: 0,
     strikeImmunityTurn: startingTurn - 1,
+    lobbySeat: spec.lobbySeat ?? null,
     pizzaPending: 0,
     companyTown: false,
     shellLicenses: mods.shellLicenses,
@@ -117,7 +123,7 @@ export function createGameState(spec: NewGameSpec): GameState {
   const game: Game = {
     id: spec.id,
     code: spec.code,
-    status: "ACTIVE",
+    status: spec.status ?? "ACTIVE",
     currentTurn: 1,
     tickIntervalHours: spec.tickIntervalHours,
     nextTickAt: spec.nextTickAt,
@@ -173,6 +179,7 @@ export function createGameState(spec: NewGameSpec): GameState {
       name: p.name,
       archetype: p.archetype,
       isBot: p.isBot ?? false,
+      lobbySeat: p.lobbySeat ?? null,
     }),
   );
 

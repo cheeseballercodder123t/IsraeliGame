@@ -38,12 +38,14 @@ export class SupabaseStore implements GameStore {
       seed: input.seed,
       tickIntervalHours: input.tickIntervalHours,
       nextTickAt: input.nextTickAt,
-      players: input.seats.map((seat) => ({
+      status: input.status,
+      players: input.seats.map((seat, index) => ({
         id: crypto.randomUUID(),
         userId: seat.userId,
         name: seat.name,
         archetype: seat.archetype,
         isBot: seat.isBot,
+        lobbySeat: index === 0 && input.lobbySeats ? input.lobbySeats : null,
       })),
     });
 
@@ -108,21 +110,25 @@ export class SupabaseStore implements GameStore {
   }
 
   async listGames(): Promise<GameSummary[]> {
+    // The seat flags come back whole rather than as an aggregate, which is
+    // twelve rows a table at most, so the lobby list can tell a full table
+    // from one still gathering without another RPC.
     const { data, error } = await this.client
       .from("games")
-      .select("id, code, current_turn, status, next_tick_at, players(count)")
+      .select("id, code, current_turn, status, next_tick_at, players(is_bot)")
       .order("created_at", { ascending: false })
       .limit(50);
     if (error) throw new Error(error.message);
     return (data ?? []).map((row) => {
-      const counts = row.players as unknown as { count: number }[] | null;
+      const seats = (row.players as unknown as { is_bot: boolean }[] | null) ?? [];
       return {
         id: row.id as string,
         code: row.code as string,
         turn: row.current_turn as number,
         status: row.status as GameState["game"]["status"],
         nextTickAt: row.next_tick_at as string,
-        players: counts && counts[0] ? counts[0].count : 0,
+        players: seats.length,
+        humans: seats.filter((seat) => !seat.is_bot).length,
       };
     });
   }
