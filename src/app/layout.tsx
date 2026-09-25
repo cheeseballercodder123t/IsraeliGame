@@ -4,7 +4,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Conglomerate: Gilded Age",
   description:
-    "An asynchronous industrial empire and corporate warfare simulator. One hundred and twenty one plots, seventy five commodities, sixty four orders, and a newspaper that prints what you did.",
+    "A live multiplayer industrial empire and corporate warfare simulator. One hundred and twenty one plots, seventy five commodities, sixty four orders, sealed windows resolved in the open, and a newspaper that prints what you did.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

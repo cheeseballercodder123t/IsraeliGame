@@ -21,6 +21,7 @@ import { OrderDesk } from "@/components/orders/OrderDesk";
 import { OrdersBoard } from "@/components/panes/OrdersBoard";
 import { StatusStrip } from "@/components/panes/StatusStrip";
 import { NewspaperModal } from "@/components/newspaper/NewspaperModal";
+import { useTableSync } from "@/components/table/useTableSync";
 import { Button, KeyValue, Meter, Notice, Panel } from "@/components/ui/primitives";
 import { cancelOrderAction, forceTickAction, queueOrderAction } from "@/server/actions";
 import {
@@ -63,6 +64,10 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
 
   const latestIssue = issues[0] ?? null;
   const me = state.players.find((player) => player.id === meId);
+  // The table's revision is watched rather than pushed: when it moves, this
+  // browser asks the router for a fresh snapshot, so a rival's sealed order, a
+  // newcomer in a chair or a resolved window lands without a reload.
+  const { live, present } = useTableSync(code, state.game.revision);
 
   useEffect(() => {
     if (!latestIssue) return;
@@ -153,6 +158,8 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
         meId={meId}
         ragTurn={latestIssue ? latestIssue.turn : null}
         onOpenRag={() => setRagOpen(true)}
+        live={live}
+        present={present}
       />
 
       {errors.length > 0 ? (

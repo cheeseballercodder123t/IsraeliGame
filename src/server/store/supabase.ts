@@ -7,6 +7,7 @@ import type {
   GameSummary,
   NewspaperRecord,
 } from "./types";
+import { withRevision } from "./types";
 
 export function supabaseCredentials(): { url: string; key: string } | null {
   const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -61,17 +62,32 @@ export class SupabaseStore implements GameStore {
     });
     if (error) throw new Error(error.message);
 
-    await this.persist(state, []);
+    // The row was just inserted at revision zero, so the first write is
+    // expected to take it to one.
+    await this.persist(state, [], state.game.revision);
     return state;
   }
 
-  private async persist(state: GameState, events: unknown[]): Promise<void> {
-    const { error } = await this.client.rpc("save_game_state", {
+  /**
+   * The guarded write. `save_game_state_rev` bumps `games.revision` only while
+   * it still matches what the caller read, so two writers on one table cannot
+   * both win; the loser is handed back null. The snapshot is stamped with the
+   * revision that actually landed.
+   */
+  private async persist(
+    state: GameState,
+    events: unknown[],
+    expected?: number,
+  ): Promise<boolean> {
+    const { data, error } = await this.client.rpc("save_game_state_rev", {
       p_game_id: state.game.id,
       p_turn: state.game.currentTurn,
       p_snapshot: state,
+      p_expected: expected ?? state.game.revision ?? 0,
     });
     if (error) throw new Error(error.message);
+    if (data === null || data === undefined) return false;
+    state.game.revision = Number(data);
 
     const { error: orderError } = await this.client.rpc("sync_queued_actions", {
       p_game_id: state.game.id,
@@ -86,12 +102,15 @@ export class SupabaseStore implements GameStore {
         p_events: events,
       });
     }
+
+    return true;
   }
 
   async getGame(id: string): Promise<GameState | null> {
     const { data, error } = await this.client.rpc("load_game_state", { p_game_id: id });
     if (error) throw new Error(error.message);
-    return (data as GameState | null) ?? null;
+    const state = (data as GameState | null) ?? null;
+    return state ? withRevision(state) : null;
   }
 
   async getGameByCode(code: string): Promise<GameState | null> {
@@ -105,8 +124,8 @@ export class SupabaseStore implements GameStore {
     return this.getGame(data.id as string);
   }
 
-  async saveGame(state: GameState): Promise<void> {
-    await this.persist(state, []);
+  async saveGame(state: GameState, expected?: number): Promise<boolean> {
+    return this.persist(state, [], expected);
   }
 
   async listGames(): Promise<GameSummary[]> {
@@ -133,18 +152,27 @@ export class SupabaseStore implements GameStore {
     });
   }
 
-  async appendOrder(gameId: string, order: QueuedOrder): Promise<void> {
-    const state = await this.getGame(gameId);
-    if (!state || state.queue.some((q) => q.id === order.id)) return;
-    state.queue.push(order);
-    await this.persist(state, []);
+  /**
+   * One order onto one row, patched into the snapshot in the same transaction.
+   * Nothing else in the window is read or rewritten, so a rival's desk cannot
+   * be clobbered by the act of sealing your own.
+   */
+  async appendOrder(gameId: string, order: QueuedOrder): Promise<boolean> {
+    const { data, error } = await this.client.rpc("append_queued_action", {
+      p_game_id: gameId,
+      p_order: order,
+    });
+    if (error) throw new Error(error.message);
+    return data === true;
   }
 
-  async removeOrder(gameId: string, orderId: string): Promise<void> {
-    const state = await this.getGame(gameId);
-    if (!state) return;
-    state.queue = state.queue.filter((q) => q.id !== orderId);
-    await this.persist(state, []);
+  async removeOrder(gameId: string, orderId: string): Promise<boolean> {
+    const { data, error } = await this.client.rpc("remove_queued_action", {
+      p_game_id: gameId,
+      p_order_id: orderId,
+    });
+    if (error) throw new Error(error.message);
+    return data === true;
   }
 
   async listIssues(gameId: string): Promise<NewspaperRecord[]> {

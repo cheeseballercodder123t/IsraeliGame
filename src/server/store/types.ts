@@ -1,6 +1,16 @@
 import type { Archetype, GameState, QueuedOrder } from "@/domain/types";
 import type { Scandal } from "@/server/rag/template";
 
+/**
+ * Tables written before revisions existed carry no counter, so a loaded
+ * snapshot is read as revision zero and picks up from there. Every adapter
+ * runs its reads through this, which is what lets an old table keep playing.
+ */
+export function withRevision(state: GameState): GameState {
+  if (typeof state.game.revision !== "number") state.game.revision = 0;
+  return state;
+}
+
 export interface NewspaperRecord {
   turn: number;
   headline: string;
@@ -48,10 +58,22 @@ export interface GameStore {
   createGame(input: CreateGameInput): Promise<GameState>;
   getGame(id: string): Promise<GameState | null>;
   getGameByCode(code: string): Promise<GameState | null>;
-  saveGame(state: GameState): Promise<void>;
+  /**
+   * Writes the snapshot and stamps it with the next revision. When `expected`
+   * is given the write only lands while the stored revision still matches what
+   * the caller read, which is what makes two writers on one table safe: the
+   * loser is handed back `false` and re-reads. Returns whether it landed, and
+   * on success updates `state.game.revision` to the revision now stored.
+   */
+  saveGame(state: GameState, expected?: number): Promise<boolean>;
   listGames(): Promise<GameSummary[]>;
-  appendOrder(gameId: string, order: QueuedOrder): Promise<void>;
-  removeOrder(gameId: string, orderId: string): Promise<void>;
+  /**
+   * Adds one order to the window without rewriting anybody else's, and bumps
+   * the revision. Returns false only when the order is already on the desk.
+   */
+  appendOrder(gameId: string, order: QueuedOrder): Promise<boolean>;
+  /** Removes one order from the window, bumping the revision if it was there. */
+  removeOrder(gameId: string, orderId: string): Promise<boolean>;
   listIssues(gameId: string): Promise<NewspaperRecord[]>;
   saveIssue(gameId: string, record: NewspaperRecord): Promise<void>;
   seedExists(code: string): Promise<boolean>;

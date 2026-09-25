@@ -5,6 +5,7 @@ import { auditRiskOf } from "@/domain/finance";
 import { charterOf } from "@/domain/constants";
 import { netWorthOf } from "@/domain/valuation";
 import type { GameState } from "@/domain/types";
+import type { TablePresence } from "@/components/table/useTableSync";
 import { formatMoney, formatPercent, countdown, ownerColor, windLabel } from "@/lib/labels";
 
 function Gauge({ label, value, readout, tone }: { label: string; value: number; readout: string; tone: string }) {
@@ -24,14 +25,25 @@ export function StatusStrip({
   meId,
   ragTurn,
   onOpenRag,
+  live = true,
+  present = [],
 }: {
   state: GameState;
   meId: string;
   /** The turn of the paper on the shelf, or null before the first one prints. */
   ragTurn?: number | null;
   onOpenRag?: () => void;
+  /** Whether the last heartbeat reached the table. */
+  live?: boolean;
+  /** Houses with a browser on the table, as of the last heartbeat. */
+  present?: TablePresence[];
 }) {
   const me = state.players.find((p) => p.id === meId);
+  /** Orders a house has sealed into the window being played. */
+  const sealedBy = (playerId: string) =>
+    state.queue.filter((order) => order.playerId === playerId && order.turn <= state.game.currentTurn)
+      .length;
+  const atDesk = (playerId: string) => present.some((who) => who.playerId === playerId);
   const [remaining, setRemaining] = useState(() =>
     Math.max(0, Math.floor((new Date(state.game.nextTickAt).getTime() - Date.now()) / 1000)),
   );
@@ -50,7 +62,22 @@ export function StatusStrip({
   return (
     <header className="flex flex-wrap items-stretch border border-rule bg-plate">
       <div className="flex min-w-[190px] flex-col justify-center border-r border-rule px-3 py-1.5">
-        <p className="text-[9px] tracking-[0.16em] text-faint uppercase">Table {state.game.code}</p>
+        <p className="flex items-center gap-2 text-[9px] tracking-[0.16em] text-faint uppercase">
+          Table {state.game.code}
+          <span
+            className={`flex items-center gap-1 ${live ? "text-bile" : "text-hazard"}`}
+            title={
+              live
+                ? "This tab is keeping up with the table"
+                : "The table could not be reached; this is the last state seen"
+            }
+          >
+            <span
+              className={`inline-block h-1.5 w-1.5 rounded-full ${live ? "bg-bile" : "bg-hazard"}`}
+            />
+            {live ? "live" : "stale"}
+          </span>
+        </p>
         <p className="text-[13px] text-ink">
           {me.name}
           <span className="ml-2 text-[10px] text-faint">{profile.name}</span>
@@ -101,21 +128,38 @@ export function StatusStrip({
         )}
       </div>
 
-      <div className="flex w-full items-center gap-3 border-t border-rule px-3 py-1">
-        {state.players.map((player) => (
-          <span key={player.id} className="flex items-center gap-1.5">
-            <span
-              className="inline-block h-2 w-4"
-              style={{ background: ownerColor(state, player.id), opacity: player.id === meId ? 1 : 0.65 }}
-            />
-            <span className={`text-[10px] ${player.id === meId ? "text-ink" : "text-faint"}`}>
-              {player.name}
+      <div className="flex w-full flex-wrap items-center gap-x-4 gap-y-1 border-t border-rule px-3 py-1">
+        {state.players.map((player) => {
+          const sealed = sealedBy(player.id);
+          return (
+            <span key={player.id} className="flex items-center gap-1.5">
+              <span
+                className="inline-block h-2 w-4"
+                style={{ background: ownerColor(state, player.id), opacity: player.id === meId ? 1 : 0.65 }}
+              />
+              <span
+                className={`inline-block h-1.5 w-1.5 rounded-full ${
+                  atDesk(player.id) ? "bg-bile" : "bg-tar"
+                }`}
+                title={atDesk(player.id) ? "at the table now" : "away from the table"}
+              />
+              <span className={`text-[10px] ${player.id === meId ? "text-ink" : "text-faint"}`}>
+                {player.name}
+              </span>
+              {player.isBot ? <span className="text-[9px] text-faint">auto</span> : null}
+              {sealed > 0 ? (
+                <span
+                  className="text-[9px] text-brass"
+                  title={`${sealed} order${sealed === 1 ? "" : "s"} sealed into this window`}
+                >
+                  {sealed} sealed
+                </span>
+              ) : null}
+              {player.bidsFrozen > 0 ? <span className="text-[9px] text-blood">no bids</span> : null}
+              {player.frozenTurns > 0 ? <span className="text-[9px] text-hazard">frozen</span> : null}
             </span>
-            {player.isBot ? <span className="text-[9px] text-faint">auto</span> : null}
-            {player.bidsFrozen > 0 ? <span className="text-[9px] text-blood">no bids</span> : null}
-            {player.frozenTurns > 0 ? <span className="text-[9px] text-hazard">frozen</span> : null}
-          </span>
-        ))}
+          );
+        })}
       </div>
     </header>
   );

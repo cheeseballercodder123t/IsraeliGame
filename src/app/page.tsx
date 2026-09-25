@@ -18,6 +18,7 @@ const BRIEF: string[] = [
   `${PLOT_COUNT} plots. A chimney has to sit next to the thing it eats, so the map is the first argument you will have.`,
   `${TENDERS_PER_TURN} plots go to sealed tender every window. The highest envelope wins and pays a dollar above the second highest.`,
   "Sixty four orders on the card, from maintenance contracts to injunctions, cartel pools and midnight discharges.",
+  "Live tables: a rival sealing an order, a stranger taking a chair and a window closing all land on your desk as they happen.",
 ];
 
 export default async function LobbyPage({
@@ -35,7 +36,7 @@ export default async function LobbyPage({
       <header className="relative border-b-2 border-double border-edge pb-4">
         <Plate name="seal" scale={3} className="absolute top-0 right-0 hidden lg:block" />
         <p className="text-[10px] tracking-[0.3em] text-faint uppercase">
-          Asynchronous industrial empire and corporate warfare
+          Live multiplayer industrial empire and corporate warfare
         </p>
         <h1 className="mt-1 font-slab text-[52px] leading-none font-extrabold tracking-tight text-ink">
           Conglomerate

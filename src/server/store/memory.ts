@@ -6,6 +6,7 @@ import type {
   GameSummary,
   NewspaperRecord,
 } from "./types";
+import { withRevision } from "./types";
 
 interface Registry {
   games: Map<string, GameState>;
@@ -22,7 +23,14 @@ function registry(): Registry {
   return holder[GLOBAL_KEY]!;
 }
 
-/** The dev server reloads modules; the registry has to outlive that. */
+/**
+ * The dev server reloads modules; the registry has to outlive that.
+ *
+ * This adapter hands back the very object it stored rather than a copy, which
+ * is what its callers and the tests have always assumed: a loaded table is the
+ * live table. In one process nothing can race it, so the revision is a plain
+ * counter here; the file and Supabase adapters are where it does real work.
+ */
 export class MemoryStore implements GameStore {
   readonly kind = "memory" as const;
 
@@ -49,19 +57,25 @@ export class MemoryStore implements GameStore {
   }
 
   async getGame(id: string): Promise<GameState | null> {
-    return registry().games.get(id) ?? null;
+    const state = registry().games.get(id);
+    return state ? withRevision(state) : null;
   }
 
   async getGameByCode(code: string): Promise<GameState | null> {
     const upper = code.toUpperCase();
     for (const state of registry().games.values()) {
-      if (state.game.code === upper) return state;
+      if (state.game.code === upper) return withRevision(state);
     }
     return null;
   }
 
-  async saveGame(state: GameState): Promise<void> {
-    registry().games.set(state.game.id, state);
+  async saveGame(state: GameState, expected?: number): Promise<boolean> {
+    const reg = registry();
+    const stored = reg.games.get(state.game.id);
+    if (expected !== undefined && (stored?.game.revision ?? 0) !== expected) return false;
+    state.game.revision = (stored?.game.revision ?? state.game.revision ?? 0) + 1;
+    reg.games.set(state.game.id, state);
+    return true;
   }
 
   async listGames(): Promise<GameSummary[]> {
@@ -76,16 +90,22 @@ export class MemoryStore implements GameStore {
     }));
   }
 
-  async appendOrder(gameId: string, order: QueuedOrder): Promise<void> {
+  async appendOrder(gameId: string, order: QueuedOrder): Promise<boolean> {
     const state = registry().games.get(gameId);
-    if (!state || state.queue.some((q) => q.id === order.id)) return;
+    if (!state || state.queue.some((q) => q.id === order.id)) return false;
     state.queue.push(order);
+    state.game.revision += 1;
+    return true;
   }
 
-  async removeOrder(gameId: string, orderId: string): Promise<void> {
+  async removeOrder(gameId: string, orderId: string): Promise<boolean> {
     const state = registry().games.get(gameId);
-    if (!state) return;
+    if (!state) return false;
+    const before = state.queue.length;
     state.queue = state.queue.filter((q) => q.id !== orderId);
+    if (state.queue.length === before) return false;
+    state.game.revision += 1;
+    return true;
   }
 
   async listIssues(gameId: string): Promise<NewspaperRecord[]> {
