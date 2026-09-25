@@ -1,0 +1,152 @@
+@import "tailwindcss";
+
+@theme {
+  /* Grounds. Warm near-black through oxidized plate steel. */
+  --color-void: #14110d;
+  --color-pit: #191510;
+  --color-steel: #221d17;
+  --color-plate: #2b251e;
+  --color-rule: #3a322a;
+  --color-edge: #4d4237;
+
+  /* Type on metal */
+  --color-ink: #ded4c3;
+  --color-dim: #9c9180;
+  --color-faint: #6d6457;
+
+  /* Pigments */
+  --color-rust: #a9542a;
+  --color-brass: #c19a3a;
+  --color-hazard: #d99a1a;
+  --color-bile: #8a9a4a;
+  --color-blood: #8c2f28;
+  --color-verdigris: #4a7a6a;
+  --color-tar: #2f2a24;
+
+  /* Newsprint for The Daily Rag */
+  --color-news: #e6dcc4;
+  --color-news-worn: #d8ccae;
+  --color-newsink: #1d1a14;
+
+  --font-mono: "IBM Plex Mono", "Courier New", Courier, monospace;
+  --font-slab: "Bitter", "Roboto Slab", Georgia, serif;
+
+  /* Every corner in this building is square. */
+  --radius-xs: 0px;
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
+  --radius-2xl: 0px;
+  --radius-3xl: 0px;
+  --radius-4xl: 0px;
+}
+
+html,
+body {
+  background-color: var(--color-void);
+  color: var(--color-ink);
+}
+
+body {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Paper grain. Fine fractal noise, no dot lattice, no gradient wash. */
+.grain::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+.rule-grid {
+  background-image: none;
+}
+
+/* Numeric readouts stay on a fixed advance so columns line up. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.hair-b {
+  border-bottom: 1px solid var(--color-rule);
+}
+
+.hair-t {
+  border-top: 1px solid var(--color-rule);
+}
+
+.hair-l {
+  border-left: 1px solid var(--color-rule);
+}
+
+.hair-r {
+  border-right: 1px solid var(--color-rule);
+}
+
+/* Hazard hatch used on sealed, frozen, or struck states. */
+.hatch {
+  background-image: repeating-linear-gradient(
+    135deg,
+    rgba(217, 154, 26, 0.22) 0px,
+    rgba(217, 154, 26, 0.22) 2px,
+    transparent 2px,
+    transparent 7px
+  );
+}
+
+.hatch-blood {
+  background-image: repeating-linear-gradient(
+    135deg,
+    rgba(140, 47, 40, 0.28) 0px,
+    rgba(140, 47, 40, 0.28) 2px,
+    transparent 2px,
+    transparent 7px
+  );
+}
+
+input[type="range"] {
+  accent-color: var(--color-brass);
+}
+
+*:focus-visible {
+  outline: 1px solid var(--color-brass);
+  outline-offset: 1px;
+}
+
+::selection {
+  background: var(--color-brass);
+  color: var(--color-void);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-pit);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-rule);
+}
+
+@keyframes ticker-drift {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.ticker-drift {
+  animation: ticker-drift 90s linear infinite;
+}

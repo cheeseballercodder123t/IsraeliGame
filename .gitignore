@@ -1,0 +1,17 @@
+node_modules
+.next
+out
+.env
+.env.local
+*.tsbuildinfo
+next-env.d.ts
+.DS_Store
+
+# Local dev server output
+.devserver.log
+
+# Local table store
+.data
+
+# Visual harness output
+.screens
