@@ -7,6 +7,7 @@ import {
   resolveIfDue,
   targetSeats,
 } from "@/server/game";
+import { beat } from "@/server/presence";
 import { readSession } from "@/server/session";
 import type { NewspaperRecord } from "@/server/store/types";
 import type { Archetype, GameState, Player, QueuedOrder } from "@/domain/types";
@@ -30,6 +31,8 @@ export interface LobbySeatView {
 export interface LobbyView {
   code: string;
   status: GameState["game"]["status"];
+  /** The table's write counter, which is what a watching client polls. */
+  revision: number;
   seats: LobbySeatView[];
   openSeats: number;
   targetSeats: number;
@@ -60,6 +63,7 @@ function lobbyOf(state: GameState, userId: string | null): LobbyView {
   return {
     code: state.game.code,
     status: state.game.status,
+    revision: state.game.revision,
     seats,
     openSeats: openSeats(state),
     targetSeats: targetSeats(state),
@@ -74,11 +78,17 @@ function lobbyOf(state: GameState, userId: string | null): LobbyView {
  * Any turn whose window has closed is resolved here before the page renders,
  * so returning to a stale tab catches the board up instead of showing
  * yesterday's ledger.
+ *
+ * Looking counts as being there: rendering the page stamps the presence
+ * roster, so the table shows a rival the moment they arrive rather than five
+ * seconds later when their first heartbeat lands.
  */
 export async function openTable(code: string): Promise<TableResult> {
   const session = await readSession();
   const loaded = await loadGameByCode(code.toUpperCase());
   if (!loaded) return { kind: "miss", miss: { reason: "no-table" } };
+
+  if (session) beat(loaded.game.id, session.userId, session.name);
 
   if (loaded.game.status === "LOBBY") {
     return { kind: "lobby", lobby: lobbyOf(loaded, session?.userId ?? null) };

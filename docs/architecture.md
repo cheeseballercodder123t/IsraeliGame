@@ -41,7 +41,7 @@ orders that arrived from more than one human.
 
 | Field | Contents |
 | --- | --- |
-| `game` | code, status (`LOBBY/ACTIVE/FINISHED`), currentTurn, nextTickAt, tickIntervalHours, wind, seed, gridLoad, powerTariff, lastLeaderId |
+| `game` | code, status (`LOBBY/ACTIVE/FINISHED`), currentTurn, nextTickAt, tickIntervalHours, wind, seed, gridLoad, powerTariff, lastLeaderId, `revision` |
 | `players[]` | one per seat: cash, offshore, debt, morale, audit risk, charter, bot flag, ~30 state fields |
 | `tiles[]` | 121 plots: owner, recipe, tier, labor model, condition, pollution, escrow, tender flag |
 | `rails[]` | player-built track with tolls and condition |
@@ -65,19 +65,27 @@ everyone at the table, including offshore reserves. Sunlight is part of the puni
   game by code, checks the seat, then calls `resolveIfDue(state)`: if `nextTickAt` has
   passed, the turn resolves *inside the render request*, so a stale tab catches up by
   reloading. Then it slices out the viewer's `pending` orders and returns the view to the RSC.
-- **Write path.** Every mutation follows *load → mutate → saveGame* on the whole snapshot:
+- **Write path.** Every mutation happens inside a guarded write. `commit(gameId, mutate)`
+  (src/server/game.ts) reads the freshest snapshot, hands it to the mutator, and writes it back
+  only while `game.revision` still matches what it read — re-running the mutator against the new
+  snapshot when another writer got there first. What each mutation does:
   - `queueOrder(gameId, playerId, input)` — validates via a zod schema **derived from the
-    same order catalog the UI renders** (src/server/orders.ts), pushes a `QueuedOrder` onto
-    `state.queue`, saves.
-  - `cancelOrder` — filters the queue, saves.
-  - `joinMatch` — appends a player, saves.
+    same order catalog the UI renders** (src/server/orders.ts), then appends one
+    `QueuedOrder` through `store.appendOrder`, which never reads or rewrites a rival's desk.
+  - `cancelOrder` — checks ownership, then `store.removeOrder`, for the same reason.
+  - `joinMatch` / `claimSeat` — takes a chair inside `commit`, so two people reaching for the
+    last seat do not both get it.
   - `advanceTurn(state)` — enqueues bot orders, runs `resolveTurnTick`, composes the
-    newspaper, saves state + issue.
-- **Turn timing.** Three resolution paths exist and all funnel into `advanceTurn`:
+    newspaper, and writes state + issue under the revision guard, so one resolver wins and the
+    others report `TurnOutcome.alreadyResolved` instead of running the window twice.
+- **Turn timing.** Four resolution paths exist and all funnel into `advanceTurn`:
   1. `POST /api/tick` — called by the pg_cron sweep (every minute, `x-tick-secret` header),
      either for one `gameId` or as a sweep over every ACTIVE game past due.
   2. `forceTickAction` — the dev "close the window" button, gated by `TICK_DEV_MODE`.
   3. `resolveIfDue` — lazily, on any page load after the deadline.
+  4. `GET /api/table/[code]/summary` — the client heartbeat also resolves a due window, so a
+     table whose players are all watching closes on the hour instead of waiting for a reload.
+  Overlapping resolvers are safe now: the revision guard gives each window exactly one winner.
 
 ### Client-side
 
@@ -87,9 +95,16 @@ everyone at the table, including offshore reserves. Sunlight is part of the puni
 - Optimistic queueing: React 19's `useOptimistic` + `useTransition` wrap the Server Action
   calls, so a sealed order appears on the desk instantly and the list reconciles when the
   revalidated page arrives.
-- The only timer-driven UI is a 1-second `setInterval` countdown in `StatusStrip`. There is
-  **no polling, no `router.refresh()`, no EventSource, no WebSocket, no Supabase Realtime
-  subscription anywhere in the client** — confirmed by search.
+- Live sync is one mechanism: `useTableSync` (src/components/table/useTableSync.ts). Every
+  five seconds while the tab is visible, and again the moment the tab regains focus, it asks
+  `GET /api/table/[code]/summary` for the table's revision. When the revision has moved it
+  calls `router.refresh()`, which re-runs `openTable` and lets the RSC diff land the new
+  snapshot. The same round trip returns the presence roster, so one poll does both jobs. There
+  is still **no EventSource, no WebSocket and no Supabase Realtime subscription**: polling works
+  identically on all three stores, and a `game_states` subscription is the upgrade path once the
+  Supabase keys are set.
+- `StatusStrip` keeps its 1-second `setInterval` for the window countdown, which is decoration
+  rather than a read path.
 - `localStorage` holds one key per table (`rag:<code>`) so the newspaper auto-opens once per
   turn.
 
@@ -124,11 +139,12 @@ picked at runtime (`getStore()`):
 | `FileStore` | default | whole snapshot as JSON under `.data/`; atomic tmp+rename; index fallback sweep |
 | `SupabaseStore` | `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` | snapshot-first: one jsonb row in `game_states`; `save_game_state` fans out into normalized tables in the same transaction |
 
-Note a small inconsistency: `queueOrder`/`cancelOrder` in game.ts mutate the loaded snapshot
-and call `saveGame` (full rewrite) even though the store interface offers
-`appendOrder`/`removeOrder` for targeted queue writes. SupabaseStore's own
-`appendOrder` re-loads + re-persists the whole state anyway. Both work today, but the
-targeted methods exist precisely for the concurrent-write problem below.
+The interface now carries the concurrency contract that used to be missing. `saveGame` takes an
+optional expected revision and returns whether it landed; `appendOrder` and `removeOrder` are
+targeted writes that bump the revision without touching anything else. Each adapter enforces
+them differently — a per-table-file promise lock and a guarded read-back in the file store, a
+single conditional `UPDATE` plus queue-patching RPCs in `0004_sync.sql` for Supabase — but the
+callers above them are identical on every store.
 
 The schema already carries multiplayer scaffolding: RLS with `is_member_of(game_id)` /
 `my_player_id(game_id)` helpers, seat uniqueness on `(game_id, user_id)`, and a realtime
@@ -139,12 +155,14 @@ client subscribes to any of it yet.
 
 | Channel | Exists? | Detail |
 | --- | --- | --- |
-| Server Actions + `revalidatePath` | yes | the only write channel. `revalidatePath` marks `/table/[code]` stale for everyone, but only the acting client receives the fresh RSC payload — nobody else is notified |
-| Lazy resolution on render | yes | anyone reloading after the deadline triggers the tick |
+| Server Actions + `revalidatePath` | yes | the only write channel. `revalidatePath` marks `/table/[code]` stale for everyone, but only the acting client receives the fresh RSC payload — the action itself notifies nobody |
+| Lazy resolution on render | yes | anyone loading after the deadline triggers the tick |
 | pg_cron → `/api/tick` | yes (dormant without Supabase) | minute sweep, secret header |
-| Server-rendered full snapshot | yes | every navigation re-ships the entire `GameState` |
-| Polling / SSE / WebSocket / Realtime | **no** | nothing pushes state or "someone joined" to a seated client |
-| Presence / chat / notifications | **no** | no mechanism at all |
+| Polling the table summary | yes | `useTableSync` every 5s while visible and on focus; `router.refresh()` only when the revision actually moved |
+| Server-rendered full snapshot | yes | every navigation and every refresh re-ships the entire `GameState` |
+| Presence | yes, best effort | an in-process roster (src/server/presence.ts) stamped by the page render and the heartbeat, 15s TTL, per instance |
+| SSE / WebSocket / Realtime | **no** | polling covers the file store and Supabase alike |
+| Chat / notifications | **no** | presence and the paper are the whole channel |
 
 In practice a second player only learns anything happened by reloading. Server Actions
 return values to their caller only; other clients are never notified.
@@ -169,19 +187,24 @@ return values to their caller only; other clients are never notified.
 1. **No lobby.** `GameStatus.LOBBY` exists but `createGameState` hardcodes `ACTIVE`, and
    `startMatch` fills every empty seat with bots immediately. There is no "table open, seats
    waiting for humans" state and no way to reserve a seat for a friend.
-2. **No live sync.** Without polling or a subscription, Player B never sees Player A's
-   sealed orders or a resolved window until a manual reload. The `revalidatePath` in A's
-   action marks the route stale, but only A's client refetches — B's tab keeps showing the
-   old snapshot indefinitely.
-3. **Lost-update races on the snapshot.** Every write is load-mutate-save of the whole
-   document with no version check. Two concurrent `queueOrderAction` calls (two players, or
-   one player double-submitting) both load turn T, both push their order, and the second
-   save silently drops the first order. `joinMatch` racing a tick has the same shape.
-4. **Tick double-resolution.** The three resolution paths can overlap (cron sweep + a page
-   load crossing the deadline + a dev tick). `advanceTurn` has no guard: both callers start
-   from the same snapshot and both save. Because the tick is deterministic the *content*
-   converges, but an order enqueued between the two loads is dropped, and `nextTickAt`
-   diverges by the inter-call delay.
+2. ~~**No live sync.**~~ **Closed.** Every seated (and lobby) page mounts `useTableSync`, which
+   polls `GET /api/table/[code]/summary` every five seconds while the tab is visible and again
+   on focus, and calls `router.refresh()` when the table's revision has moved. Player B sees
+   Player A's sealed orders appear on the desk, a stranger take a chair and the window resolve
+   without touching anything. The heartbeat also resolves an overdue window, so the deadline
+   lands for a table full of watching players rather than waiting for someone to reload.
+3. ~~**Lost-update races on the snapshot.**~~ **Closed.** `Game.revision` is bumped on every
+   accepted write, `saveGame(state, expected)` refuses a write whose revision has moved, and
+   the file store serialises read-modify-write per table file. Queueing no longer rewrites the
+   whole snapshot at all: `appendOrder` / `removeOrder` touch only the one order, and on
+   Supabase they are single-statement RPCs against the jsonb queue. `commit()` re-runs a losing
+   mutation against the fresh snapshot, so two directors sealing at once (`tests/multiplayer.test.ts`)
+   and two people reaching for the last chair both come out right.
+4. ~~**Tick double-resolution.**~~ **Closed.** `advanceTurn` re-reads the table through the same
+   revision guard. The first resolver wins and prints the paper; the rest re-read, find the turn
+   has already moved on, and return `alreadyResolved` with no issue. Verified live: two
+   simultaneous `POST /api/tick` calls for one table produce a single headline, one turn of
+   advance and one newspaper issue.
 5. **Identity is a browser cookie.** `{ userId, name }` minted per browser, 60-day maxAge.
    Two people on one machine share a seat; one person across devices gets two seats. The
    file even says where Supabase Auth plugs in; nothing calls it yet.
@@ -189,9 +212,10 @@ return values to their caller only; other clients are never notified.
    their *covert* orders for this window) is serialized into every client. The UI only
    renders your own queue, but the data is on the wire. Fine while "sunlight" is a rule;
    must change if hidden information is ever desired.
-7. **Payload economics at N players.** Whole-snapshot re-render per action means each of N
-   players' actions re-ships ~hundreds of KB to everyone. Workable at 12 seats; worth a
-   versioned/partial read path before it becomes a live-updated UI.
+7. **Payload economics at N players.** The UI is live-updated now, but a full snapshot still
+   re-ships on every *change* rather than on a timer: the five-second heartbeat is a few
+   hundred bytes, and a refresh only happens when the revision actually moved. Workable at 12
+   seats; a partial or versioned read path is the next thing to buy if tables get busier.
 
 ### Recommended plan, in order of leverage
 
@@ -204,22 +228,26 @@ return values to their caller only; other clients are never notified.
 - Flip status to `ACTIVE` on first tick. `openTable` already handles a not-yet-seated
   viewer as `no-seat`; give it a "table open, N/12 seats" lobby view.
 
-**Phase 2 — Concurrent-write safety (server only, medium).**
-- Add a monotonically increasing `revision` to `Game` and make `saveGame` conditional
-  (`UPDATE ... WHERE revision = :seen` / optimistic retry in `queueOrder`).
-- Route queue mutations through the existing `appendOrder`/`removeOrder` so two players'
-  orders can't clobber each other (and make SupabaseStore implement them as single-row
-  RPCs rather than load+persist).
-- Guard `advanceTurn` with the same revision (or a Postgres advisory lock keyed by gameId):
-  one resolver wins, the others observe "already resolved".
+**Phase 2 — Concurrent-write safety (server only, medium). — SHIPPED**
+- `revision` on `Game`; `saveGame(state, expected)` is conditional in all three adapters, and
+  `supabase/migrations/0004_sync.sql` adds `save_game_state_rev` for the Postgres path.
+- Queue mutations go through `appendOrder`/`removeOrder`, implemented as single-statement
+  writes (`append_queued_action` / `remove_queued_action` patch the jsonb queue in place),
+  with a per-table-file lock in the file store.
+- `advanceTurn` is guarded by the same revision: one resolver wins, the rest see
+  `alreadyResolved`. `commit()` supplies the optimistic retry for joins and seat claims.
 
-**Phase 3 — Live-ish sync for seated players.**
-- Supabase path: subscribe the client to `game_states` (or a lightweight `games.revision`
-  row) + `queued_actions` + `newspaper_issues` — the publication already exists. On change,
-  `router.refresh()` re-runs `openTable` and the RSC diff does the rest.
-- File-store path: a `GET /api/table/[code]/summary` returning `{revision, currentTurn,
-  nextTickAt, seats}` polled every ~5s while the tab is visible; full refresh only when the
-  summary moves. Reuse `secondsUntilTick`'s existing 1s timer as the heartbeat.
+**Phase 3 — Live sync for seated players. — SHIPPED**
+- `GET /api/table/[code]/summary` returns `{revision, currentTurn, nextTickAt, status, present}`,
+  the last from a small in-process roster (src/server/presence.ts) stamped by page renders and
+  heartbeats. It also resolves a due window, which is what makes the deadline land for players
+  who are all watching.
+- `useTableSync` (src/components/table/useTableSync.ts) polls it every five seconds while the
+  tab is visible and on focus, and refreshes the router only when the revision moved. The
+  running table and the gathering lobby both use it. `StatusStrip` shows the live/stale state,
+  a per-house sealed count and who is at the desk.
+- Supabase Realtime remains the upgrade: the publication already carries `game_states`, and the
+  same hook could subscribe instead of polling when `NEXT_PUBLIC_SUPABASE_*` is set.
 
 **Phase 4 — Identity and views.**
 - Swap `session.ts` to Supabase Auth (its docstring names the seam); `players.userId`
@@ -233,8 +261,8 @@ return values to their caller only; other clients are never notified.
 | Phase | Files |
 | --- | --- |
 | 1 | `src/server/game.ts`, `src/domain/world.ts`, `src/server/dashboard.ts`, `src/app/page.tsx`, `src/app/table/[code]/page.tsx` |
-| 2 | `src/server/game.ts`, `src/server/store/*` (revision on `Game` in `src/domain/types.ts`) |
-| 3 | new `src/app/api/table/[code]/summary/route.ts`, `src/components/table/Dashboard.tsx`, `src/components/panes/StatusStrip.tsx` (or a small `useTableSync` hook) |
+| 2 | `src/server/game.ts`, `src/server/store/*`, `src/domain/types.ts` (revision on `Game`), `supabase/migrations/0004_sync.sql` |
+| 3 | `src/app/api/table/[code]/summary/route.ts` (new), `src/components/table/useTableSync.ts` (new), `src/server/presence.ts` (new), `src/server/dashboard.ts`, `src/components/table/Dashboard.tsx`, `src/components/table/LobbyViewPanel.tsx`, `src/components/panes/StatusStrip.tsx`, `src/app/api/tick/route.ts` |
 | 4 | `src/server/session.ts`, `supabase/migrations/*` (auth linkage), `src/server/dashboard.ts` (redaction) |
 
 ## 8. Environment surface (for reference)

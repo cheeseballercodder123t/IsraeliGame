@@ -13,6 +13,9 @@ export const TICK_INTERVAL_HOURS = Number(process.env.TICK_INTERVAL_HOURS ?? 24)
 export const DEV_TICK = process.env.TICK_DEV_MODE !== "false";
 export { MAX_SEATS, MIN_SEATS };
 
+/** How many times a losing writer re-reads before it gives the table up. */
+const COMMIT_ATTEMPTS = 6;
+
 function nextTickFrom(now: Date): string {
   return new Date(now.getTime() + TICK_INTERVAL_HOURS * 3_600_000).toISOString();
 }
@@ -29,6 +32,44 @@ async function uniqueCode(store: GameStore): Promise<string> {
 export interface SeatResult {
   state: GameState;
   playerId: string;
+}
+
+/** What a mutator decides about the snapshot it was handed. */
+type Decision<T> = { ok: true; value: T } | { ok: false; error: string };
+
+type CommitOutcome<T> =
+  | { ok: true; state: GameState; value: T }
+  | { ok: false; error: string };
+
+/**
+ * Read, decide, write — and try again when somebody else got there first.
+ *
+ * Every change to a table goes through here. The mutator is handed the
+ * freshest snapshot and returns either a value to keep or an error to report;
+ * if the guarded write is refused because the revision moved underneath it,
+ * the mutator runs again against the new snapshot. That is what lets two
+ * directors seal orders in the same second, or a joiner race a tick, without
+ * either edit being silently dropped.
+ *
+ * A mutator must validate before it mutates: it may be re-run, and on the
+ * in-process store it is working on the live table rather than a copy.
+ */
+async function commit<T>(
+  gameId: string,
+  mutate: (state: GameState) => Decision<T>,
+): Promise<CommitOutcome<T>> {
+  const store = getStore();
+  for (let attempt = 0; attempt < COMMIT_ATTEMPTS; attempt += 1) {
+    const state = await store.getGame(gameId);
+    if (!state) return { ok: false, error: "No such table." };
+    const seen = state.game.revision;
+    const decision = mutate(state);
+    if (!decision.ok) return { ok: false, error: decision.error };
+    if (await store.saveGame(state, seen)) {
+      return { ok: true, state, value: decision.value };
+    }
+  }
+  return { ok: false, error: "The table is moving faster than this write. Try again." };
 }
 
 /**
@@ -101,36 +142,44 @@ export function acceptsJoiners(state: GameState): boolean {
 /**
  * The window opens: the table goes ACTIVE, the roster fills from the bench
  * so every remaining chair becomes an automated director, and the clock
- * starts from now.
+ * starts from now. Written through `commit`, so a joiner arriving in the same
+ * breath is seated rather than overwritten.
  */
-async function activateMatch(state: GameState): Promise<void> {
-  const store = getStore();
-  const total = targetSeats(state);
-  const opponents = seatOpponents(total, state.players[0]?.archetype).slice(
-    0,
-    Math.max(0, total - state.players.length),
-  );
-  for (const persona of opponents) {
-    state.players.push(
-      newPlayer(
-        {
-          id: crypto.randomUUID(),
-          gameId: state.game.id,
-          userId: `bot-${state.players.length}-${state.game.code}`,
-          name: persona.name,
-          archetype: persona.archetype,
-          isBot: true,
-        },
-        state.game.currentTurn,
-      ),
+async function activateMatch(gameId: string): Promise<{ ok: boolean; error?: string }> {
+  const outcome = await commit(gameId, (state) => {
+    if (state.game.status === "ACTIVE") {
+      return { ok: false as const, error: "The table is already running." };
+    }
+
+    const total = targetSeats(state);
+    const opponents = seatOpponents(total, state.players[0]?.archetype).slice(
+      0,
+      Math.max(0, total - state.players.length),
     );
-  }
-  // Every seat is accounted for; the flag has served its purpose.
-  for (const player of state.players) player.lobbySeat = null;
-  state.game.status = "ACTIVE";
-  state.game.nextTickAt = nextTickFrom(new Date());
-  markLobbySeat(state, total);
-  await store.saveGame(state);
+    for (const persona of opponents) {
+      state.players.push(
+        newPlayer(
+          {
+            id: crypto.randomUUID(),
+            gameId: state.game.id,
+            userId: `bot-${state.players.length}-${state.game.code}`,
+            name: persona.name,
+            archetype: persona.archetype,
+            isBot: true,
+          },
+          state.game.currentTurn,
+        ),
+      );
+    }
+    // Every seat is accounted for; the flag has served its purpose.
+    for (const player of state.players) player.lobbySeat = null;
+    state.game.status = "ACTIVE";
+    state.game.nextTickAt = nextTickFrom(new Date());
+    markLobbySeat(state, total);
+    return { ok: true as const, value: total };
+  });
+
+  return outcome.ok ? { ok: true } : { ok: false, error: outcome.error };
 }
 
 /**
@@ -148,8 +197,7 @@ export async function startTable(code: string, userId: string): Promise<{ ok: bo
     return { ok: false, error: `A table needs ${MIN_SEATS} houses before the window opens.` };
   }
 
-  await activateMatch(state);
-  return { ok: true };
+  return activateMatch(state.game.id);
 }
 
 /**
@@ -163,43 +211,97 @@ export async function joinMatch(
   user: { userId: string; name: string },
   archetype: Archetype,
 ): Promise<SeatResult | null> {
-  const store = getStore();
-  const state = await store.getGameByCode(code);
+  const state = await getStore().getGameByCode(code);
   if (!state) return null;
 
   const existing = state.players.find((p) => p.userId === user.userId);
   if (existing) return { state, playerId: existing.id };
 
-  const seated = await claimSeat(state, user, archetype);
-  if (!seated) return null;
-  const player = state.players.find((p) => p.userId === user.userId);
-  if (!player) return null;
-  return { state, playerId: player.id };
+  return claimSeat(state.game.id, user, archetype);
 }
 
 /**
  * Puts a person in a chair: their own first, then an open lobby seat, then a
  * bot's. Inheriting a bot seat hands the human the bot's assets; the bot's
  * old id retires with it. Returns null when the table is full or closed.
+ *
+ * The chair is taken inside a guarded write, so two people reaching for the
+ * last seat at the same moment do not both get it.
  */
 export async function claimSeat(
-  state: GameState,
+  gameId: string,
   user: { userId: string; name: string },
   archetype: Archetype,
-): Promise<Player | null> {
-  const store = getStore();
-  const existing = state.players.find((p) => p.userId === user.userId);
-  if (existing) return existing;
+): Promise<SeatResult | null> {
+  const outcome = await commit(gameId, (state) => {
+    const existing = state.players.find((p) => p.userId === user.userId);
+    if (existing) return { ok: true as const, value: existing.id };
 
-  if (!acceptsJoiners(state)) return null;
-  if (openSeats(state) <= 0) return null;
+    if (!acceptsJoiners(state) || openSeats(state) <= 0) {
+      return { ok: false as const, error: "No chair to take at this table." };
+    }
 
-  const vacantBot = state.players.find((p) => p.isBot && !p.lobbySeat);
+    const vacantBot = state.players.find((p) => p.isBot && !p.lobbySeat);
 
-  if (vacantBot) {
-    // The chair keeps its owner flag empty and its ledger full; a new player
-    // record inherits the assets so the seat's history is not erased.
-    const replacement = newPlayer(
+    if (vacantBot) {
+      // The chair keeps its owner flag empty and its ledger full; a new player
+      // record inherits the assets so the seat's history is not erased.
+      const replacement = newPlayer(
+        {
+          id: crypto.randomUUID(),
+          gameId: state.game.id,
+          userId: user.userId,
+          name: user.name,
+          archetype,
+          isBot: false,
+        },
+        state.game.currentTurn,
+      );
+      replacement.cash = vacantBot.cash;
+      replacement.offshoreCash = vacantBot.offshoreCash;
+      replacement.debt = vacantBot.debt;
+      replacement.debtAge = vacantBot.debtAge;
+      replacement.shellLicenses = vacantBot.shellLicenses;
+      replacement.pr = vacantBot.pr;
+      replacement.morale = vacantBot.morale;
+      replacement.baseMorale = vacantBot.baseMorale;
+      replacement.equitySold = vacantBot.equitySold;
+      replacement.wageScale = vacantBot.wageScale;
+      replacement.safetyProgram = vacantBot.safetyProgram;
+      state.players = state.players.filter((p) => p.id !== vacantBot.id);
+      // Plots, inventory, patents, policies and every other paper instrument
+      // name the retired player id; repoint them at the successor so a takeover
+      // does not orphan the seat's holdings.
+      for (const tile of state.tiles) {
+        if (tile.ownerId === vacantBot.id) tile.ownerId = replacement.id;
+      }
+      for (const row of state.inventory) {
+        if (row.playerId === vacantBot.id) row.playerId = replacement.id;
+      }
+      for (const entry of state.shorts) if (entry.playerId === vacantBot.id) entry.playerId = replacement.id;
+      for (const entry of state.futures) if (entry.playerId === vacantBot.id) entry.playerId = replacement.id;
+      for (const entry of state.supplies) {
+        if (entry.sellerId === vacantBot.id) entry.sellerId = replacement.id;
+        if (entry.buyerId === vacantBot.id) entry.buyerId = replacement.id;
+      }
+      for (const entry of state.patents) if (entry.ownerId === vacantBot.id) entry.ownerId = replacement.id;
+      for (const entry of state.insurance) if (entry.playerId === vacantBot.id) entry.playerId = replacement.id;
+      for (const entry of state.cartels) {
+        entry.parties = entry.parties.map((id) => (id === vacantBot.id ? replacement.id : id));
+        entry.defectors = entry.defectors.map((id) => (id === vacantBot.id ? replacement.id : id));
+      }
+      for (const entry of state.tariffs) if (entry.sponsorId === vacantBot.id) entry.sponsorId = replacement.id;
+      for (const entry of state.injunctions) {
+        if (entry.ownerId === vacantBot.id) entry.ownerId = replacement.id;
+        if (entry.plaintiffId === vacantBot.id) entry.plaintiffId = replacement.id;
+      }
+      for (const entry of state.municipal) if (entry.playerId === vacantBot.id) entry.playerId = replacement.id;
+      for (const entry of state.convertibles) if (entry.playerId === vacantBot.id) entry.playerId = replacement.id;
+      state.players.push(replacement);
+      return { ok: true as const, value: replacement.id };
+    }
+
+    const player: Player = newPlayer(
       {
         id: crypto.randomUUID(),
         gameId: state.game.id,
@@ -210,65 +312,12 @@ export async function claimSeat(
       },
       state.game.currentTurn,
     );
-    replacement.cash = vacantBot.cash;
-    replacement.offshoreCash = vacantBot.offshoreCash;
-    replacement.debt = vacantBot.debt;
-    replacement.debtAge = vacantBot.debtAge;
-    replacement.shellLicenses = vacantBot.shellLicenses;
-    replacement.pr = vacantBot.pr;
-    replacement.morale = vacantBot.morale;
-    replacement.baseMorale = vacantBot.baseMorale;
-    replacement.equitySold = vacantBot.equitySold;
-    replacement.wageScale = vacantBot.wageScale;
-    replacement.safetyProgram = vacantBot.safetyProgram;
-    state.players = state.players.filter((p) => p.id !== vacantBot.id);
-    // Plots, inventory, patents, policies and every other paper instrument
-    // name the retired player id; repoint them at the successor so a takeover
-    // does not orphan the seat's holdings.
-    for (const tile of state.tiles) {
-      if (tile.ownerId === vacantBot.id) tile.ownerId = replacement.id;
-    }
-    for (const row of state.inventory) {
-      if (row.playerId === vacantBot.id) row.playerId = replacement.id;
-    }
-    for (const entry of state.shorts) if (entry.playerId === vacantBot.id) entry.playerId = replacement.id;
-    for (const entry of state.futures) if (entry.playerId === vacantBot.id) entry.playerId = replacement.id;
-    for (const entry of state.supplies) {
-      if (entry.sellerId === vacantBot.id) entry.sellerId = replacement.id;
-      if (entry.buyerId === vacantBot.id) entry.buyerId = replacement.id;
-    }
-    for (const entry of state.patents) if (entry.ownerId === vacantBot.id) entry.ownerId = replacement.id;
-    for (const entry of state.insurance) if (entry.playerId === vacantBot.id) entry.playerId = replacement.id;
-    for (const entry of state.cartels) {
-      entry.parties = entry.parties.map((id) => (id === vacantBot.id ? replacement.id : id));
-      entry.defectors = entry.defectors.map((id) => (id === vacantBot.id ? replacement.id : id));
-    }
-    for (const entry of state.tariffs) if (entry.sponsorId === vacantBot.id) entry.sponsorId = replacement.id;
-    for (const entry of state.injunctions) {
-      if (entry.ownerId === vacantBot.id) entry.ownerId = replacement.id;
-      if (entry.plaintiffId === vacantBot.id) entry.plaintiffId = replacement.id;
-    }
-    for (const entry of state.municipal) if (entry.playerId === vacantBot.id) entry.playerId = replacement.id;
-    for (const entry of state.convertibles) if (entry.playerId === vacantBot.id) entry.playerId = replacement.id;
-    state.players.push(replacement);
-    await store.saveGame(state);
-    return replacement;
-  }
+    state.players.push(player);
+    return { ok: true as const, value: player.id };
+  });
 
-  const player = newPlayer(
-    {
-      id: crypto.randomUUID(),
-      gameId: state.game.id,
-      userId: user.userId,
-      name: user.name,
-      archetype,
-      isBot: false,
-    },
-    state.game.currentTurn,
-  );
-  state.players.push(player);
-  await store.saveGame(state);
-  return player;
+  if (!outcome.ok) return null;
+  return { state: outcome.state, playerId: outcome.value };
 }
 
 /**
@@ -277,7 +326,7 @@ export async function claimSeat(
  */
 export async function fillWithBots(state: GameState): Promise<void> {
   if (state.game.status !== "LOBBY") return;
-  await activateMatch(state);
+  await activateMatch(state.game.id);
 }
 
 /** Claim by table code, the shape the Server Actions call with. */
@@ -288,9 +337,7 @@ export async function claimSeatByCode(
 ): Promise<SeatResult | null> {
   const state = await getStore().getGameByCode(code);
   if (!state) return null;
-  const player = await claimSeat(state, user, archetype);
-  if (!player) return null;
-  return { state, playerId: player.id };
+  return claimSeat(state.game.id, user, archetype);
 }
 
 export interface OpenTableSummary {
@@ -350,8 +397,11 @@ export async function queueOrder(
     order,
     createdAt: new Date().toISOString(),
   };
-  state.queue.push(queued);
-  await store.saveGame(state);
+
+  // Appended to the window rather than folded into a whole-snapshot rewrite, so
+  // a rival sealing at the same moment cannot lose their order to this one. The
+  // id is fresh, so a refused append only means the table vanished mid-write.
+  await store.appendOrder(gameId, queued);
   return { ok: true, order: queued };
 }
 
@@ -365,9 +415,7 @@ export async function cancelOrder(
   if (!state) return false;
   const target = state.queue.find((q) => q.id === orderId);
   if (!target || target.playerId !== playerId) return false;
-  state.queue = state.queue.filter((q) => q.id !== orderId);
-  await store.saveGame(state);
-  return true;
+  return store.removeOrder(gameId, orderId);
 }
 
 function enqueueBotOrders(state: GameState): void {
@@ -390,31 +438,55 @@ function enqueueBotOrders(state: GameState): void {
 
 export interface TurnOutcome {
   state: GameState;
-  issue: NewspaperIssue;
+  /** The paper this call printed, or null when the window was already closed. */
+  issue: NewspaperIssue | null;
   turn: number;
+  /** True when another resolver had already closed the window this call named. */
+  alreadyResolved: boolean;
 }
 
+/**
+ * Closes the window.
+ *
+ * The tick is deterministic, but the snapshot it writes is not: a cron sweep
+ * crossing a page load, or two players watching a deadline pass, would
+ * otherwise run the same turn twice from the same base and clobber each other.
+ * The write is guarded by the revision, so the winner resolves and the losers
+ * re-read, find the turn has already moved on, and report the window closed
+ * rather than resolving it a second time.
+ */
 export async function advanceTurn(state: GameState): Promise<TurnOutcome> {
   const store = getStore();
+  const gameId = state.game.id;
   const turn = state.game.currentTurn;
 
-  enqueueBotOrders(state);
-  const result = resolveTurnTick(state, { now: new Date() });
-  const issue = await composeIssue(state, result.events, turn);
+  for (let attempt = 0; attempt < COMMIT_ATTEMPTS; attempt += 1) {
+    const current = await store.getGame(gameId);
+    if (!current || current.game.currentTurn > turn) {
+      return { state: current ?? state, issue: null, turn, alreadyResolved: true };
+    }
 
-  const record: NewspaperRecord = {
-    turn,
-    headline: issue.headline,
-    deck: issue.deck,
-    contentMarkdown: issue.contentMarkdown,
-    scandals: issue.scandals,
-    createdAt: new Date().toISOString(),
-  };
+    const seen = current.game.revision;
+    enqueueBotOrders(current);
+    const result = resolveTurnTick(current, { now: new Date() });
+    const issue = await composeIssue(current, result.events, turn);
 
-  await store.saveGame(result.state);
-  await store.saveIssue(result.state.game.id, record);
+    if (await store.saveGame(result.state, seen)) {
+      const record: NewspaperRecord = {
+        turn,
+        headline: issue.headline,
+        deck: issue.deck,
+        contentMarkdown: issue.contentMarkdown,
+        scandals: issue.scandals,
+        createdAt: new Date().toISOString(),
+      };
+      await store.saveIssue(gameId, record);
+      return { state: result.state, issue, turn, alreadyResolved: false };
+    }
+  }
 
-  return { state: result.state, issue, turn };
+  const settled = await store.getGame(gameId);
+  return { state: settled ?? state, issue: null, turn, alreadyResolved: true };
 }
 
 /**

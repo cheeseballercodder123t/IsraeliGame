@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import type { GameState } from "@/domain/types";
 import { advanceTurn } from "@/server/game";
 import { getStore } from "@/server/store";
 
@@ -31,28 +32,29 @@ export async function POST(request: Request) {
   const store = getStore();
   const resolved: { code: string; turn: number; headline: string }[] = [];
 
-  if (gameId) {
-    const state = await store.getGame(gameId);
-    if (!state) return NextResponse.json({ ok: false, error: "unknown table" }, { status: 404 });
+  // A window that another resolver got to first comes back with no paper, and
+  // that is not a failure: it is the guard doing its job.
+  const close = async (state: GameState | null) => {
+    if (!state) return;
     const outcome = await advanceTurn(state);
+    if (!outcome.issue) return;
     resolved.push({
       code: outcome.state.game.code,
       turn: outcome.turn,
       headline: outcome.issue.headline,
     });
+  };
+
+  if (gameId) {
+    const state = await store.getGame(gameId);
+    if (!state) return NextResponse.json({ ok: false, error: "unknown table" }, { status: 404 });
+    await close(state);
   } else {
     const now = Date.now();
     for (const summary of await store.listGames()) {
       if (summary.status !== "ACTIVE") continue;
       if (new Date(summary.nextTickAt).getTime() > now) continue;
-      const state = await store.getGame(summary.id);
-      if (!state) continue;
-      const outcome = await advanceTurn(state);
-      resolved.push({
-        code: outcome.state.game.code,
-        turn: outcome.turn,
-        headline: outcome.issue.headline,
-      });
+      await close(await store.getGame(summary.id));
     }
   }
 

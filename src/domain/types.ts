@@ -151,6 +151,14 @@ export interface Game {
   powerTariff: number;
   /** Who led the table at the close of the last tick, for the paper. */
   lastLeaderId: string | null;
+  /**
+   * Monotonic write counter. Every accepted write bumps it, and a write is
+   * refused when the stored revision has moved on since the writer read it, so
+   * two desks sealing at the same moment cannot drop each other's work and two
+   * resolvers cannot run the same window twice. Clients also watch it: when it
+   * moves, the table they are looking at is stale.
+   */
+  revision: number;
 }
 
 export interface Player {

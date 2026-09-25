@@ -6,6 +6,7 @@ import { CHARTER_LIST, charterOf } from "@/domain/constants";
 import type { Archetype } from "@/domain/types";
 import type { LobbyView } from "@/server/dashboard";
 import { claimSeatAction, fillWithBotsAction, startTableAction } from "@/server/actions";
+import { useTableSync } from "@/components/table/useTableSync";
 import { Button, Notice, Panel } from "@/components/ui/primitives";
 
 function charterName(id: Archetype): string {
@@ -17,6 +18,10 @@ export function LobbyViewPanel({ lobby }: { lobby: LobbyView }) {
   const [pending, startTransition] = useTransition();
   const [archetype, setArchetype] = useState<Archetype>("TECH_MESSIAH");
   const [error, setError] = useState<string | null>(null);
+
+  // A gathering table is watched the same way a running one is, so a friend
+  // taking the next chair shows up without anybody reloading.
+  const { live, present } = useTableSync(lobby.code, lobby.revision);
 
   const waiting = lobby.seats.length < lobby.minSeats;
   const canStart = lobby.me !== null && lobby.seats.length >= lobby.minSeats;
@@ -45,6 +50,19 @@ export function LobbyViewPanel({ lobby }: { lobby: LobbyView }) {
         <p className="mt-2 text-[12px] text-dim">
           {lobby.seats.length} of {lobby.targetSeats} chairs held · {lobby.openSeats} open ·{" "}
           {lobby.minSeats} houses to open the window
+        </p>
+        <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-faint">
+          <span className={`flex items-center gap-1 ${live ? "text-bile" : "text-hazard"}`}>
+            <span
+              className={`inline-block h-1.5 w-1.5 rounded-full ${live ? "bg-bile" : "bg-hazard"}`}
+            />
+            {live ? "live" : "stale"}
+          </span>
+          {present.length > 0 ? (
+            <span>
+              at the table: {present.map((who) => (who.me ? "you" : who.name)).join(", ")}
+            </span>
+          ) : null}
         </p>
       </header>
 

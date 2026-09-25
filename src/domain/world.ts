@@ -132,6 +132,7 @@ export function createGameState(spec: NewGameSpec): GameState {
     gridLoad: 0,
     powerTariff: 1,
     lastLeaderId: null,
+    revision: 0,
   };
 
   const deposits = rng.shuffle(DEPOSIT_POOL);

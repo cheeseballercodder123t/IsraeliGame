@@ -8,6 +8,7 @@ import type {
   GameSummary,
   NewspaperRecord,
 } from "./types";
+import { withRevision } from "./types";
 
 /**
  * A store that writes the table to disk. The dev server restarts on every
@@ -28,6 +29,24 @@ function dataRoot(): string {
   return process.env.CONGLOMERATE_DATA_DIR ?? path.join(process.cwd(), ".data");
 }
 
+/**
+ * Read-modify-write on one table file is not atomic across `await` points, so
+ * two requests arriving together can both read the old document and the second
+ * write silently drops the first. Every mutation below runs through a per-key
+ * promise chain, which is this adapter's stand-in for a row lock.
+ */
+const locks = new Map<string, Promise<unknown>>();
+
+function withLock<T>(key: string, run: () => Promise<T>): Promise<T> {
+  const previous = locks.get(key) ?? Promise.resolve();
+  const next = previous.then(run, run);
+  locks.set(
+    key,
+    next.catch(() => undefined),
+  );
+  return next;
+}
+
 export class FileStore implements GameStore {
   readonly kind = "file" as const;
 
@@ -43,6 +62,10 @@ export class FileStore implements GameStore {
 
   private get indexPath(): string {
     return path.join(this.root, "index.json");
+  }
+
+  private gameFile(id: string): string {
+    return path.join(this.gamesDir, `${id}.json`);
   }
 
   private async ensureDirs(): Promise<void> {
@@ -70,20 +93,22 @@ export class FileStore implements GameStore {
   }
 
   private async note(state: GameState): Promise<void> {
-    const index = await this.readIndex();
-    const entry: IndexEntry = {
-      id: state.game.id,
-      code: state.game.code,
-      turn: state.game.currentTurn,
-      status: state.game.status,
-      nextTickAt: state.game.nextTickAt,
-      players: state.players.length,
-      humans: state.players.filter((p) => !p.isBot).length,
-    };
-    const at = index.games.findIndex((game) => game.id === state.game.id);
-    if (at >= 0) index.games[at] = entry;
-    else index.games.push(entry);
-    await this.writeJson(this.indexPath, index);
+    await withLock(this.indexPath, async () => {
+      const index = await this.readIndex();
+      const entry: IndexEntry = {
+        id: state.game.id,
+        code: state.game.code,
+        turn: state.game.currentTurn,
+        status: state.game.status,
+        nextTickAt: state.game.nextTickAt,
+        players: state.players.length,
+        humans: state.players.filter((p) => !p.isBot).length,
+      };
+      const at = index.games.findIndex((game) => game.id === state.game.id);
+      if (at >= 0) index.games[at] = entry;
+      else index.games.push(entry);
+      await this.writeJson(this.indexPath, index);
+    });
   }
 
   async createGame(input: CreateGameInput): Promise<GameState> {
@@ -108,7 +133,8 @@ export class FileStore implements GameStore {
   }
 
   async getGame(id: string): Promise<GameState | null> {
-    return this.readJson<GameState>(path.join(this.gamesDir, `${id}.json`));
+    const state = await this.readJson<GameState>(this.gameFile(id));
+    return state ? withRevision(state) : null;
   }
 
   async getGameByCode(code: string): Promise<GameState | null> {
@@ -128,9 +154,23 @@ export class FileStore implements GameStore {
     return null;
   }
 
-  async saveGame(state: GameState): Promise<void> {
-    await this.writeJson(path.join(this.gamesDir, `${state.game.id}.json`), state);
-    await this.note(state);
+  /**
+   * The write itself is guarded and serialised: a snapshot is only accepted
+   * while the stored revision is still the one the writer read, so the loser of
+   * a race is told and can re-read instead of overwriting the winner.
+   */
+  async saveGame(state: GameState, expected?: number): Promise<boolean> {
+    return withLock(this.gameFile(state.game.id), async () => {
+      const file = this.gameFile(state.game.id);
+      if (expected !== undefined) {
+        const stored = await this.readJson<GameState>(file);
+        if ((stored?.game.revision ?? 0) !== expected) return false;
+      }
+      state.game.revision = (expected ?? state.game.revision ?? 0) + 1;
+      await this.writeJson(file, state);
+      await this.note(state);
+      return true;
+    });
   }
 
   async listGames(): Promise<GameSummary[]> {
@@ -152,18 +192,30 @@ export class FileStore implements GameStore {
     return summaries.sort((a, b) => b.turn - a.turn || a.code.localeCompare(b.code));
   }
 
-  async appendOrder(gameId: string, order: QueuedOrder): Promise<void> {
-    const state = await this.getGame(gameId);
-    if (!state || state.queue.some((q) => q.id === order.id)) return;
-    state.queue.push(order);
-    await this.saveGame(state);
+  async appendOrder(gameId: string, order: QueuedOrder): Promise<boolean> {
+    return withLock(this.gameFile(gameId), async () => {
+      const state = await this.getGame(gameId);
+      if (!state || state.queue.some((q) => q.id === order.id)) return false;
+      state.queue.push(order);
+      state.game.revision += 1;
+      await this.writeJson(this.gameFile(gameId), state);
+      await this.note(state);
+      return true;
+    });
   }
 
-  async removeOrder(gameId: string, orderId: string): Promise<void> {
-    const state = await this.getGame(gameId);
-    if (!state) return;
-    state.queue = state.queue.filter((q) => q.id !== orderId);
-    await this.saveGame(state);
+  async removeOrder(gameId: string, orderId: string): Promise<boolean> {
+    return withLock(this.gameFile(gameId), async () => {
+      const state = await this.getGame(gameId);
+      if (!state) return false;
+      const before = state.queue.length;
+      state.queue = state.queue.filter((q) => q.id !== orderId);
+      if (state.queue.length === before) return false;
+      state.game.revision += 1;
+      await this.writeJson(this.gameFile(gameId), state);
+      await this.note(state);
+      return true;
+    });
   }
 
   async listIssues(gameId: string): Promise<NewspaperRecord[]> {
