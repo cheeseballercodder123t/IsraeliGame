@@ -19,8 +19,9 @@ export default function NotFound() {
         {kind === "memory" ? (
           <p className="hatch mt-4 border border-hazard px-3 py-2 text-[11px] leading-relaxed text-ink">
             This instance is running the in-process store, so every table is held in the server
-            process. Restarting the development server clears the board, and the codes from before it
-            stop answering. Set the Supabase keys in `.env.local` to keep tables between restarts.
+            process. A restart clears the board, and the codes from before it stop answering. Set
+            SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY to keep tables beyond the process that made
+            them.
           </p>
         ) : null}
         <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-3">

@@ -25,7 +25,13 @@ interface StoreIndex {
   games: IndexEntry[];
 }
 
-function dataRoot(): string {
+/**
+ * Where the tables live: an explicit directory when one is named, otherwise
+ * `.data` beside the app. `index.ts` reads the same function, so the directory
+ * it tests for writability and the directory this adapter writes are always
+ * one and the same.
+ */
+export function fileStoreRoot(): string {
   return process.env.CONGLOMERATE_DATA_DIR ?? path.join(process.cwd(), ".data");
 }
 
@@ -50,7 +56,7 @@ function withLock<T>(key: string, run: () => Promise<T>): Promise<T> {
 export class FileStore implements GameStore {
   readonly kind = "file" as const;
 
-  constructor(private readonly root: string = dataRoot()) {}
+  constructor(private readonly root: string = fileStoreRoot()) {}
 
   private get gamesDir(): string {
     return path.join(this.root, "games");
