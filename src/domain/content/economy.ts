@@ -227,6 +227,16 @@ export const ANTITRUST_THRESHOLD = 0.35;
 export const APEX_ROYALTY_RATE = 0.05;
 export const TENDER_RESERVE_PRICE = 90_000;
 export const RAID_BREAK_FEE = 0.1;
+/** Windows a forced sale stays on the block before the public book takes it. */
+export const LOT_TURNS = 3;
+/** Share of appraised value a distressed lot opens at. */
+export const LOT_RESERVE_RATE = 0.45;
+/** The court's cut of a forced sale, taken off the seller's proceeds. */
+export const LOT_COURT_FEE = 0.06;
+/** Turns an unsigned contract offer stays on the wire. */
+export const OFFER_TURNS = 3;
+/** Offers one house may leave on the table at once. */
+export const OFFER_CAP = 4;
 
 // Books.
 export const TIDES: { name: string; atLeast: number; rate: number }[] = [

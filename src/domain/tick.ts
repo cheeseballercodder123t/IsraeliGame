@@ -13,7 +13,12 @@ import {
   TIER_ORDER,
   modifiersOf,
 } from "./constants";
-import { openTenders, resolveTakeovers, resolveTenders } from "./auctions";
+import {
+  openTenders,
+  resolveLotAuctions,
+  resolveTakeovers,
+  resolveTenders,
+} from "./auctions";
 import { runAudit, runDebt, runTaxation } from "./finance";
 import {
   advanceInstruments,
@@ -315,8 +320,10 @@ export function resolveTurnTick(input: GameState, options: TickOptions = {}): Ti
   // 15. Dirty air is fined, and the inspectors do not take excuses.
   runRegulation(state, scratch);
 
-  // 16. Tenders, raids, then construction held back for a winning envelope.
+  // 16. Tenders, forced sales, raids, then construction held back for a
+  //     winning envelope.
   resolveTenders(state, events, queued);
+  resolveLotAuctions(state, events, queued);
   resolveTakeovers(state, events, queued);
 
   for (const [tileId, plan] of ctx.construction) {

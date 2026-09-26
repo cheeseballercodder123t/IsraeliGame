@@ -10,7 +10,7 @@ import { TABLE_KEYBINDS } from "@/components/table/keybinds";
 describe("the keybind card", () => {
   it("reaches the market and every main area", () => {
     const keys = TABLE_KEYBINDS.map((bind) => bind.keys);
-    for (const key of ["d", "f", "m", "b", "o", "k", "r", "t", "/", "?"]) {
+    for (const key of ["d", "f", "m", "b", "o", "k", "l", "r", "t", "/", "?"]) {
       expect(keys, `the card is missing ${key}`).toContain(key);
     }
   });

@@ -9,9 +9,11 @@ import {
   bandCensus,
   spriteStyle,
 } from "@/domain/constants";
-import type { CSSProperties } from "react";
+import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { GameState, Tile } from "@/domain/types";
 import { RECIPE_ABBR, RESOURCE_ABBR } from "@/domain/constants";
+import { stepCoord } from "@/domain/grid";
+import type { BoardStep } from "@/domain/grid";
 import { ownerColor } from "@/lib/labels";
 import { sheetUrl, useSpriteAtlas } from "./atlas";
 
@@ -30,6 +32,14 @@ const AXIS = 20;
 const TOTAL_PX = BOARD_PX + AXIS * 2;
 /** Length of a corner mark on the drawn frame. */
 const MARK = 16;
+
+/** The arrows walk the board, one plot at a time. */
+const STEP_KEYS: Record<string, BoardStep> = {
+  ArrowUp: "UP",
+  ArrowDown: "DOWN",
+  ArrowLeft: "LEFT",
+  ArrowRight: "RIGHT",
+};
 
 /**
  * Below this the tile labels stop being legible at their drawn size, so the
@@ -121,6 +131,11 @@ export function GridCanvas({ state, selectedTileId, onSelect, highlightPlayerId 
   const ready = useSpriteAtlas();
   const holder = useRef<HTMLDivElement | null>(null);
   const [scale, setScale] = useState(1);
+  // A phone fits the whole frame at a third size, where a plot is art and very
+  // little else. The reader can ask for the drawn size instead and scroll the
+  // board sideways, which is what a paper map is for.
+  const [zoomed, setZoomed] = useState(false);
+  const shown = zoomed ? 1 : scale;
 
   // The board is drawn at one pitch and scaled as a whole, so a laptop that
   // cannot give it the drawn frame still sees all one hundred and twenty one
@@ -142,9 +157,30 @@ export function GridCanvas({ state, selectedTileId, onSelect, highlightPlayerId 
     return () => observer.disconnect();
   }, []);
 
-  const compact = scale < COMPACT_AT;
-  const bare = scale < BARE_AT;
+  const compact = shown < COMPACT_AT;
+  const bare = shown < BARE_AT;
   const selected = state.tiles.find((tile) => tile.id === selectedTileId) ?? null;
+
+  /**
+   * The arrows walk the board rather than the page, and the hand follows the
+   * plot it just moved to, so a director can cross the whole grid without the
+   * mouse. Focus starts from whatever plot is being stood on, so the walk
+   * begins where the eye already is.
+   */
+  const walk = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    const step = STEP_KEYS[event.key];
+    if (!step) return;
+    const standing = (event.target as HTMLElement | null)?.dataset?.tile;
+    const from =
+      state.tiles.find((tile) => tile.id === standing) ?? selected ?? state.tiles[0] ?? null;
+    if (!from) return;
+    event.preventDefault();
+    const next = stepCoord({ x: from.x, y: from.y }, step);
+    const target = state.tiles.find((tile) => tile.x === next.x && tile.y === next.y);
+    if (!target) return;
+    onSelect(target.id);
+    holder.current?.querySelector<HTMLButtonElement>(`[data-tile="${target.id}"]`)?.focus();
+  };
 
   const rails = useMemo(
     () =>
@@ -166,20 +202,24 @@ export function GridCanvas({ state, selectedTileId, onSelect, highlightPlayerId 
   );
 
   return (
-    <div ref={holder} className="w-full">
-      <div className="relative border border-rule bg-void p-1.5">
-        <div className="relative" style={{ width: TOTAL_PX * scale, height: TOTAL_PX * scale }}>
-          <Corner at="tl" x={AXIS * scale - MARK} y={AXIS * scale - MARK} />
-          <Corner at="tr" x={(AXIS + BOARD_PX) * scale} y={AXIS * scale - MARK} />
-          <Corner at="bl" x={AXIS * scale - MARK} y={(AXIS + BOARD_PX) * scale} />
-          <Corner at="br" x={(AXIS + BOARD_PX) * scale} y={(AXIS + BOARD_PX) * scale} />
+    <div ref={holder} className="w-full" onKeyDown={walk}>
+      <div
+        className={`relative border border-rule bg-void p-1.5 ${
+          zoomed ? "overflow-x-auto" : "overflow-hidden"
+        }`}
+      >
+        <div className="relative" style={{ width: TOTAL_PX * shown, height: TOTAL_PX * shown }}>
+          <Corner at="tl" x={AXIS * shown - MARK} y={AXIS * shown - MARK} />
+          <Corner at="tr" x={(AXIS + BOARD_PX) * shown} y={AXIS * shown - MARK} />
+          <Corner at="bl" x={AXIS * shown - MARK} y={(AXIS + BOARD_PX) * shown} />
+          <Corner at="br" x={(AXIS + BOARD_PX) * shown} y={(AXIS + BOARD_PX) * shown} />
 
           <div
             className="absolute top-0 left-0 bg-pit"
             style={{
               width: TOTAL_PX,
               height: TOTAL_PX,
-              transform: `scale(${scale})`,
+              transform: `scale(${shown})`,
               transformOrigin: "top left",
             }}
             role="group"
@@ -265,6 +305,12 @@ export function GridCanvas({ state, selectedTileId, onSelect, highlightPlayerId 
                     data-stalled={tile.stalled ? "true" : "false"}
                     data-scrubber={tile.scrubber ? "true" : "false"}
                     data-tender={tile.onTender ? "true" : "false"}
+                    data-lot={state.lots.some((lot) => lot.tileId === tile.id) ? "true" : "false"}
+                    data-tile={tile.id}
+                    aria-current={inHand ? "true" : undefined}
+                    // Roving focus: the board is one stop on the keyboard, and
+                    // the arrows move the stop from plot to plot.
+                    tabIndex={inHand || (!selectedTileId && tile.x === 0 && tile.y === 0) ? 0 : -1}
                     className="plot absolute cursor-pointer text-left"
                     style={{
                       left: tile.x * CELL + GAP / 2,
@@ -342,6 +388,12 @@ export function GridCanvas({ state, selectedTileId, onSelect, highlightPlayerId 
                       </span>
                     ) : null}
 
+                    {ready && state.lots.some((lot) => lot.tileId === tile.id) ? (
+                      <span className="absolute inset-0" data-overlay="lot" aria-hidden>
+                        <Art keyName="over_tender" scale={2} />
+                      </span>
+                    ) : null}
+
                     {bare ? null : (
                       <span className="absolute top-[3px] left-[4px] text-[8px] tracking-[0.1em] text-faint">
                         {label}
@@ -397,6 +449,44 @@ export function GridCanvas({ state, selectedTileId, onSelect, highlightPlayerId 
               ))}
             </div>
           </div>
+        </div>
+      </div>
+
+      {/*
+       * The frame control. On a narrow screen the board cannot be both whole
+       * and legible, so the reader chooses: the fitted frame shows all one
+       * hundred and twenty one plots, and the drawn frame is scrolled by hand.
+       */}
+      <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+        <p className="text-[10px] text-faint">
+          {zoomed ? "Drawn at full size, scroll to cross it" : "Fitted to the frame"}
+          {Math.round(shown * 100) < 100 ? ` at ${Math.round(shown * 100)} percent` : ""}
+        </p>
+        <div className="flex gap-1.5">
+          <button
+            type="button"
+            onClick={() => setZoomed(false)}
+            aria-pressed={!zoomed}
+            className={`border px-2 py-[2px] text-[10px] tracking-[0.12em] uppercase ${
+              zoomed
+                ? "border-rule bg-pit text-dim hover:border-edge hover:text-ink"
+                : "border-brass bg-plate text-ink"
+            }`}
+          >
+            Fit the frame
+          </button>
+          <button
+            type="button"
+            onClick={() => setZoomed(true)}
+            aria-pressed={zoomed}
+            className={`border px-2 py-[2px] text-[10px] tracking-[0.12em] uppercase ${
+              zoomed
+                ? "border-brass bg-plate text-ink"
+                : "border-rule bg-pit text-dim hover:border-edge hover:text-ink"
+            }`}
+          >
+            Full size
+          </button>
         </div>
       </div>
     </div>

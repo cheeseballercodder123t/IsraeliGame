@@ -91,6 +91,30 @@ describe("the house rules", () => {
     expect(guilty).toEqual([]);
   });
 
+  it("allows the front page its two liberties, and nowhere else", () => {
+    // The landing is allowed a letterpress offset and one tonal wash. Both are
+    // hard and flat, and neither is allowed to spread into the rest of the
+    // building: if a third surface wants one, it has to argue with this test.
+    const front = FILES.filter((file) => /\bletterpress(?:-sm)?\b|front-wash/.test(file.body))
+      .map((file) => file.name)
+      .sort();
+    // The two surfaces a stranger meets first: the lobby and the notice for a
+    // code that never filed. Nothing behind the front door gets an offset.
+    expect(front).toEqual(["app/not-found.tsx", "app/page.tsx"].sort());
+
+    const css = readFileSync(path.join(SOURCE, "app", "globals.css"), "utf8");
+    const blocks = css.match(/\.letterpress(?:-sm)?\s*\{[^}]*\}/g) ?? [];
+    expect(blocks.length, "the two letterpress rules are missing").toBe(2);
+    for (const block of blocks) {
+      const shadow = (block.match(/box-shadow:\s*([^;]+);/) ?? [])[1] ?? "";
+      // A hard offset: whole pixels, no blur, no spread, and never black.
+      expect(shadow, `the letterpress shadow went soft: ${shadow}`).toMatch(
+        /^\d+px \d+px 0 0 #[0-9a-f]{6}$/,
+      );
+      expect(shadow).not.toContain("#000000");
+    }
+  });
+
   it("keeps the theme square, and off pure white", () => {
     // The stylesheet is not a TypeScript file, so it is read on its own.
     const css = readFileSync(path.join(SOURCE, "app", "globals.css"), "utf8");

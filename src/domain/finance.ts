@@ -1,3 +1,4 @@
+import { listLot } from "./auctions";
 import {
   ARSON_AUDIT_RISK,
   ARSON_PAYOUT_MULTIPLIER,
@@ -137,14 +138,6 @@ export function runDebt(state: GameState, player: Player, events: GameEvent[]): 
   if (!victim) return;
 
   const recovered = RECIPES[victim.recipeId].baseValue * (victim.condition / 100);
-  victim.ownerId = null;
-  victim.recipeId = "NONE";
-  victim.tier = 0;
-  victim.condition = 0;
-  victim.defenseEscrow = 0;
-  victim.onTender = true;
-  victim.scrubber = false;
-  player.debt = Math.max(0, player.debt - recovered);
   player.debtAge = 0;
   player.pr = Math.max(0, player.pr - 10);
 
@@ -155,6 +148,12 @@ export function runDebt(state: GameState, player: Player, events: GameEvent[]): 
     tileId: tileKey(victim.x, victim.y),
     amount: recovered,
   });
+
+  // The bank does not keep the plant: it puts the deed on the block and the
+  // money clears the paper. If the table will not meet the reserve the works
+  // come down and the ground goes back to the public book, which is the loss
+  // a default was always going to cost.
+  listLot(state, victim, player.id, "BANK", events);
 }
 
 export function issueBond(
@@ -290,12 +289,10 @@ export function declareChapter11(
     const victim = owned[0];
     if (!victim) break;
     surrendered = tileKey(victim.x, victim.y);
-    victim.ownerId = null;
-    victim.recipeId = "NONE";
-    victim.tier = 0;
-    victim.condition = 0;
-    victim.onTender = true;
-    victim.scrubber = false;
+    // The plant goes to a forced sale rather than to nobody: the court takes
+    // sealed envelopes above a reserve, and the filer keeps the proceeds less
+    // the court's cut. That is what makes reorganisation survivable.
+    listLot(state, victim, player.id, "COURT", events);
   }
 
   events.push({

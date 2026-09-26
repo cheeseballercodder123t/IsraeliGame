@@ -48,6 +48,13 @@ body {
   color: var(--color-ink);
 }
 
+html {
+  /* Native controls, list pickers and scrollbars follow the plate rather than
+     the browser default, so a select never opens as a white sheet. */
+  color-scheme: dark;
+  scroll-behavior: smooth;
+}
+
 body {
   font-family: var(--font-mono);
   font-size: 13px;
@@ -227,8 +234,10 @@ input[type="radio"] {
   background: var(--color-rule);
 }
 
-/* A pasted page in the paper reads on newsprint, so its scrollbar follows suit. */
+/* A pasted page in the paper reads on newsprint, so its scrollbar and its
+   native controls follow suit rather than staying dark. */
 .paper-scroll {
+  color-scheme: light;
   scrollbar-color: var(--color-newsink) var(--color-news-worn);
 }
 
@@ -251,6 +260,30 @@ input[type="radio"] {
   font-size: 3.1em;
   font-weight: 800;
   line-height: 0.8;
+}
+
+/*
+ * The liberties of the front page. The landing is allowed two things the rest
+ * of the building is not: one soft tonal wash behind the masthead, and a hard
+ * offset shadow on the pieces worth pressing. Both stay flat and square: the
+ * shadow is a letterpress offset with no blur, and the wash never turns into a
+ * gradient panel.
+ */
+.front-wash {
+  background-image: linear-gradient(
+    to bottom,
+    rgba(193, 154, 58, 0.075),
+    rgba(193, 154, 58, 0.02) 38%,
+    transparent 70%
+  );
+}
+
+.letterpress {
+  box-shadow: 6px 6px 0 0 #0d0b08;
+}
+
+.letterpress-sm {
+  box-shadow: 3px 3px 0 0 #0d0b08;
 }
 
 /* An indicator lamp. Slow enough to read as a lit bulb, not as a blink. */

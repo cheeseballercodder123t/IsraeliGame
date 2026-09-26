@@ -389,6 +389,8 @@ export interface OpenTableSummary {
   humans: number;
   players: number;
   open: number;
+  /** The seed the country was drawn from, printed on the lobby card. */
+  seed: number;
 }
 
 /** Tables a newcomer can still sit at: gathering lobbies first. */
@@ -409,6 +411,7 @@ export async function listJoinableTables(): Promise<OpenTableSummary[]> {
       humans: summary.humans,
       players: state.players.length,
       open,
+      seed: state.game.seed,
     });
   }
   return tables.sort((a, b) =>
@@ -453,9 +456,17 @@ export async function queueOrder(
   await store.appendOrder(gameId, queued);
   // Timestamp the seal on the table itself, which is what the fairness rule
   // reads when a window closes on a desk that is still typing. A bot seals
-  // during resolution and does not go through here.
+  // during resolution and does not go through here. The seal is also filed in
+  // the Record, which is how the window can say who filed before the bell.
   await commit(gameId, (live) => {
     live.game.lastSealAt = queued.createdAt;
+    const filed = live.seals.some(
+      (seal) => seal.playerId === playerId && seal.at === queued.createdAt,
+    );
+    if (!filed) {
+      live.seals.push({ playerId, turn: queued.turn, at: queued.createdAt });
+      if (live.seals.length > 160) live.seals = live.seals.slice(-160);
+    }
     return { ok: true as const, value: true };
   });
   return { ok: true, order: queued };
@@ -633,9 +644,15 @@ export async function say(
 /**
  * Opens a new era on the same table. The code, the seats, the clock and the
  * win condition carry over; the board, the books and the paper start again.
- * The wire is kept, because the same houses are still sitting at it.
+ * The wire is kept, because the same houses are still sitting at it. A table
+ * may also be reopened on its own seed, which draws the same country again:
+ * same wind, same deposits, same opening plots.
  */
-export async function rematch(code: string, userId: string): Promise<{ ok: boolean; error?: string }> {
+export async function rematch(
+  code: string,
+  userId: string,
+  options: { sameSeed?: boolean } = {},
+): Promise<{ ok: boolean; error?: string }> {
   const store = getStore();
   const loaded = await store.getGameByCode(code);
   if (!loaded) return { ok: false, error: "No such table." };
@@ -644,7 +661,9 @@ export async function rematch(code: string, userId: string): Promise<{ ok: boole
     return { ok: false, error: "Only a seated house can open a new era." };
   }
 
-  const seed = hashSeed(`${loaded.game.code}:${Date.now()}:rematch`);
+  const seed = options.sameSeed
+    ? loaded.game.seed
+    : hashSeed(`${loaded.game.code}:${Date.now()}:rematch`);
   const rebuilt = createGameState({
     id: loaded.game.id,
     code: loaded.game.code,

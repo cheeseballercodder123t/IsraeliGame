@@ -63,6 +63,8 @@ export function TileInspector({ state, player, tile, onOrder }: TileInspectorPro
   const bid = state.queue.find(
     (item) => item.order.type === "BID_TENDER" && item.order.tileId === tile.id,
   );
+  const lot = state.lots.find((entry) => entry.tileId === tile.id) ?? null;
+  const selling = lot ? lot.sellerId === player.id : false;
   const rail = state.rails.find(
     (track) => (track.ax === tile.x && track.ay === tile.y) || (track.bx === tile.x && track.by === tile.y),
   );
@@ -105,8 +107,19 @@ export function TileInspector({ state, player, tile, onOrder }: TileInspectorPro
             label="Particulate"
             value={formatUnits(tile.pollution)}
             tone={tile.pollution > 20 ? "rust" : "dim"}
+          />          <KeyValue
+            label="Escrow"
+            value={formatMoney(tile.defenseEscrow)}
           />
-          <KeyValue label="Escrow" value={formatMoney(tile.defenseEscrow)} />
+          {lot ? (
+            <KeyValue
+              label={lot.reason === "BANK" ? "Bank sale" : "Forced sale"}
+              value={`reserve ${formatMoney(lot.reserve)} · ${lot.turnsLeft} ${
+                lot.turnsLeft === 1 ? "window" : "windows"
+              } left`}
+              tone={selling ? "rust" : "brass"}
+            />
+          ) : null}
           <KeyValue
             label="Output at board prices"
             value={cashYield > 0 ? `${formatMoney(cashYield)} a turn` : "no output"}
@@ -244,17 +257,23 @@ export function TileInspector({ state, player, tile, onOrder }: TileInspectorPro
 
         {!mine ? (
           <>
-            {tile.onTender ? (
+            {tile.onTender || lot ? (
               <Button
                 tone="brass"
                 onClick={() =>
                   onOrder(
-                    { type: "BID_TENDER", tileId: tile.id, amount: Math.round(Math.max(120_000, player.cash * 0.2)) },
+                    {
+                      type: "BID_TENDER",
+                      tileId: tile.id,
+                      amount: Math.round(
+                        Math.max(lot ? lot.reserve * 1.15 : 120_000, player.cash * 0.2),
+                      ),
+                    },
                     bid ? "Raise the envelope" : "Seal an envelope",
                   )
                 }
               >
-                {bid ? "Raise the envelope" : "Bid at tender"}
+                {bid ? "Raise the envelope" : lot ? "Bid at the forced sale" : "Bid at tender"}
               </Button>
             ) : null}
             {tile.ownerId ? (
@@ -277,7 +296,15 @@ export function TileInspector({ state, player, tile, onOrder }: TileInspectorPro
         ) : null}
       </div>
 
-      {mine ? (
+      {mine && selling ? (
+        <p className="mt-2 border-t border-rule pt-2 text-[10px] leading-relaxed text-rust">
+          Your deed is on the block at a reserve of {formatMoney(lot ? lot.reserve : 0)}. Sealed
+          envelopes are read when the window closes, and if none meets it the works come down and
+          the ground goes back to the public book.
+        </p>
+      ) : null}
+
+      {mine && !selling ? (
         <div className="mt-2.5 flex flex-wrap gap-1.5 border-t border-rule pt-2.5">
           {WASTE_RESOURCES.map((resource) => {
             const held = getQty(state.inventory, player.id, resource);

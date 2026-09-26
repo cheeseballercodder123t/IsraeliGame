@@ -1,7 +1,16 @@
-import { RECIPES, RAID_BREAK_FEE, TENDERS_PER_TURN, TENDER_RESERVE_PRICE, modifiersOf } from "./constants";
+import {
+  LOT_COURT_FEE,
+  LOT_RESERVE_RATE,
+  LOT_TURNS,
+  RECIPES,
+  RAID_BREAK_FEE,
+  TENDERS_PER_TURN,
+  TENDER_RESERVE_PRICE,
+  modifiersOf,
+} from "./constants";
 import { tileKey } from "./grid";
 import type { Rng } from "./rng";
-import type { GameEvent, GameState, QueuedOrder, Tile } from "./types";
+import type { DistressedLot, GameEvent, GameState, QueuedOrder, Tile } from "./types";
 
 export interface Bid {
   playerId: string;
@@ -100,6 +109,139 @@ export function resolveTenders(
       success: true,
     });
   }
+}
+
+/**
+ * A forced sale.
+ *
+ * A house that files for protection or defaults on its paper loses the deed
+ * either way, but the table decides the price: the court lists the plant at a
+ * reserve and takes sealed envelopes for a few windows. A bid above the
+ * reserve buys a working plant, not bare ground, and the seller keeps the
+ * proceeds less the court's cut. If nobody bids, the works come down and the
+ * plot goes to the public book, which is the old outcome and the reason a
+ * reserve is worth meeting.
+ */
+export function listLot(
+  state: GameState,
+  tile: Tile,
+  sellerId: string,
+  reason: DistressedLot["reason"],
+  events: GameEvent[],
+): DistressedLot | null {
+  const recipe = RECIPES[tile.recipeId];
+  if (recipe.id === "NONE") return null;
+  const existing = state.lots.find((lot) => lot.tileId === tile.id);
+  if (existing) return existing;
+  const appraised = recipe.baseValue * (tile.condition / 100);
+  const reserve = Math.max(TENDER_RESERVE_PRICE, Math.round(appraised * LOT_RESERVE_RATE));
+  const lot: DistressedLot = { tileId: tile.id, sellerId, reserve, turnsLeft: LOT_TURNS, reason };
+  state.lots.push(lot);
+  events.push({
+    kind: "LOT_OPENED",
+    turn: state.game.currentTurn,
+    playerId: sellerId,
+    tileId: tileKey(tile.x, tile.y),
+    amount: reserve,
+    count: LOT_TURNS,
+    note: reason.toLowerCase(),
+  });
+  return lot;
+}
+
+/**
+ * Sealed envelopes on the lots. Same machinery as the public tender: highest
+ * envelope wins and pays a dollar above the second highest, and only the
+ * reserve is public in advance.
+ */
+export function resolveLotAuctions(
+  state: GameState,
+  events: GameEvent[],
+  queued: QueuedOrder[],
+): void {
+  if (state.lots.length === 0) return;
+  const turn = state.game.currentTurn;
+  const surviving: DistressedLot[] = [];
+
+  for (const lot of state.lots) {
+    const tile = state.tiles.find((t) => t.id === lot.tileId);
+    const seller = state.players.find((p) => p.id === lot.sellerId);
+    // The deed left the seller's book by some other route: the sale lapses.
+    if (!tile || !seller || tile.ownerId !== seller.id || tile.scorchedTurns > 0) {
+      continue;
+    }
+
+    const bids: Bid[] = [];
+    for (const item of queued) {
+      const order = item.order;
+      if (order.type !== "BID_TENDER" || order.tileId !== tile.id) continue;
+      const player = state.players.find((p) => p.id === item.playerId);
+      if (!player || player.id === seller.id) continue;
+      if (player.bidsFrozen > 0) continue;
+      if (player.cash < order.amount || order.amount < lot.reserve) continue;
+      bids.push({ playerId: player.id, amount: order.amount });
+    }
+
+    const outcome = vickreyOutcome(bids);
+    if (!outcome || outcome.price < lot.reserve) {
+      lot.turnsLeft -= 1;
+      if (lot.turnsLeft > 0) {
+        surviving.push(lot);
+        continue;
+      }
+      // Nobody met the reserve in time. The works come down and the ground
+      // goes back on the public tender, which is what a forced sale costs.
+      tile.ownerId = null;
+      tile.recipeId = "NONE";
+      tile.tier = 0;
+      tile.condition = 0;
+      tile.defenseEscrow = 0;
+      tile.scrubber = false;
+      tile.onTender = true;
+      events.push({
+        kind: "LOT_LAPSED",
+        turn,
+        playerId: seller.id,
+        tileId: tileKey(tile.x, tile.y),
+        count: LOT_TURNS,
+      });
+      continue;
+    }
+
+    const winner = state.players.find((p) => p.id === outcome.winner.playerId);
+    if (!winner || winner.cash < outcome.price) {
+      surviving.push(lot);
+      continue;
+    }
+
+    const fee = outcome.price * LOT_COURT_FEE;
+    const net = outcome.price - fee;
+    winner.cash -= outcome.price;
+    if (lot.reason === "BANK") {
+      // A bank sale pays the paper first, and the debtor keeps the remainder.
+      const repaid = Math.min(net, seller.debt);
+      seller.debt -= repaid;
+      if (seller.debt <= 0) seller.debtAge = 0;
+      seller.cash += net - repaid;
+    } else {
+      seller.cash += net;
+    }
+    tile.ownerId = winner.id;
+    tile.defenseEscrow = 0;
+    tile.onTender = false;
+    events.push({
+      kind: "LOT_WON",
+      turn,
+      playerId: winner.id,
+      targetId: seller.id,
+      tileId: tileKey(tile.x, tile.y),
+      amount: outcome.price,
+      quantity: fee,
+      success: true,
+    });
+  }
+
+  state.lots = surviving;
 }
 
 export interface TakeoverAttempt {

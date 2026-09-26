@@ -11,7 +11,7 @@ export const TABLE_TOUR: TourStep[] = [
   {
     anchor: "strip",
     title: "The strip is the whole table at a glance",
-    body: "Cash, offshore money, debt, standing, audit risk and morale on the left, the countdown to the close on the right. The badge beside the table code reads live while this tab is keeping up with the room. The row underneath is every house: a lit square means somebody is at the table now, and a count means somebody has already sealed orders into this window.",
+    body: "Cash, offshore money, debt, standing, audit risk and morale on the left, the window clock on the right. The dial there is graduated like a gauge: the ring fills as the window is spent, turns amber at three quarters and blood when it is nearly out, and the time left is printed inside it. The badge beside the table code reads live while this tab is keeping up with the room. The row underneath is every house: a lit square means somebody is at the table now, and a count means somebody has already sealed orders into this window.",
   },
   {
     anchor: "views",
@@ -21,12 +21,12 @@ export const TABLE_TOUR: TourStep[] = [
   {
     anchor: "first-moves",
     title: "What the desk wants next",
-    body: "Sixty four orders and an empty ledger is the hardest moment in the game, so this panel names one thing at a time and takes you to the plot that can do it. It reads your own books, so it disappears the moment there is nothing left to nag about. If you never see it, you are already ahead of it.",
+    body: "Sixty seven orders and an empty ledger is the hardest moment in the game, so this panel names one thing at a time and takes you to the plot that can do it. It reads your own books, so it disappears the moment there is nothing left to nag about. If you never see it, you are already ahead of it.",
   },
   {
     anchor: "desk",
     title: "The operations desk",
-    body: "Every order in the game, sorted into planning, commerce, capital, labor, city hall and night work. Open one, fill in its fields, and seal it. The price beside each order is what it will cost at settlement. Seal as many as you like in a window, and the tick plays them all at once. The count on each phase tab reads as sealed over available, so a brass 2 over 11 means you have two orders in that phase.",
+    body: "Every order in the game, sorted into planning, commerce, capital, labor, city hall and night work. Open one, fill in its fields, and seal it. The price beside each order is what it will cost at settlement. Seal as many as you like in a window, and the tick plays them all at once. The count on each phase tab reads as sealed over available, so a brass 2 over 14 means you have two orders in that phase.",
   },
   {
     anchor: "queue",
@@ -34,9 +34,14 @@ export const TABLE_TOUR: TourStep[] = [
     body: "Your own sealed orders, listed under the desk you sealed them from, each with a button to pull it back. Rivals see the count and not the contents, which is the only reason a sealed window stays interesting.",
   },
   {
+    anchor: "contracts",
+    title: "Contracts on the wire",
+    body: "A supply contract is bilateral: one house writes the terms and the other signs them, so nothing is owed until both desks have touched the paper. Offers addressed to you are signed or refused from here, and the contracts already in force list what you owe, to whom, and how much you have fallen short so far.",
+  },
+  {
     anchor: "board",
     title: "The industrial grid",
-    body: "Eleven rows by eleven columns, five bands wrapped around a single crown plot. The outer band is the only ground that yields raw material, so a plant has to sit near what it eats and haul the difference over track you own. The legend under the board names each band and the tiers it will take.",
+    body: "Eleven rows by eleven columns, five bands wrapped around a single crown plot. The rim is numbered along the top and the left, so any plot can be named off the screen, and a crosshair runs the row and column of the plot in hand. The arrow keys walk one plot at a time and the hand follows, so the whole board can be crossed without the mouse. The outer band is the only ground that yields raw material, so a plant has to sit near what it eats and haul the difference over track you own. The legend under the board names each band and the tiers it will take.",
   },
   {
     anchor: "inspector",
@@ -54,9 +59,19 @@ export const TABLE_TOUR: TourStep[] = [
     body: "Cash, offshore money, debt and how many windows it has been outstanding, standing with the regulator, your wage scale, patents, policies, shorts and forward contracts, and who currently leads the table. Debt ages three windows before the revenue service starts charging interest on it.",
   },
   {
+    anchor: "record",
+    title: "The Record",
+    body: "The paper tells the window as a story; the Record prints the same ledger as a ledger. It says who sealed before the bell, what changed hands, what was done after dark and which thresholds the table crossed, and it is read off the tick's own event log, so it can never disagree with the paper printed from it.",
+  },
+  {
+    anchor: "tape",
+    title: "The tape keeps drifting",
+    body: "One slip per commodity, led by whatever has moved furthest from the book's own base price, green when a book is up on the window and rust when it is down. It drifts slowly enough to be read. Every figure on it is taken from the exchange printed underneath, so the tape is a reading of the floor rather than a forecast of it.",
+  },
+  {
     anchor: "rag",
     title: "The Rag",
-    body: "The paper prints at every close and names what everyone did after dark. A new issue opens itself the first time this browser sees it, and the shelf keeps the recent ones. This button opens the latest.",
+    body: "The paper prints at every close and names what everyone did after dark. A new issue opens itself the first time this browser sees it, the shelf lists the editions kept, and the ruled strip at the foot of the paper flips between back issues without leaving the page. This button opens the latest.",
   },
   {
     anchor: "tick",

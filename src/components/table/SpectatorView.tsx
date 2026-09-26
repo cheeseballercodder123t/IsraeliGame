@@ -1,15 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { eraWinner, winConditionLabel } from "@/domain/endgame";
 import { RECIPES } from "@/domain/constants";
 import type { GameState } from "@/domain/types";
 import type { NewspaperRecord } from "@/server/store/types";
 import { GridCanvas } from "@/components/grid/GridCanvas";
 import { NewspaperModal } from "@/components/newspaper/NewspaperModal";
+import { RagShelf } from "@/components/newspaper/RagShelf";
+import { MarketTape } from "@/components/panes/MarketTape";
 import { StatusStrip } from "@/components/panes/StatusStrip";
 import { ChatPanel } from "@/components/table/ChatPanel";
 import { HousesRegister } from "@/components/table/HousesRegister";
+import { RecordPane } from "@/components/table/RecordPane";
 import { POLL_MS, REALTIME_POLL_MS, useTableSync } from "@/components/table/useTableSync";
 import { Panel } from "@/components/ui/primitives";
 import { thump } from "@/lib/sound";
@@ -34,6 +37,8 @@ export function SpectatorView({
   issues: NewspaperRecord[];
 }) {
   const [ragOpen, setRagOpen] = useState(false);
+  /** The edition on the rail, so the shelf can open any issue and not just the latest. */
+  const [ragTurn, setRagTurn] = useState<number | null>(null);
   const [selectedTileId, setSelectedTileId] = useState<string | null>(null);
   const realtime = state.game.mode === "REALTIME";
   const { live, present } = useTableSync(
@@ -43,6 +48,9 @@ export function SpectatorView({
   );
 
   const latestIssue = issues[0] ?? null;
+  const issue =
+    (ragTurn === null ? null : issues.find((entry) => entry.turn === ragTurn) ?? null) ??
+    latestIssue;
   const finished = state.game.status === "FINISHED";
   const winner = finished ? eraWinner(state) : null;
   const selected = state.tiles.find((tile) => tile.id === selectedTileId) ?? null;
@@ -52,10 +60,17 @@ export function SpectatorView({
     const key = `rag:${code}`;
     const seen = window.localStorage.getItem(key);
     if (seen === null || Number(seen) < latestIssue.turn) {
+      // A new edition goes up on the rail, even if an older one was open.
+      setRagTurn(latestIssue.turn);
       setRagOpen(true);
       window.localStorage.setItem(key, String(latestIssue.turn));
     }
   }, [code, latestIssue]);
+
+  const openIssue = useCallback((record: NewspaperRecord) => {
+    setRagTurn(record.turn);
+    setRagOpen(true);
+  }, []);
 
   useEffect(() => {
     if (ragOpen) thump();
@@ -90,6 +105,10 @@ export function SpectatorView({
         </p>
       </section>
 
+      <div className="mt-3">
+        <MarketTape state={state} />
+      </div>
+
       <div className="mt-3 grid items-start gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,340px)] 2xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="min-w-0 space-y-3">
           <Panel
@@ -121,32 +140,22 @@ export function SpectatorView({
           <Panel title="Houses on the register" aside="read only">
             <HousesRegister state={state} />
           </Panel>
+
+          <RecordPane state={state} />
         </div>
 
         <div className="min-w-0 space-y-3">
           <ChatPanel code={code} state={state} readOnly />
 
-          <Panel title="The Rag" aside={`${issues.length} issues kept`}>
-            <ul className="space-y-1">
-              {issues.slice(0, 6).map((issue) => (
-                <li key={`${issue.turn}-${issue.createdAt}`} className="border-b border-rule/40 py-1">
-                  <p className="text-[11px] text-ink">{issue.headline}</p>
-                  <p className="text-[10px] text-faint">
-                    turn {issue.turn} · {issue.scandals.length} named
-                  </p>
-                </li>
-              ))}
-              {issues.length === 0 ? (
-                <p className="text-[11px] text-faint">The press has not run yet.</p>
-              ) : null}
-            </ul>
+          <Panel title="The Rag" aside={`${issues.length} editions kept`}>
+            <RagShelf issues={issues} current={issue ? issue.turn : null} onOpen={openIssue} />
             {latestIssue ? (
               <button
                 type="button"
-                onClick={() => setRagOpen(true)}
-                className="mt-2 border border-edge px-2 py-1 text-[10px] tracking-[0.1em] text-dim uppercase hover:text-ink"
+                onClick={() => openIssue(latestIssue)}
+                className="mt-2 border border-edge px-2 py-1 text-[10px] tracking-[0.14em] text-dim uppercase hover:border-brass hover:text-ink"
               >
-                Open the latest issue
+                Read the latest edition
               </button>
             ) : null}
           </Panel>
@@ -172,7 +181,13 @@ export function SpectatorView({
         </div>
       </div>
 
-      <NewspaperModal issue={latestIssue} open={ragOpen} onOpenChange={setRagOpen} />
+      <NewspaperModal
+        issue={issue}
+        open={ragOpen}
+        onOpenChange={setRagOpen}
+        shelf={issues}
+        onSelect={openIssue}
+      />
     </main>
   );
 }

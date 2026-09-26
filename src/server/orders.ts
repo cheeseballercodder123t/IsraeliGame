@@ -42,6 +42,7 @@ function fieldSchema(field: OrderField): z.ZodTypeAny {
     case "TILE":
     case "PLAYER":
     case "RAIL":
+    case "OFFER":
       return z.string().min(1).max(72);
     case "TEXT":
       // Labor models and anything else chosen from a fixed vocabulary is

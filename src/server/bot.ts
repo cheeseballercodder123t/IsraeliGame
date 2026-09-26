@@ -164,6 +164,55 @@ export function planBotTurn(state: GameState, playerId: string): Order[] {
     }
   }
 
+  // 4b. Forced sales. A working plant at a court reserve is the cheapest way
+  //     onto a band the house could not otherwise buy into.
+  for (const lot of state.lots) {
+    const tile = state.tiles.find((t) => t.id === lot.tileId);
+    if (!tile || tile.ownerId === player.id) continue;
+    const ceiling = Math.max(0, wallet - RESERVE);
+    const bid = Math.round(Math.min(ceiling * 0.4, lot.reserve * 1.3));
+    if (bid <= lot.reserve || bid > ceiling) continue;
+    orders.push({ type: "BID_TENDER", tileId: tile.id, amount: bid });
+  }
+
+  // 4c. The wire. Sign what is quoted under the market, send back what is not,
+  //     and offer a surplus to the house whose plant eats it.
+  for (const offer of state.offers) {
+    if (offer.buyerId !== player.id) continue;
+    const row = state.market.find((m) => m.resource === offer.resource);
+    if (!row || row.price <= 0) continue;
+    if (offer.price <= row.price * 1.05 && wallet > offer.quantity * offer.price * 3) {
+      orders.push({ type: "SIGN_CONTRACT", offerId: offer.id });
+    } else if (offer.price > row.price * 1.25) {
+      orders.push({ type: "DECLINE_CONTRACT", offerId: offer.id });
+    }
+  }
+  const quoted = state.offers.filter((offer) => offer.sellerId === player.id).length;
+  if (quoted < 2 && rng.chance(0.5)) {
+    for (const resource of TRADEABLE) {
+      const row = state.market.find((m) => m.resource === resource);
+      if (!row || row.price <= 0) continue;
+      const surplus = producedBy(state, player.id, resource) - consumedBy(state, player.id, resource);
+      if (surplus < 2) continue;
+      const buyer = state.tiles.find(
+        (t) =>
+          t.ownerId &&
+          t.ownerId !== player.id &&
+          (RECIPES[t.recipeId].input[resource] ?? 0) > 0,
+      );
+      if (!buyer || !buyer.ownerId) continue;
+      orders.push({
+        type: "PROPOSE_CONTRACT",
+        playerId: buyer.ownerId,
+        resource,
+        quantity: Math.max(2, Math.round(surplus * 0.5)),
+        price: row.price * 0.92,
+        turns: 4,
+      });
+      break;
+    }
+  }
+
   // 5. Escrow the plots that would hurt to lose.
   for (const tile of owned.slice().sort((a, b) => plotPriority(b) - plotPriority(a)).slice(0, 3)) {
     if (RECIPES[tile.recipeId].baseValue < 600_000) continue;
@@ -358,6 +407,13 @@ function producedBy(state: GameState, playerId: string, resource: Resource): num
   return state.tiles
     .filter((t) => t.ownerId === playerId)
     .reduce((sum, t) => sum + (RECIPES[t.recipeId].output[resource] ?? 0), 0);
+}
+
+/** What the house's own works eat of a resource, for quoting a surplus. */
+function consumedBy(state: GameState, playerId: string, resource: Resource): number {
+  return state.tiles
+    .filter((t) => t.ownerId === playerId)
+    .reduce((sum, t) => sum + (RECIPES[t.recipeId].input[resource] ?? 0), 0);
 }
 
 function richestRival(state: GameState, playerId: string): Player | undefined {

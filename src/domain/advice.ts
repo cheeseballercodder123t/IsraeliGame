@@ -1,12 +1,12 @@
 import { RECIPES, RESOURCE_LABEL, WASTE_RESOURCES } from "./constants";
-import { formatUnits } from "./format";
+import { formatMoney, formatUnits } from "./format";
 import { getQty } from "./inventory";
 import type { GameState, Player } from "./types";
 
 /**
  * What a director should do next.
  *
- * Sixty four orders and an empty ledger is the hardest moment in the game, so
+ * Sixty seven orders and an empty ledger is the hardest moment in the game, so
  * the desk says one thing at a time, in the order the books actually need it,
  * and names the plot whose inspector already carries the right button. Every
  * line is derived from the player's own state, which is what lets the advice
@@ -74,6 +74,27 @@ export function advise(state: GameState, player: Player): Advice | null {
       action: `Open ${tip.x}, ${tip.y} to burn it`,
       tileId: tip.id,
     };
+  }
+
+  // A forced sale is the one opportunity on this board with an expiry on it:
+  // three windows, and then the works are pulled down and the ground is public.
+  const lot = state.lots.find(
+    (entry) => entry.sellerId !== player.id && entry.reserve <= player.cash,
+  );
+  if (lot) {
+    const listed = state.tiles.find((tile) => tile.id === lot.tileId);
+    if (listed) {
+      return {
+        aside: "a forced sale",
+        body: `Plot ${listed.x}, ${listed.y} is on the block at a reserve of ${formatMoney(
+          lot.reserve,
+        )}. A forced sale buys the standing plant rather than bare ground, and the envelope only has to clear the reserve. ${lot.turnsLeft} ${
+          lot.turnsLeft === 1 ? "window" : "windows"
+        } left before the works come down and the ground goes back to the public book.`,
+        action: `Open plot ${listed.x}, ${listed.y}`,
+        tileId: listed.id,
+      };
+    }
   }
 
   return null;

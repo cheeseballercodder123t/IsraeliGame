@@ -44,6 +44,7 @@ export type FieldKind =
   | "RECIPE"
   | "GRADE"
   | "SIDE"
+  | "OFFER"
   | "BOOLEAN";
 
 export interface OrderField {
@@ -115,6 +116,7 @@ const fPlayer: OrderField = { name: "playerId", label: "House", kind: "PLAYER", 
 const fRecipe: OrderField = { name: "recipeId", label: "Process", kind: "RECIPE", required: true };
 const fResource: OrderField = { name: "resource", label: "Commodity", kind: "RESOURCE", required: true };
 const fGrade: OrderField = { name: "grade", label: "Rolling stock", kind: "GRADE", required: true };
+const fOffer: OrderField = { name: "offerId", label: "Offer on the wire", kind: "OFFER", required: true };
 
 function spec(
   type: OrderType,
@@ -340,6 +342,36 @@ export const ORDER_SPECS: Record<OrderType, OrderSpec> = {
       { name: "price", label: "Price a unit", kind: "MONEY", required: true, min: 0.01, step: 0.01 },
       fCount("turns", "Turns", 1, SUPPLY_CONTRACT_MAX_TURNS),
     ],
+  ),
+  PROPOSE_CONTRACT: spec(
+    "PROPOSE_CONTRACT",
+    "COMMERCE",
+    "COMMERCE",
+    "Offer a supply contract",
+    "Put terms on the wire and seal nothing yet. The other house signs it before a single unit is owed, and an unsigned offer lapses in three windows.",
+    [
+      fPlayer,
+      fResource,
+      fUnits("quantity", "Units a turn"),
+      { name: "price", label: "Price a unit", kind: "MONEY", required: true, min: 0.01, step: 0.01 },
+      fCount("turns", "Turns", 1, SUPPLY_CONTRACT_MAX_TURNS),
+    ],
+  ),
+  SIGN_CONTRACT: spec(
+    "SIGN_CONTRACT",
+    "COMMERCE",
+    "COMMERCE",
+    "Sign a contract on the wire",
+    "Put your name to an offer addressed to you. The terms are the seller's own, and the penalties on a missed delivery are two times the gap.",
+    [fOffer],
+  ),
+  DECLINE_CONTRACT: spec(
+    "DECLINE_CONTRACT",
+    "COMMERCE",
+    "COMMERCE",
+    "Decline an offer",
+    "Send the paper back unsigned so the seller can quote somebody else. Nothing is owed either way.",
+    [fOffer],
   ),
   FILE_PATENT: spec(
     "FILE_PATENT",
@@ -754,6 +786,12 @@ export function orderLabel(order: Order): string {
       return `forward short ${formatUnits(order.quantity)} at $${order.price.toFixed(2)}`;
     case "SUPPLY_CONTRACT":
       return `supply contract, ${formatUnits(order.quantity)} a turn for ${order.turns} turns`;
+    case "PROPOSE_CONTRACT":
+      return `offer ${formatUnits(order.quantity)} a turn at $${order.price.toFixed(2)}`;
+    case "SIGN_CONTRACT":
+      return "sign the offer on the wire";
+    case "DECLINE_CONTRACT":
+      return "decline the offer";
     case "FILE_PATENT":
       return `file on the ${RECIPES[order.recipeId].name.toLowerCase()}`;
     case "LICENSE_PATENT":
@@ -900,6 +938,10 @@ export function orderCost(state: GameState, player: Player, order: Order): numbe
       return Math.max(BRIBE_COST, order.amount) * mods.bribeDiscount;
     case "LOBBY":
       return order.amount * mods.bribeDiscount;
+    case "PROPOSE_CONTRACT":
+    case "SIGN_CONTRACT":
+    case "DECLINE_CONTRACT":
+      return 0;
     case "TAX_DECLARATION":
     case "SET_WAGE":
     case "UNION_CONTRACT":

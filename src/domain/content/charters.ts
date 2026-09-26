@@ -388,6 +388,86 @@ export const CHARTERS: Record<Archetype, Charter> = {
     doctrine: ["Buy the good plots early", "Hold what is inherited"],
     modifiers: { startingCash: 3_000_000, startingPr: 85 },
   },
+  COAL_BARON: {
+    id: "COAL_BARON",
+    name: "The Coal Baron",
+    tagline: "Sells the fuel, then sells the smoke.",
+    perks: [
+      "Coal faces run thirty five percent above rated output",
+      "Steelworks and smelters run fifteen percent above rated output",
+      "Pays for the grid at half price and the air at full",
+    ],
+    doctrine: ["Cut every coal face you can reach", "Feed your own furnaces"],
+    modifiers: {
+      yieldByRecipe: { COAL_FACE: 1.35, STEELWORKS: 1.15, SMELTER: 1.15 },
+      powerDiscount: 0.2,
+      pollutionMultiplier: 1.3,
+    },
+  },
+  FREIGHT_BROKER: {
+    id: "FREIGHT_BROKER",
+    name: "The Freight Broker",
+    tagline: "Never owned a thing he moved.",
+    perks: [
+      "Haulage is quoted at fifty five percent of list",
+      "Pays no fees on the exchange",
+      "Posts twenty percent margin to sell paper forward",
+    ],
+    doctrine: ["Quote every corridor", "Trade the spread, not the goods"],
+    modifiers: { freightDiscount: 0.45, marketFeeRelief: 1, shortMargin: 0.2 },
+  },
+  PATENT_SHARK: {
+    id: "PATENT_SHARK",
+    name: "The Patent Shark",
+    tagline: "Owns the drawing, not the plant.",
+    perks: [
+      "Injunctions and trust suits cost forty percent of list",
+      "Device and chip lines run fifteen percent above rated output",
+      "Dismisses a fifth of all audits",
+    ],
+    doctrine: ["File first, build never", "Sue whoever ships"],
+    modifiers: {
+      legalDiscount: 0.4,
+      yieldByRecipe: { SEMICONDUCTOR_FAB: 1.15, NEURAL_ENGINE_LAB: 1.15, SENSOR_WORKS: 1.15 },
+      auditDodge: 0.2,
+    },
+  },
+  HARBOR_MASTER: {
+    id: "HARBOR_MASTER",
+    name: "The Harbor Master",
+    tagline: "The tide works for him and everybody pays the berth.",
+    perks: [
+      "Spans cost thirty percent of list and tolls collect half again as much",
+      "Builds on the waterfront at a tenth off",
+      "Keeps the men on a wage that keeps the docks quiet",
+    ],
+    doctrine: ["Hold the water side of the board", "Charge what the cargo will bear"],
+    modifiers: { railDiscount: 0.3, tollMultiplier: 1.5, buildDiscount: 0.9, wageMultiplier: 1.1 },
+  },
+  CREDIT_MAGNATE: {
+    id: "CREDIT_MAGNATE",
+    name: "The Credit Magnate",
+    tagline: "Holds the paper under everybody else's foundation.",
+    perks: [
+      "Collects a sixth of every bond a rival issues",
+      "Settles with the revenue at half the usual price per point",
+      "Opens with a banker's reputation",
+    ],
+    doctrine: ["Lend to the ambitious", "Call it in when they win"],
+    modifiers: { dividendOnBorrow: 0.17, startingPr: 90, auditRelief: 0.05 },
+  },
+  COMPANY_DOCTOR: {
+    id: "COMPANY_DOCTOR",
+    name: "The Company Doctor",
+    tagline: "Walks in on Monday and the plant is smaller by Friday.",
+    perks: [
+      "Plants are built and rebuilt at eighty five percent of list",
+      "Waste output is cut by a fifth",
+      "A company town bleeds morale at three quarters rate",
+    ],
+    doctrine: ["Buy the broken plants", "Cut the yard, keep the output"],
+    modifiers: { buildDiscount: 0.85, wasteRelief: 0.2, townMoraleMultiplier: 0.75 },
+  },
 };
 
 export const CHARTER_LIST: Charter[] = Object.values(CHARTERS);
@@ -440,4 +520,10 @@ export const BOT_ROSTER: PersonaSeed[] = [
   { name: "June Takeda", archetype: "SPECULATOR" },
   { name: "Ramón Estévez", archetype: "OIL_PATRIARCH" },
   { name: "Lady Pembroke", archetype: "DYNASTY_HEIR" },
+  { name: "Absalom Rigg", archetype: "COAL_BARON" },
+  { name: "Maribel Quist", archetype: "FREIGHT_BROKER" },
+  { name: "Dr. Emerson Hale", archetype: "PATENT_SHARK" },
+  { name: "Captain Oyelaran", archetype: "HARBOR_MASTER" },
+  { name: "Jasper Vane", archetype: "CREDIT_MAGNATE" },
+  { name: "Trudy Blaine", archetype: "COMPANY_DOCTOR" },
 ];
