@@ -22,11 +22,11 @@ export function OrdersBoard({
           back until then.
         </Empty>
       ) : (
-        <ul className="space-y-1">
+        <ul className="border border-rule">
           {orders.map((item) => (
             <li
               key={item.id}
-              className="flex items-center justify-between gap-2 border border-rule px-2 py-1"
+              className="flex items-center justify-between gap-2 border-b border-rule/50 px-2 py-1.5 last:border-b-0"
             >
               <span className="text-[11px] text-dim">
                 <span className="text-faint">{item.order.type.toLowerCase().replace(/_/g, " ")}</span>{" "}

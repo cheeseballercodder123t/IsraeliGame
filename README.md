@@ -12,7 +12,7 @@ model key are both optional and both activate automatically when present.
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # 201 engine tests
+npm test           # 213 engine tests
 npm run typecheck
 npm run build
 ```
@@ -229,8 +229,8 @@ them without touching the rest of the server layer.
 
 ### The tests
 
-Twenty three files, two hundred and one tests. Geometry and the catalogs are checked against their
-own contents, so a catalog edit that breaks an assumption fails a test rather than a screen:
+Twenty five files, two hundred and thirteen tests. Geometry and the catalogs are checked against
+their own contents, so a catalog edit that breaks an assumption fails a test rather than a screen:
 seventy five commodities, seventy five plants, twenty charters, sixty four orders, a hundred and
 eleven event kinds, and every sprite placement inside its sheet. The table's own rules are pinned
 the same way: the late seal hold, the wire's length and its refusals, the countdown ring's
@@ -238,7 +238,11 @@ arithmetic, the open tables list's clock, and the ending from the limit window t
 edition to the rematch. The engine tests cover the exchange, freight, production, waste,
 tenders, raids, bonds, audits, arson, chapter 11 and a full turn replay. `tests/tick.test.ts` runs the
 same input twice and asserts a byte identical event log, and `tests/rag.test.ts` asserts the paper
-prints the same broadsheet twice from the same ledger.
+prints the same broadsheet twice from the same ledger. Two of the files read the interface rather
+than the engine: `tests/render.test.ts` paints the strip, the register and the board on the server
+and pins what they print, and `tests/copy.test.ts` walks every source file for the house rules, so
+an em dash, a borrowed phrase, a rounded corner, a drop shadow or an emoji fails a check instead of
+reaching a screen.
 
 ## Deferred
 

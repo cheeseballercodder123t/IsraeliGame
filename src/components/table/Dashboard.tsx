@@ -225,7 +225,7 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
   if (!me) return null;
 
   return (
-    <div className="mx-auto max-w-[1780px] p-2 sm:p-3">
+    <div className="ledger mx-auto max-w-[1780px] p-2 sm:p-3">
       <Tour name="table" steps={TABLE_TOUR} recap={TABLE_RECAP} />
 
       <StatusStrip
@@ -237,59 +237,84 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
         present={present}
       />
 
-      {errors.length > 0 ? (
-        <div className="mt-2 space-y-1">
+      {errors.length > 0 || receipt ? (
+        <div className="mt-2 max-w-3xl space-y-1">
           {errors.map((message, index) => (
             <Notice key={index} tone="bad">
               {message}
             </Notice>
           ))}
-          <button
-            type="button"
-            onClick={() => setErrors([])}
-            className="text-[10px] text-faint uppercase hover:text-ink"
-          >
-            Dismiss
-          </button>
-        </div>
-      ) : null}
-
-      {receipt ? (
-        <div className="mt-2">
-          <Notice tone="ok">{receipt}</Notice>
+          {receipt ? <Notice tone="ok">{receipt}</Notice> : null}
+          {errors.length > 0 ? (
+            <button
+              type="button"
+              onClick={() => setErrors([])}
+              className="text-[10px] tracking-[0.14em] text-faint uppercase hover:text-ink"
+            >
+              Dismiss
+            </button>
+          ) : null}
         </div>
       ) : null}
 
       {me.frozenTurns > 0 ? (
-        <div className="mt-2">
+        <div className="mt-2 max-w-3xl">
           <Notice tone="warn">
             Your office is frozen this turn. Planning and night work will not run until it thaws.
           </Notice>
         </div>
       ) : null}
 
-      <div data-tour="views" className="mt-2 flex flex-wrap items-center gap-1">
-        {finished
-          ? null
-          : (["DESK", "FLOOR"] as const).map((id) => (
+      {/*
+       * The console rail. Wordmark on the left, the two rooms in the middle as
+       * one control with a brass underline on the room in front of you, and the
+       * utility levers bolted to the right.
+       */}
+      <div
+        data-tour="views"
+        className="mt-3 flex flex-wrap items-stretch border border-edge bg-pit"
+      >
+        <p className="hidden min-w-[186px] flex-col justify-center border-r border-rule bg-plate px-3 py-2 lg:flex">
+          <span className="font-slab text-[15px] leading-none text-ink">Conglomerate</span>
+          <span className="mt-1 text-[9px] tracking-[0.26em] text-brass uppercase">
+            Gilded Age
+          </span>
+        </p>
+
+        <div className="flex flex-1 items-stretch">
+          {finished ? (
+            <p className="flex items-center px-3 py-2 text-[10px] tracking-[0.18em] text-faint uppercase">
+              The era is closed · read the closing desk
+            </p>
+          ) : (
+            (["DESK", "FLOOR"] as const).map((id) => (
               <button
                 key={id}
                 type="button"
                 onClick={() => setView(id)}
-                className={`border px-3 py-1 text-[10px] tracking-[0.16em] uppercase ${
-                  view === id ? "border-brass bg-plate text-ink" : "border-rule text-dim hover:text-ink"
+                aria-pressed={view === id}
+                className={`relative border-r border-rule px-3 py-2 text-[10px] tracking-[0.18em] uppercase ${
+                  view === id
+                    ? "bg-steel text-ink"
+                    : "bg-pit text-dim hover:bg-steel hover:text-ink"
                 }`}
               >
                 {id === "DESK" ? "Desk and board" : "Floor and register"}
+                {view === id ? (
+                  <span className="absolute inset-x-0 bottom-0 h-[2px] bg-brass" aria-hidden />
+                ) : null}
               </button>
-            ))}
-        <div className="ml-auto flex items-center gap-1">
+            ))
+          )}
+        </div>
+
+        <div className="flex items-stretch border-l border-rule">
           <button
             type="button"
             onClick={() => toggleSound()}
             aria-pressed={sound}
-            className={`border px-3 py-1 text-[10px] tracking-[0.16em] uppercase ${
-              sound ? "border-brass text-ink" : "border-rule text-dim hover:text-ink"
+            className={`border-r border-rule px-3 py-2 text-[10px] tracking-[0.18em] uppercase ${
+              sound ? "bg-steel text-brass" : "text-dim hover:bg-steel hover:text-ink"
             }`}
             title={
               sound
@@ -302,7 +327,7 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
           <button
             type="button"
             onClick={() => setHelpOpen(true)}
-            className="border border-edge px-3 py-1 text-[10px] tracking-[0.16em] text-dim uppercase hover:text-ink"
+            className="border-r border-rule px-3 py-2 text-[10px] tracking-[0.18em] text-dim uppercase hover:bg-steel hover:text-ink"
             title="Every key at the table"
           >
             Guide ?
@@ -310,7 +335,7 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
           <button
             type="button"
             onClick={() => startTour("full")}
-            className="border border-edge px-3 py-1 text-[10px] tracking-[0.16em] text-dim uppercase hover:text-ink"
+            className="px-3 py-2 text-[10px] tracking-[0.18em] text-dim uppercase hover:bg-steel hover:text-ink"
           >
             Take the tour
           </button>
@@ -594,33 +619,57 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
       <NewspaperModal issue={latestIssue} open={ragOpen} onOpenChange={setRagOpen} />
       <HelpOverlay open={helpOpen} onOpenChange={setHelpOpen} />
 
-      <footer className="mt-4 space-y-1 border-t border-rule pt-3">
-        <p className="text-[10px] text-faint">
-          A window resolves in this order: weather, planning, commerce, capital, labor, city hall,
-          night work, wear, the wage bill, the grid, production tier one outward, waste and smog,
-          the floor, paper, the revenue service, then tenders and raids.
-        </p>
-        <p className="text-[10px] text-faint">
-          {RESOURCE_LABEL.POWER} is bought by the tick, not by you. Waste that cannot be held spills
-          onto your own plots, and the inspectors fine the air, not the intention.
-        </p>
-        <p className="text-[10px] text-faint">
-          Keys: d desk, f floor, m market, b board, o orders, k book, r the Rag, t the walk-around,
-          / to jump to an order by name, and ? for the whole card.
-        </p>
-        <p className="text-[10px] text-faint">
-          The wire on the right of either room carries the table's talk, so a pool, a supply contract
-          or a licence can be named before it is sealed. The sound switch beside the guide turns the
-          bell at the close and the press for the paper on or off; both are silent until you ask.
-        </p>
-        <p className="flex flex-wrap items-center gap-2 pt-1">
+      {/* The colophon: how the window runs, what the tick buys, and every key. */}
+      <footer className="mt-6 border-t-2 border-double border-edge pt-4">
+        <dl className="grid gap-x-10 gap-y-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div>
+            <dt className="text-[9px] tracking-[0.2em] text-faint uppercase">
+              The order of a window
+            </dt>
+            <dd className="mt-1.5 text-[10px] leading-relaxed text-dim">
+              A window resolves in this order: weather, planning, commerce, capital, labor, city
+              hall, night work, wear, the wage bill, the grid, production tier one outward, waste
+              and smog, the floor, paper, the revenue service, then tenders and raids.
+            </dd>
+          </div>
+          <div>
+            <dt className="text-[9px] tracking-[0.2em] text-faint uppercase">
+              Power and waste
+            </dt>
+            <dd className="mt-1.5 text-[10px] leading-relaxed text-dim">
+              {RESOURCE_LABEL.POWER} is bought by the tick, not by you. Waste that cannot be held
+              spills onto your own plots, and the inspectors fine the air, not the intention.
+            </dd>
+          </div>
+          <div>
+            <dt className="text-[9px] tracking-[0.2em] text-faint uppercase">
+              Every room one key away
+            </dt>
+            <dd className="mt-1.5 text-[10px] leading-relaxed text-dim">
+              Keys: d desk, f floor, m market, b board, o orders, k book, r the Rag, t the
+              walk-around, / to jump to an order by name, and ? for the whole card.
+            </dd>
+          </div>
+          <div>
+            <dt className="text-[9px] tracking-[0.2em] text-faint uppercase">
+              The wire and the bell
+            </dt>
+            <dd className="mt-1.5 text-[10px] leading-relaxed text-dim">
+              The wire on the right of either room carries the table's talk, so a pool, a supply
+              contract or a licence can be named before it is sealed. The sound switch turns the
+              bell at the close and the press for the paper on or off; both are silent until you
+              ask.
+            </dd>
+          </div>
+        </dl>
+        <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-rule pt-3">
           <Button tone="quiet" onClick={() => startTour("full")}>
             Walk the room again
           </Button>
           <Button tone="quiet" onClick={() => setHelpOpen(true)}>
             Show me the keys
           </Button>
-        </p>
+        </div>
       </footer>
     </div>
   );

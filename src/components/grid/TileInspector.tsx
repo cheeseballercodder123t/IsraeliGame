@@ -73,12 +73,15 @@ export function TileInspector({ state, player, tile, onOrder }: TileInspectorPro
       aside={`${bandNameForRing(tile.ring)} · ring ${tile.ring}`}
     >
       <div className="flex gap-3">
-        <div className="border border-rule bg-pit p-2">
+        <div className="shrink-0 border border-rule bg-pit p-2">
           <PlotArt tile={tile} />
+          <p className="tabular mt-1.5 text-center text-[9px] text-faint">
+            {tile.x},{tile.y}
+          </p>
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-[12px] text-ink">{recipe.name}</p>
-          <p className="text-[11px] text-dim">{recipe.blurb}</p>
+          <p className="font-slab text-[14px] leading-tight text-ink">{recipe.name}</p>
+          <p className="mt-1 text-[11px] leading-relaxed text-dim">{recipe.blurb}</p>
           <p className="mt-1 text-[10px] text-faint">
             {owner ? (
               <span style={{ color: ownerColor(state, owner.id) }}>
@@ -169,7 +172,7 @@ export function TileInspector({ state, player, tile, onOrder }: TileInspectorPro
         </p>
       ) : null}
 
-      <div className="mt-3 flex flex-wrap gap-1 border-t border-rule pt-2">
+      <div className="mt-3 flex flex-wrap gap-1.5 border-t border-rule pt-2.5">
         {mine && recipe.id === "NONE" ? (
           <Button
             tone="brass"
@@ -275,7 +278,7 @@ export function TileInspector({ state, player, tile, onOrder }: TileInspectorPro
       </div>
 
       {mine ? (
-        <div className="mt-2 flex flex-wrap gap-1 border-t border-rule pt-2">
+        <div className="mt-2.5 flex flex-wrap gap-1.5 border-t border-rule pt-2.5">
           {WASTE_RESOURCES.map((resource) => {
             const held = getQty(state.inventory, player.id, resource);
             if (held < 1) return null;

@@ -55,6 +55,17 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Heads get to break where they read best, body copy avoids a lone last word. */
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+
+p {
+  text-wrap: pretty;
+}
+
 /* Paper grain. Fine fractal noise, no dot lattice, no gradient wash. */
 .grain::before {
   content: "";
@@ -67,6 +78,21 @@ body {
 
 .rule-grid {
   background-image: none;
+}
+
+/*
+ * The daybook ground. Fine horizontal rules, one every eight lines of type,
+ * the way a works' ledger is printed. It sits behind everything and never
+ * reads as a pattern: at this contrast it is closer to paper than to ink.
+ */
+.ledger {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 27px,
+    rgba(58, 50, 42, 0.5) 27px,
+    rgba(58, 50, 42, 0.5) 28px
+  );
 }
 
 /* Numeric readouts stay on a fixed advance so columns line up. */
@@ -111,8 +137,71 @@ body {
   );
 }
 
+.hatch-verdigris {
+  background-image: repeating-linear-gradient(
+    135deg,
+    rgba(74, 122, 106, 0.24) 0px,
+    rgba(74, 122, 106, 0.24) 2px,
+    transparent 2px,
+    transparent 7px
+  );
+}
+
+/* A plot on the board. The outline is drawn at once, never eased in. */
+.plot {
+  outline-offset: -2px;
+}
+
+.plot:hover {
+  outline: 1px solid var(--color-faint);
+}
+
+/* Machined controls: square thumb, hairline track, oxidized metal either side. */
 input[type="range"] {
+  appearance: none;
+  height: 16px;
+  background: transparent;
+  cursor: pointer;
+}
+
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 3px;
+  background: var(--color-tar);
+  border-top: 1px solid var(--color-rule);
+  border-bottom: 1px solid var(--color-rule);
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 9px;
+  height: 16px;
+  margin-top: -7px;
+  background: var(--color-brass);
+  border: 1px solid var(--color-edge);
+}
+
+input[type="range"]::-moz-range-track {
+  height: 3px;
+  background: var(--color-tar);
+  border-top: 1px solid var(--color-rule);
+  border-bottom: 1px solid var(--color-rule);
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 9px;
+  height: 16px;
+  border-radius: 0;
+  background: var(--color-brass);
+  border: 1px solid var(--color-edge);
+}
+
+input[type="checkbox"],
+input[type="radio"] {
   accent-color: var(--color-brass);
+}
+
+::placeholder {
+  color: var(--color-faint);
 }
 
 *:focus-visible {
@@ -136,6 +225,47 @@ input[type="range"] {
 
 ::-webkit-scrollbar-thumb {
   background: var(--color-rule);
+}
+
+/* A pasted page in the paper reads on newsprint, so its scrollbar follows suit. */
+.paper-scroll {
+  scrollbar-color: var(--color-newsink) var(--color-news-worn);
+}
+
+.paper-scroll::-webkit-scrollbar-track {
+  background: var(--color-news-worn);
+}
+
+.paper-scroll::-webkit-scrollbar-thumb {
+  background: var(--color-newsink);
+}
+
+/*
+ * Print craft for the Rag. The opening paragraph sets a drop cap, the way a
+ * broadsheet front page does under its own masthead.
+ */
+.press > p.press-lead::first-letter {
+  float: left;
+  padding: 2px 6px 0 0;
+  font-family: var(--font-slab);
+  font-size: 3.1em;
+  font-weight: 800;
+  line-height: 0.8;
+}
+
+/* An indicator lamp. Slow enough to read as a lit bulb, not as a blink. */
+@keyframes lamp-breath {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+.lamp {
+  animation: lamp-breath 3.2s ease-in-out infinite;
 }
 
 /* The window runs out under somebody's eyes: one red wash, then gone. */
@@ -168,4 +298,22 @@ input[type="range"] {
 
 .ticker-drift {
   animation: ticker-drift 90s linear infinite;
+}
+
+/* Whoever asks the machine to hold still gets a still machine. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .ticker-drift,
+  .lamp,
+  .window-flash {
+    animation: none;
+  }
 }

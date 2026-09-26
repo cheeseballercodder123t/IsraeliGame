@@ -78,35 +78,44 @@ export function ChatPanel({
       title="The wire"
       aside={`${optimistic.length} line${optimistic.length === 1 ? "" : "s"} · window ${state.game.currentTurn}`}
     >
-      <div ref={log} className="max-h-52 space-y-1 overflow-y-auto pr-1">
+      <div
+        ref={log}
+        className="max-h-56 min-h-[52px] overflow-y-auto border border-rule/70 bg-pit px-2.5 py-1.5"
+      >
         {optimistic.length === 0 ? (
-          <p className="text-[11px] text-faint">
+          <p className="py-2 text-[11px] leading-relaxed text-faint">
             Nothing said yet. A pool, a supply contract or a licence agreed here is worth more than
             one guessed at the close.
           </p>
         ) : (
           optimistic.map((line) => (
-            <p key={line.id} className="text-[11px] leading-snug">
-              <span
-                className="mr-1.5 inline-block h-2 w-3 align-middle"
-                style={{ background: ownerColor(state, line.playerId) }}
-              />
-              <span className="text-brass">{line.name}</span>{" "}
-              <span className="text-dim">{line.body}</span>
-              <span className="tabular ml-1.5 text-[9px] text-faint">t{line.turn}</span>
+            <p key={line.id} className="border-b border-rule/40 py-1.5 last:border-b-0">
+              <span className="flex items-baseline gap-2">
+                <span
+                  className="inline-block h-2 w-3 shrink-0 translate-y-[2px]"
+                  style={{ background: ownerColor(state, line.playerId) }}
+                />
+                <span className="truncate text-[10px] tracking-[0.14em] text-brass uppercase">
+                  {line.name}
+                </span>
+                <span className="tabular ml-auto shrink-0 text-[9px] text-faint">t{line.turn}</span>
+              </span>
+              <span className="mt-1 block pl-[18px] text-[11.5px] leading-snug text-dim">
+                {line.body}
+              </span>
             </p>
           ))
         )}
       </div>
 
       {readOnly ? (
-        <p className="mt-2 border-t border-rule pt-2 text-[10px] text-faint">
+        <p className="mt-3 border-t border-rule pt-2 text-[10px] leading-relaxed text-faint">
           Watching only. The houses at the table do the talking, and the wire carries what they say.
         </p>
       ) : (
         <>
           <form
-            className="mt-2 flex gap-1 border-t border-rule pt-2"
+            className="mt-3 flex gap-1 border-t border-rule pt-3"
             onSubmit={(event) => {
               event.preventDefault();
               send(draft);
@@ -123,20 +132,25 @@ export function ChatPanel({
               Say
             </Button>
           </form>
-          {failure ? <p className="pt-1 text-[10px] text-blood">{failure}</p> : null}
-          <div className="mt-2 flex flex-wrap gap-1">
-            {barbs.map((barb) => (
-              <button
-                key={barb}
-                type="button"
-                disabled={pending}
-                onClick={() => send(barb)}
-                className="border border-rule px-2 py-[2px] text-left text-[10px] text-dim hover:border-edge hover:text-ink disabled:opacity-40"
-              >
-                {barb}
-              </button>
-            ))}
-          </div>
+          {failure ? <p className="pt-1.5 text-[10px] text-blood">{failure}</p> : null}
+          {barbs.length > 0 ? (
+            <>
+              <p className="mt-3 text-[9px] tracking-[0.2em] text-faint uppercase">Ready lines</p>
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {barbs.map((barb) => (
+                  <button
+                    key={barb}
+                    type="button"
+                    disabled={pending}
+                    onClick={() => send(barb)}
+                    className="border border-rule bg-pit px-2 py-1 text-left text-[10px] leading-snug text-dim hover:border-brass hover:text-ink disabled:opacity-40"
+                  >
+                    {barb}
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : null}
         </>
       )}
     </Panel>
