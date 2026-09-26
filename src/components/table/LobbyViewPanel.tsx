@@ -63,6 +63,8 @@ export function LobbyViewPanel({ lobby }: { lobby: LobbyView }) {
           {lobby.mode === "REALTIME"
             ? " · the window closes every few seconds once it opens"
             : " · one long window, sealed then played at the close"}
+          {" · win: "}
+          <span className="text-brass">{lobby.win}</span>
         </p>
         <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-faint">
           <span className={`flex items-center gap-1 ${live ? "text-bile" : "text-hazard"}`}>
@@ -148,8 +150,11 @@ export function LobbyViewPanel({ lobby }: { lobby: LobbyView }) {
           </Panel>
         </div>
       ) : full ? (
-        <div className="mt-4">
-          <Notice tone="warn">Every chair at this table is taken.</Notice>
+        <div className="mt-4 space-y-2">
+          <Notice tone="warn">
+            Every chair at this table is taken. The rail is still open: once the window opens, this
+            page shows the board, the books, the paper and the wire, read only.
+          </Notice>
         </div>
       ) : (
         <div data-tour="lobby-claim" className="mt-4">

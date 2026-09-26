@@ -1,4 +1,5 @@
-import type { Archetype, GameState, QueuedOrder } from "@/domain/types";
+import { normalizeWinCondition } from "@/domain/endgame";
+import type { Archetype, GameState, QueuedOrder, WinCondition } from "@/domain/types";
 import type { Scandal } from "@/server/rag/template";
 
 /**
@@ -10,6 +11,15 @@ export function withRevision(state: GameState): GameState {
   if (typeof state.game.revision !== "number") state.game.revision = 0;
   // Tables written before real time existed have no mode and are turn based.
   if (state.game.mode !== "REALTIME") state.game.mode = "TURN";
+  // Tables written before the era could close have no condition and are given
+  // the default one rather than an ending nobody can read.
+  state.game.winCondition = normalizeWinCondition(state.game.winCondition);
+  if (typeof state.game.holdsUsed !== "number") state.game.holdsUsed = 0;
+  if (state.game.lastSealAt !== null && typeof state.game.lastSealAt !== "string") {
+    state.game.lastSealAt = null;
+  }
+  // Tables written before the wire existed have never had a message.
+  if (!Array.isArray(state.messages)) state.messages = [];
   return state;
 }
 
@@ -44,6 +54,8 @@ export interface CreateGameInput {
   status?: GameState["game"]["status"];
   /** Turn based unless the host asked for a real time table. */
   mode?: GameState["game"]["mode"];
+  /** What closes the era. Defaults to a turn limit when the host does not say. */
+  winCondition?: WinCondition;
 }
 
 export interface GameSummary {

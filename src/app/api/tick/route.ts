@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { GameState } from "@/domain/types";
-import { advanceTurn } from "@/server/game";
+import { resolveIfDue } from "@/server/game";
 import { getStore } from "@/server/store";
 
 export const dynamic = "force-dynamic";
@@ -31,17 +31,25 @@ export async function POST(request: Request) {
 
   const store = getStore();
   const resolved: { code: string; turn: number; headline: string }[] = [];
+  const held: string[] = [];
 
-  // A window that another resolver got to first comes back with no paper, and
-  // that is not a failure: it is the guard doing its job.
+  // Resolution goes through the same door a page load uses, so the fairness
+  // rule applies to a cron sweep as well: a window that closed on a desk still
+  // sealing is held rather than resolved. A window another resolver got to
+  // first comes back with no paper, which is the guard doing its job.
   const close = async (state: GameState | null) => {
     if (!state) return;
-    const outcome = await advanceTurn(state);
-    if (!outcome.issue) return;
+    const { state: settled, issue } = await resolveIfDue(state);
+    if (!issue) {
+      if (settled.game.status === "ACTIVE" && settled.game.holdsUsed > 0) {
+        held.push(settled.game.code);
+      }
+      return;
+    }
     resolved.push({
-      code: outcome.state.game.code,
-      turn: outcome.turn,
-      headline: outcome.issue.headline,
+      code: settled.game.code,
+      turn: settled.game.currentTurn - 1,
+      headline: issue.headline,
     });
   };
 
@@ -58,7 +66,7 @@ export async function POST(request: Request) {
     }
   }
 
-  return NextResponse.json({ ok: true, resolved });
+  return NextResponse.json({ ok: true, resolved, held });
 }
 
 export async function GET() {

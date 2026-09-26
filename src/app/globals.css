@@ -138,6 +138,25 @@ input[type="range"] {
   background: var(--color-rule);
 }
 
+/* The window runs out under somebody's eyes: one red wash, then gone. */
+@keyframes window-close {
+  0% {
+    background-color: rgba(140, 47, 40, 0.5);
+    box-shadow: inset 0 0 0 1px var(--color-blood);
+  }
+  70% {
+    background-color: rgba(140, 47, 40, 0.18);
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: inset 0 0 0 1px transparent;
+  }
+}
+
+.window-flash {
+  animation: window-close 1.8s ease-out 1;
+}
+
 @keyframes ticker-drift {
   from {
     transform: translateX(0);

@@ -361,9 +361,12 @@ export function resolveTurnTick(input: GameState, options: TickOptions = {}): Ti
     }
   }
 
-  // 19. Open the next window.
+  // 19. Open the next window. The fairness ledger starts clean too: the late
+  //     seal that may have held this window has been paid for.
   state.game.currentTurn = turn + 1;
   state.queue = state.queue.filter((q) => q.turn > turn);
+  state.game.lastSealAt = null;
+  state.game.holdsUsed = 0;
   state.game.nextTickAt = new Date(
     (options.now ?? new Date()).getTime() + state.game.tickIntervalHours * 3_600_000,
   ).toISOString();

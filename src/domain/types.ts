@@ -126,6 +126,30 @@ export interface QueuedOrder {
   createdAt: string;
 }
 
+/**
+ * A line on the table wire. Houses negotiate pacts, supply contracts and
+ * licences in the open before they seal the paperwork, which is what makes a
+ * sealed window a bargain rather than a guess.
+ */
+export interface ChatMessage {
+  id: string;
+  /** The house that said it. */
+  playerId: string;
+  name: string;
+  body: string;
+  /** The window it was said in, so the wire reads in the order it was said. */
+  turn: number;
+  createdAt: string;
+}
+
+/**
+ * What ends the era. A table is opened to a turn limit or to a figure, and
+ * either way the books close on the window where the condition is met.
+ */
+export type WinCondition =
+  | { kind: "TURNS"; turns: number }
+  | { kind: "NET_WORTH"; target: number };
+
 export interface OrderCategoryMeta {
   id: OrderCategory;
   name: string;
@@ -168,6 +192,16 @@ export interface Game {
    * moves, the table they are looking at is stale.
    */
   revision: number;
+  /** The condition the table was opened to, and what closes the era. */
+  winCondition: WinCondition;
+  /**
+   * When an order was last sealed into the window being played. A seal landing
+   * inside the last seconds of a short window buys that desk a short extension,
+   * so a real time table does not punish whoever was slowest to click.
+   */
+  lastSealAt: string | null;
+  /** How many times this window has already been held for a late seal. */
+  holdsUsed: number;
 }
 
 export interface Player {
@@ -448,6 +482,8 @@ export interface GameState {
   convertibles: ConvertibleNote[];
   events: GameEvent[];
   queue: QueuedOrder[];
+  /** The wire: lines said at the table, oldest first and capped. */
+  messages: ChatMessage[];
   /** Scandal lines the paper may print, cleared each tick. */
   scandals: string[];
 }

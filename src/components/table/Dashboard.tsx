@@ -12,7 +12,7 @@ import {
   TRADEABLE,
 } from "@/domain/constants";
 import { netWorthOf, leader } from "@/domain/valuation";
-import type { GameState, Order, Player, QueuedOrder } from "@/domain/types";
+import type { GameState, Order, QueuedOrder } from "@/domain/types";
 import type { NewspaperRecord } from "@/server/store/types";
 import { GridCanvas, ringLegend } from "@/components/grid/GridCanvas";
 import { TileInspector } from "@/components/grid/TileInspector";
@@ -22,8 +22,12 @@ import { OrdersBoard } from "@/components/panes/OrdersBoard";
 import { StatusStrip } from "@/components/panes/StatusStrip";
 import { FirstMoves } from "@/components/table/FirstMoves";
 import { NewspaperModal } from "@/components/newspaper/NewspaperModal";
+import { ChatPanel } from "@/components/table/ChatPanel";
+import { EraClosing } from "@/components/table/EraClosing";
 import { HelpOverlay } from "@/components/table/HelpOverlay";
+import { HousesRegister } from "@/components/table/HousesRegister";
 import { POLL_MS, REALTIME_POLL_MS, useTableSync } from "@/components/table/useTableSync";
+import { thump, toggleSound, useSound } from "@/lib/sound";
 import { Tour, startTour } from "@/components/tour/Tour";
 import { TABLE_RECAP, TABLE_TOUR } from "@/components/tour/steps";
 import { Button, KeyValue, Meter, Notice, Panel } from "@/components/ui/primitives";
@@ -33,7 +37,6 @@ import {
   formatPercent,
   formatUnits,
   orderLabel,
-  ownerColor,
   windLabel,
 } from "@/lib/labels";
 
@@ -67,9 +70,11 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
   const [errors, setErrors] = useState<string[]>([]);
   const [receipt, setReceipt] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const sound = useSound();
 
   const latestIssue = issues[0] ?? null;
   const me = state.players.find((player) => player.id === meId);
+  const finished = state.game.status === "FINISHED";
   // The table's revision is watched rather than pushed: when it moves, this
   // browser asks the router for a fresh snapshot, so a rival's sealed order, a
   // newcomer in a chair or a resolved window lands without a reload. A real
@@ -90,6 +95,12 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
       window.localStorage.setItem(key, String(latestIssue.turn));
     }
   }, [code, latestIssue]);
+
+  // The press comes down whenever the paper opens, whether a house asked for it
+  // or a new edition opened itself. Silent unless the switch is on.
+  useEffect(() => {
+    if (ragOpen) thump();
+  }, [ragOpen]);
 
   const handleOrder = useCallback(
     (order: Order, label: string) => {
@@ -206,25 +217,6 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
 
   const selectedTile = state.tiles.find((tile) => tile.id === selectedTileId) ?? null;
 
-  const ranked = useMemo(
-    () =>
-      state.players
-        .map((player: Player) => ({
-          player,
-          worth: netWorthOf(state, player.id),
-          plots: state.tiles.filter((tile) => tile.ownerId === player.id).length,
-          plants: state.tiles.filter(
-            (tile) => tile.ownerId === player.id && RECIPES[tile.recipeId].id !== "NONE",
-          ).length,
-          output: state.tiles
-            .filter((tile) => tile.ownerId === player.id)
-            .reduce((sum, tile) => sum + tile.lastOutputValue, 0),
-          morale: player.morale,
-        }))
-        .sort((a, b) => b.worth - a.worth),
-    [state],
-  );
-
   const held = useMemo(() => (me ? holdingsByFamily(state, me.id) : []), [state, me]);
 
   const idle = state.tiles.filter((tile) => tile.lastIdle !== null).length;
@@ -277,19 +269,36 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
       ) : null}
 
       <div data-tour="views" className="mt-2 flex flex-wrap items-center gap-1">
-        {(["DESK", "FLOOR"] as const).map((id) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => setView(id)}
-            className={`border px-3 py-1 text-[10px] tracking-[0.16em] uppercase ${
-              view === id ? "border-brass bg-plate text-ink" : "border-rule text-dim hover:text-ink"
-            }`}
-          >
-            {id === "DESK" ? "Desk and board" : "Floor and register"}
-          </button>
-        ))}
+        {finished
+          ? null
+          : (["DESK", "FLOOR"] as const).map((id) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setView(id)}
+                className={`border px-3 py-1 text-[10px] tracking-[0.16em] uppercase ${
+                  view === id ? "border-brass bg-plate text-ink" : "border-rule text-dim hover:text-ink"
+                }`}
+              >
+                {id === "DESK" ? "Desk and board" : "Floor and register"}
+              </button>
+            ))}
         <div className="ml-auto flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => toggleSound()}
+            aria-pressed={sound}
+            className={`border px-3 py-1 text-[10px] tracking-[0.16em] uppercase ${
+              sound ? "border-brass text-ink" : "border-rule text-dim hover:text-ink"
+            }`}
+            title={
+              sound
+                ? "The bell and the press are on. Click to silence the table."
+                : "The table is silent. Click for the bell at the close and the press for the paper."
+            }
+          >
+            Sound {sound ? "on" : "off"}
+          </button>
           <button
             type="button"
             onClick={() => setHelpOpen(true)}
@@ -308,7 +317,9 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
         </div>
       </div>
 
-      {view === "DESK" ? (
+      {finished ? (
+        <EraClosing code={code} state={state} meId={meId} onOpenRag={() => setRagOpen(true)} />
+      ) : view === "DESK" ? (
         /*
          * Three columns only where there is room for three. A laptop gets two:
          * the desk down the left, and the board, the register and the inspector
@@ -357,63 +368,7 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
 
             <div data-tour="register">
               <Panel title="Houses on the register" aside="net worth, plots, output">
-                <div className="overflow-x-auto">
-                  <table className="w-full border-collapse">
-                    <thead>
-                      <tr className="border-b border-rule">
-                        {[
-                          ["House", ""],
-                          ["Charter", "hidden sm:table-cell"],
-                          ["Worth", ""],
-                          ["Plots", ""],
-                          ["Plants", "hidden md:table-cell"],
-                          ["Morale", "hidden md:table-cell"],
-                        ].map(([head, hide]) => (
-                          <th
-                            key={head}
-                            className={`py-1 text-left text-[9px] tracking-[0.14em] text-faint uppercase ${hide}`}
-                          >
-                            {head}
-                          </th>
-                        ))}
-                        <th className="py-1 text-right text-[9px] tracking-[0.14em] text-faint uppercase">
-                          Out
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {ranked.map((entry) => (
-                        <tr key={entry.player.id} className="border-b border-rule/40">
-                          <td className="py-1 text-[11px]">
-                            <span
-                              className="mr-1.5 inline-block h-2 w-3 align-middle"
-                              style={{ background: ownerColor(state, entry.player.id) }}
-                            />
-                            <span className={entry.player.id === meId ? "text-ink" : "text-dim"}>
-                              {entry.player.name}
-                            </span>
-                          </td>
-                          <td className="hidden py-1 text-[10px] text-faint sm:table-cell">
-                            {entry.player.archetype.toLowerCase().replace(/_/g, " ")}
-                          </td>
-                          <td className="tabular py-1 text-[11px] text-brass">
-                            {formatMoney(entry.worth)}
-                          </td>
-                          <td className="tabular py-1 text-[11px] text-dim">{entry.plots}</td>
-                          <td className="tabular hidden py-1 text-[11px] text-dim md:table-cell">
-                            {entry.plants}
-                          </td>
-                          <td className="tabular hidden py-1 text-[11px] text-dim md:table-cell">
-                            {entry.morale.toFixed(0)}
-                          </td>
-                          <td className="tabular py-1 text-right text-[11px] text-bile">
-                            {formatMoney(entry.output)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <HousesRegister state={state} meId={meId} />
               </Panel>
             </div>
 
@@ -433,6 +388,10 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
           </div>
 
           <div className="order-3 grid min-w-0 items-start gap-3 md:grid-cols-2 lg:order-none lg:col-start-2 lg:row-start-2 2xl:col-start-3 2xl:row-start-1 2xl:grid-cols-1">
+            <div className="min-w-0">
+              <ChatPanel code={code} state={state} meId={meId} />
+            </div>
+
             <div data-tour="inspector" className="min-w-0">
               <TileInspector state={state} player={me} tile={selectedTile} onOrder={handleOrder} />
             </div>
@@ -532,6 +491,8 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
           </div>
 
           <div className="min-w-0 space-y-3">
+            <ChatPanel code={code} state={state} meId={meId} />
+
             <Panel title="The desk this window" aside={`${optimistic.length} sealed`}>
               {optimistic.length === 0 ? (
                 <p className="text-[11px] text-faint">
@@ -646,6 +607,11 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
         <p className="text-[10px] text-faint">
           Keys: d desk, f floor, m market, b board, o orders, k book, r the Rag, t the walk-around,
           / to jump to an order by name, and ? for the whole card.
+        </p>
+        <p className="text-[10px] text-faint">
+          The wire on the right of either room carries the table's talk, so a pool, a supply contract
+          or a licence can be named before it is sealed. The sound switch beside the guide turns the
+          bell at the close and the press for the paper on or off; both are silent until you ask.
         </p>
         <p className="flex flex-wrap items-center gap-2 pt-1">
           <Button tone="quiet" onClick={() => startTour("full")}>

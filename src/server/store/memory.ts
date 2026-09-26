@@ -44,6 +44,7 @@ export class MemoryStore implements GameStore {
       nextTickAt: input.nextTickAt,
       status: input.status,
       mode: input.mode,
+      winCondition: input.winCondition,
       players: input.seats.map((seat, index) => ({
         id: crypto.randomUUID(),
         userId: seat.userId,

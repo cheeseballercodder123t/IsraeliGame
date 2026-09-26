@@ -1,13 +1,24 @@
+import { MAX_WIRE_LINES, tidyLine } from "@/domain/chat";
+import { defaultWinCondition, reachedWinCondition, winConditionLabel } from "@/domain/endgame";
+import { lateSealHold, type HoldRules } from "@/domain/fairness";
 import { resolveTurnTick } from "@/domain/tick";
-import { makeGameCode, newPlayer } from "@/domain/world";
+import { createGameState, makeGameCode, newPlayer } from "@/domain/world";
 import { hashSeed } from "@/domain/rng";
 import { parseOrder } from "@/server/orders";
 import { MAX_SEATS, MIN_SEATS, clampSeats, seatOpponents } from "@/server/personas";
-import { composeIssue, type NewspaperIssue } from "@/server/rag";
+import { composeClosingIssue, composeIssue, type NewspaperIssue } from "@/server/rag";
 import { getStore, type GameStore } from "@/server/store";
 import type { NewspaperRecord } from "@/server/store/types";
 import { planBotTurn } from "@/server/bot";
-import type { Archetype, GameMode, GameState, Player, QueuedOrder } from "@/domain/types";
+import type {
+  Archetype,
+  ChatMessage,
+  GameMode,
+  GameState,
+  Player,
+  QueuedOrder,
+  WinCondition,
+} from "@/domain/types";
 
 export const TICK_INTERVAL_HOURS = Number(process.env.TICK_INTERVAL_HOURS ?? 24);
 /** Seconds a real time window stays open before it closes and resolves. */
@@ -17,6 +28,15 @@ export const REALTIME_WINDOW_SECONDS = Math.max(
 );
 export const DEV_TICK = process.env.TICK_DEV_MODE !== "false";
 export { MAX_SEATS, MIN_SEATS };
+
+/**
+ * The fairness rule for a short window. A seal landing in the last seconds of
+ * a window buys it this many seconds, and a window can only be held this many
+ * times, so the table cannot be stalled by sealing in a loop.
+ */
+export const SEAL_GRACE_SECONDS = Math.max(1, Number(process.env.FAIRNESS_GRACE_SECONDS ?? 3));
+export const MAX_WINDOW_HOLDS = Math.max(0, Number(process.env.FAIRNESS_HOLDS ?? 2));
+const HOLD_RULES: HoldRules = { graceSeconds: SEAL_GRACE_SECONDS, maxHolds: MAX_WINDOW_HOLDS };
 
 /** How many times a losing writer re-reads before it gives the table up. */
 const COMMIT_ATTEMPTS = 6;
@@ -93,6 +113,7 @@ export async function startMatch(
   archetype: Archetype,
   seats = 5,
   mode: GameMode = "TURN",
+  winCondition: WinCondition = defaultWinCondition(),
 ): Promise<SeatResult> {
   const store = getStore();
   const code = await uniqueCode(store);
@@ -109,6 +130,7 @@ export async function startMatch(
     seats: [{ userId: host.userId, name: host.name, archetype, isBot: false }],
     lobbySeats: total,
     status: "LOBBY",
+    winCondition,
   });
   await store.saveGame(state);
 
@@ -358,6 +380,12 @@ export async function claimSeatByCode(
 export interface OpenTableSummary {
   code: string;
   status: GameState["game"]["status"];
+  /** The clock a joiner is seated at, so they know it before they sit down. */
+  mode: GameMode;
+  /** The window length in seconds, on whichever clock the table runs. */
+  windowSeconds: number;
+  /** What closes the era at this table. */
+  win: string;
   humans: number;
   players: number;
   open: number;
@@ -375,6 +403,9 @@ export async function listJoinableTables(): Promise<OpenTableSummary[]> {
     tables.push({
       code: summary.code,
       status: summary.status,
+      mode: state.game.mode,
+      windowSeconds: Math.max(1, Math.round(state.game.tickIntervalHours * 3600)),
+      win: winConditionLabel(state.game.winCondition),
       humans: summary.humans,
       players: state.players.length,
       open,
@@ -400,6 +431,9 @@ export async function queueOrder(
 
   const player = state.players.find((p) => p.id === playerId);
   if (!player) return { ok: false, error: "You are not seated at this table." };
+  if (state.game.status === "FINISHED") {
+    return { ok: false, error: "The era has closed. No further orders are taken." };
+  }
   if (player.isBankrupt) return { ok: false, error: "The court has closed your operation." };
 
   const order = parseOrder(input);
@@ -417,6 +451,13 @@ export async function queueOrder(
   // a rival sealing at the same moment cannot lose their order to this one. The
   // id is fresh, so a refused append only means the table vanished mid-write.
   await store.appendOrder(gameId, queued);
+  // Timestamp the seal on the table itself, which is what the fairness rule
+  // reads when a window closes on a desk that is still typing. A bot seals
+  // during resolution and does not go through here.
+  await commit(gameId, (live) => {
+    live.game.lastSealAt = queued.createdAt;
+    return { ok: true as const, value: true };
+  });
   return { ok: true, order: queued };
 }
 
@@ -475,6 +516,11 @@ export async function advanceTurn(state: GameState): Promise<TurnOutcome> {
   const gameId = state.game.id;
   const turn = state.game.currentTurn;
 
+  // A closed era takes no more windows. The closing edition is the last paper.
+  if (state.game.status === "FINISHED") {
+    return { state, issue: null, turn, alreadyResolved: true };
+  }
+
   for (let attempt = 0; attempt < COMMIT_ATTEMPTS; attempt += 1) {
     const current = await store.getGame(gameId);
     if (!current || current.game.currentTurn > turn) {
@@ -484,7 +530,13 @@ export async function advanceTurn(state: GameState): Promise<TurnOutcome> {
     const seen = current.game.revision;
     enqueueBotOrders(current);
     const result = resolveTurnTick(current, { now: new Date() });
-    const issue = await composeIssue(current, result.events, turn);
+    // The window just played can meet the table's condition. When it does the
+    // era closes here, and the paper prints the ranking instead of the wire.
+    const closing = reachedWinCondition(result.state);
+    if (closing) result.state.game.status = "FINISHED";
+    const issue = closing
+      ? await composeClosingIssue(result.state, turn)
+      : await composeIssue(current, result.events, turn);
 
     if (await store.saveGame(result.state, seen)) {
       const record: NewspaperRecord = {
@@ -513,8 +565,110 @@ export async function resolveIfDue(
 ): Promise<{ state: GameState; issue: NewspaperIssue | null }> {
   if (state.game.status !== "ACTIVE") return { state, issue: null };
   if (new Date(state.game.nextTickAt).getTime() > Date.now()) return { state, issue: null };
+  // A window that closed on somebody still sealing waits a moment for them,
+  // rather than throwing the order away. The hold is written before the table
+  // is resolved, so every other watcher of this window sees the new deadline.
+  const held = await holdForLateSeal(state.game.id);
+  if (held) return { state: held, issue: null };
   const outcome = await advanceTurn(state);
   return { state: outcome.state, issue: outcome.issue };
+}
+
+/**
+ * Moves a due window's deadline to give a late seal its grace period, when the
+ * window still has holds left. Written through `commit`, so two watchers who
+ * both notice the deadline cannot hold the same window twice.
+ */
+async function holdForLateSeal(gameId: string): Promise<GameState | null> {
+  const outcome = await commit(gameId, (state) => {
+    const hold = lateSealHold(state, Date.now(), HOLD_RULES);
+    if (!hold) return { ok: false as const, error: "no hold" };
+    state.game.nextTickAt = hold.nextTickAt;
+    state.game.holdsUsed = hold.holds;
+    return { ok: true as const, value: hold.gainedMs };
+  });
+  return outcome.ok ? outcome.state : null;
+}
+
+/**
+ * Says something on the table wire. Houses negotiate pacts, supply contracts
+ * and licences here before they seal the paperwork, which does not change the
+ * ledger: the message rides the same revision guard as everything else.
+ */
+export async function say(
+  gameId: string,
+  playerId: string,
+  name: string,
+  body: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const text = tidyLine(body);
+  if (text.length === 0) return { ok: false, error: "Nothing was said." };
+
+  // The id is minted outside the mutator, which may be run again: the same
+  // message is only ever appended once, however many times the write retries.
+  const message: ChatMessage = {
+    id: crypto.randomUUID(),
+    playerId,
+    name,
+    body: text,
+    turn: 0,
+    createdAt: new Date().toISOString(),
+  };
+
+  const outcome = await commit(gameId, (state) => {
+    const player = state.players.find((p) => p.id === playerId);
+    if (!player) return { ok: false as const, error: "You are not seated at this table." };
+    if (!state.messages.some((said) => said.id === message.id)) {
+      state.messages.push({ ...message, turn: state.game.currentTurn });
+    }
+    if (state.messages.length > MAX_WIRE_LINES) {
+      state.messages = state.messages.slice(-MAX_WIRE_LINES);
+    }
+    return { ok: true as const, value: true };
+  });
+
+  return outcome.ok ? { ok: true } : { ok: false, error: outcome.error };
+}
+
+/**
+ * Opens a new era on the same table. The code, the seats, the clock and the
+ * win condition carry over; the board, the books and the paper start again.
+ * The wire is kept, because the same houses are still sitting at it.
+ */
+export async function rematch(code: string, userId: string): Promise<{ ok: boolean; error?: string }> {
+  const store = getStore();
+  const loaded = await store.getGameByCode(code);
+  if (!loaded) return { ok: false, error: "No such table." };
+  if (loaded.game.status !== "FINISHED") return { ok: false, error: "The era is still running." };
+  if (!loaded.players.some((player) => player.userId === userId)) {
+    return { ok: false, error: "Only a seated house can open a new era." };
+  }
+
+  const seed = hashSeed(`${loaded.game.code}:${Date.now()}:rematch`);
+  const rebuilt = createGameState({
+    id: loaded.game.id,
+    code: loaded.game.code,
+    seed,
+    tickIntervalHours: loaded.game.tickIntervalHours,
+    nextTickAt: nextTickFrom(new Date(), loaded.game.tickIntervalHours),
+    status: "ACTIVE",
+    mode: loaded.game.mode,
+    winCondition: loaded.game.winCondition ?? defaultWinCondition(),
+    players: loaded.players.map((player) => ({
+      id: player.id,
+      userId: player.userId,
+      name: player.name,
+      archetype: player.archetype,
+      isBot: player.isBot,
+    })),
+  });
+  rebuilt.messages = (loaded.messages ?? []).slice(-MAX_WIRE_LINES);
+
+  // The snapshot is swapped whole, under the same revision guard every other
+  // write uses, so a rematch racing a watcher cannot half land.
+  const stored = await store.saveGame(rebuilt, loaded.game.revision);
+  if (!stored) return { ok: false, error: "The table moved while it was being reopened. Try again." };
+  return { ok: true };
 }
 
 export async function listIssues(gameId: string): Promise<NewspaperRecord[]> {

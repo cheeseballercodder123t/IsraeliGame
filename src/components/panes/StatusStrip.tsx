@@ -1,12 +1,66 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { auditRiskOf } from "@/domain/finance";
 import { charterOf } from "@/domain/constants";
 import { netWorthOf } from "@/domain/valuation";
+import { winConditionLabel } from "@/domain/endgame";
+import { windowClock, windowFraction, windowPressure, windowSecondsOf } from "@/domain/window";
+import type { WindowPressure } from "@/domain/window";
 import type { GameState } from "@/domain/types";
 import type { TablePresence } from "@/components/table/useTableSync";
+import { bell } from "@/lib/sound";
 import { formatMoney, formatPercent, countdown, ownerColor, windLabel } from "@/lib/labels";
+
+const RING_RADIUS = 15;
+const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
+
+/**
+ * The window, as a ring rather than a number. A short window is easy to miss
+ * when it is only a line of text, so the ring fills at a glance, turns hazard
+ * when three quarters of the window is gone and blood when it is nearly out,
+ * and the pip in the middle goes out with the window.
+ */
+function CountdownRing({
+  spent,
+  pressure,
+  closed,
+}: {
+  spent: number;
+  pressure: WindowPressure;
+  closed: boolean;
+}) {
+  const stroke = closed
+    ? "#4d4237"
+    : pressure === "imminent"
+      ? "#8c2f28"
+      : pressure === "late"
+        ? "#d99a1a"
+        : "#c19a3a";
+  return (
+    <span className="relative inline-flex h-11 w-11 shrink-0 items-center justify-center" aria-hidden>
+      <svg viewBox="0 0 36 36" className="h-11 w-11 -rotate-90">
+        <circle cx="18" cy="18" r={RING_RADIUS} fill="none" stroke="#2f2a24" strokeWidth="3" />
+        <circle
+          cx="18"
+          cy="18"
+          r={RING_RADIUS}
+          fill="none"
+          stroke={stroke}
+          strokeWidth="3"
+          strokeDasharray={`${RING_CIRCUMFERENCE} ${RING_CIRCUMFERENCE}`}
+          strokeDashoffset={RING_CIRCUMFERENCE * (1 - spent)}
+          className="transition-[stroke-dashoffset] duration-1000 ease-linear"
+        />
+      </svg>
+      <span
+        className={`absolute h-1.5 w-1.5 ${
+          closed ? "bg-blood" : pressure === "calm" ? "bg-brass" : "bg-hazard"
+        }`}
+      />
+    </span>
+  );
+}
 
 function Gauge({ label, value, readout, tone }: { label: string; value: number; readout: string; tone: string }) {
   return (
@@ -29,7 +83,8 @@ export function StatusStrip({
   present = [],
 }: {
   state: GameState;
-  meId: string;
+  /** The house looking, or null for somebody watching from the rail. */
+  meId: string | null;
   /** The turn of the paper on the shelf, or null before the first one prints. */
   ragTurn?: number | null;
   onOpenRag?: () => void;
@@ -38,42 +93,70 @@ export function StatusStrip({
   /** Houses with a browser on the table, as of the last heartbeat. */
   present?: TablePresence[];
 }) {
-  const me = state.players.find((p) => p.id === meId);
+  const me = state.players.find((p) => p.id === meId) ?? null;
   /** Orders a house has sealed into the window being played. */
   const sealedBy = (playerId: string) =>
     state.queue.filter((order) => order.playerId === playerId && order.turn <= state.game.currentTurn)
       .length;
+  const sealedTotal = state.queue.filter((order) => order.turn <= state.game.currentTurn).length;
   const atDesk = (playerId: string) => present.some((who) => who.playerId === playerId);
+  const mineSealed = me ? sealedBy(me.id) : 0;
+
+  const windowSeconds = windowSecondsOf(state.game.tickIntervalHours);
   const [remaining, setRemaining] = useState(() =>
     Math.max(0, Math.floor((new Date(state.game.nextTickAt).getTime() - Date.now()) / 1000)),
   );
+  const [flash, setFlash] = useState(false);
+  const armed = useRef(false);
+  const finished = state.game.status === "FINISHED";
 
   useEffect(() => {
-    const timer = setInterval(() => {
-      setRemaining(Math.max(0, Math.floor((new Date(state.game.nextTickAt).getTime() - Date.now()) / 1000)));
-    }, 1000);
+    const left = () =>
+      Math.max(0, Math.floor((new Date(state.game.nextTickAt).getTime() - Date.now()) / 1000));
+    setRemaining(left());
+    const timer = setInterval(() => setRemaining(left()), 1000);
     return () => clearInterval(timer);
   }, [state.game.nextTickAt]);
 
-  if (!me) return null;
-  const risk = auditRiskOf(me);
-  const profile = charterOf(me.archetype);
-  const mineSealed = sealedBy(meId);
+  // The window is not "closed" until the clock runs out under somebody's eyes.
+  // Whichever happens, it is worth one bell and one flash, and only one: the
+  // next window re-arms it.
+  useEffect(() => {
+    if (finished) {
+      armed.current = false;
+      return;
+    }
+    if (remaining > 0) {
+      armed.current = true;
+      return;
+    }
+    if (!armed.current) return;
+    armed.current = false;
+    setFlash(true);
+    bell();
+    const timer = setTimeout(() => setFlash(false), 1800);
+    return () => clearTimeout(timer);
+  }, [remaining, finished]);
 
-  // How much of this window has already gone, which is what the tick will
-  // resolve against. The bar is deliberately the last thing in the strip to
-  // turn: a window that is nearly out is the one thing worth interrupting for.
-  const windowSeconds = Math.max(1, state.game.tickIntervalHours * 3600);
-  const spent = Math.min(100, Math.max(0, (1 - remaining / windowSeconds) * 100));
-  const late = remaining / windowSeconds < 0.25;
-  const imminent = remaining / windowSeconds < 0.1;
-  const windowTone = imminent ? "text-blood" : late ? "text-hazard" : "text-ink";
-  const windowFill = imminent ? "bg-blood" : late ? "bg-hazard" : "bg-brass";
+  const risk = me ? auditRiskOf(me) : 0;
+  const profile = me ? charterOf(me.archetype) : null;
+  const spent = windowFraction(remaining, windowSeconds);
+  const pressure = finished ? "calm" : windowPressure(remaining, windowSeconds);
+  const windowTone = finished
+    ? "text-dim"
+    : pressure === "imminent"
+      ? "text-blood"
+      : pressure === "late"
+        ? "text-hazard"
+        : "text-ink";
+  const held = state.game.holdsUsed > 0;
 
   return (
     <header
       data-tour="strip"
-      className="flex flex-wrap items-stretch border border-rule bg-plate"
+      className={`flex flex-wrap items-stretch border bg-plate ${
+        flash ? "window-flash border-blood" : "border-rule"
+      }`}
     >
       <div className="flex min-w-[168px] flex-1 flex-col justify-center border-r border-rule px-3 py-1.5 sm:min-w-[190px] sm:flex-none">
         <p className="flex items-center gap-2 text-[9px] tracking-[0.16em] text-faint uppercase">
@@ -91,8 +174,10 @@ export function StatusStrip({
           </span>
         </p>
         <p className="text-[13px] text-ink">
-          {me.name}
-          <span className="ml-2 text-[10px] text-faint">{profile.name}</span>
+          {me ? me.name : "The rail"}
+          <span className="ml-2 text-[10px] text-faint">
+            {profile ? profile.name : "watching, read only"}
+          </span>
         </p>
         <p className="tabular text-[10px] text-dim">
           Turn {state.game.currentTurn} · wind {windLabel(state.game.wind)}
@@ -104,39 +189,66 @@ export function StatusStrip({
         </p>
       </div>
 
-      <Gauge label="Cash" value={Math.min(100, (me.cash / 3_000_000) * 100)} readout={formatMoney(me.cash)} tone="text-brass" />
-      <Gauge
-        label="Offshore"
-        value={Math.min(100, (me.offshoreCash / 3_000_000) * 100)}
-        readout={formatMoney(me.offshoreCash)}
-        tone={me.offshoreCash > 0 ? "text-rust" : "text-dim"}
-      />
-      <Gauge
-        label="Debt"
-        value={Math.min(100, (me.debt / 3_000_000) * 100)}
-        readout={me.debt > 0 ? `${formatMoney(me.debt)} · ${me.debtAge}/3` : "clear"}
-        tone={me.debt > 0 ? "text-blood" : "text-dim"}
-      />
-      <Gauge label="Standing" value={me.pr} readout={me.pr.toFixed(0)} tone="text-verdigris" />
-      <Gauge label="Audit risk" value={risk * 100} readout={formatPercent(risk, 1)} tone="text-hazard" />
-      <Gauge
-        label="Morale"
-        value={me.morale}
-        readout={`${me.morale.toFixed(0)}${me.companyTown ? " · scrip" : ""}`}
-        tone={me.morale < 25 ? "text-blood" : "text-bile"}
-      />
-
-      <div className="flex min-w-[164px] flex-1 items-center justify-between gap-2 border-l border-rule px-3 py-1.5 sm:flex-none">
-        <div className="min-w-0 flex-1">
-          <p className="text-[9px] tracking-[0.16em] text-faint uppercase">Window closes</p>
-          <p className={`tabular text-[13px] ${windowTone}`}>{countdown(remaining)}</p>
-          <div className="mt-1 h-[3px] w-full bg-tar" title={`${Math.round(spent)}% of this window spent`}>
-            <div className={`h-full ${windowFill}`} style={{ width: `${spent}%` }} />
-          </div>
-          <p className="tabular mt-1 text-[10px] text-faint">
-            <span className={mineSealed > 0 ? "text-brass" : undefined}>{mineSealed} sealed</span> ·
-            worth {formatMoney(netWorthOf(state, meId))}
+      {me ? (
+        <>
+          <Gauge label="Cash" value={Math.min(100, (me.cash / 3_000_000) * 100)} readout={formatMoney(me.cash)} tone="text-brass" />
+          <Gauge
+            label="Offshore"
+            value={Math.min(100, (me.offshoreCash / 3_000_000) * 100)}
+            readout={formatMoney(me.offshoreCash)}
+            tone={me.offshoreCash > 0 ? "text-rust" : "text-dim"}
+          />
+          <Gauge
+            label="Debt"
+            value={Math.min(100, (me.debt / 3_000_000) * 100)}
+            readout={me.debt > 0 ? `${formatMoney(me.debt)} · ${me.debtAge}/3` : "clear"}
+            tone={me.debt > 0 ? "text-blood" : "text-dim"}
+          />
+          <Gauge label="Standing" value={me.pr} readout={me.pr.toFixed(0)} tone="text-verdigris" />
+          <Gauge label="Audit risk" value={risk * 100} readout={formatPercent(risk, 1)} tone="text-hazard" />
+          <Gauge
+            label="Morale"
+            value={me.morale}
+            readout={`${me.morale.toFixed(0)}${me.companyTown ? " · scrip" : ""}`}
+            tone={me.morale < 25 ? "text-blood" : "text-bile"}
+          />
+        </>
+      ) : (
+        <div className="flex min-w-[168px] flex-1 items-center border-r border-rule px-3 py-1.5 sm:min-w-[190px] sm:flex-none">
+          <p className="text-[10px] leading-relaxed text-dim">
+            Every chair is taken, so this is the rail: the board, the books, the paper and the wire,
+            read only.
           </p>
+        </div>
+      )}
+
+      <div
+        className={`flex min-w-[186px] flex-1 items-center justify-between gap-2 border-rule px-3 py-1.5 sm:flex-none ${
+          me ? "border-l" : ""
+        }`}
+      >
+        <div className="flex min-w-0 flex-1 items-center gap-2.5">
+          <CountdownRing spent={finished ? 1 : spent} pressure={pressure} closed={finished || remaining === 0} />
+          <div className="min-w-0 flex-1">
+            <p className="text-[9px] tracking-[0.16em] text-faint uppercase">
+              {finished ? "The era has closed" : "Next window in"}
+            </p>
+            <p
+              className={`tabular text-[15px] leading-tight ${windowTone}`}
+              title={`Window of ${countdown(windowSeconds)} · era closes at ${winConditionLabel(state.game.winCondition)}`}
+            >
+              {finished ? "the books are shut" : windowClock(remaining, windowSeconds)}
+            </p>
+            <p className="tabular mt-0.5 text-[10px] text-faint">
+              {me ? `${mineSealed} sealed` : `${sealedTotal} sealed at the table`} · win:{" "}
+              {winConditionLabel(state.game.winCondition)}
+            </p>
+            {held && !finished ? (
+              <p className="text-[9px] text-hazard" title="A seal landed in the last moments of the window, so the close waited for it">
+                held for a late seal
+              </p>
+            ) : null}
+          </div>
         </div>
         {onOpenRag && ragTurn ? (
           <button
@@ -182,6 +294,11 @@ export function StatusStrip({
             </span>
           );
         })}
+        {me ? (
+          <span className="tabular ml-auto text-[10px] text-faint">
+            worth {formatMoney(netWorthOf(state, me.id))}
+          </span>
+        ) : null}
       </div>
     </header>
   );
