@@ -251,15 +251,19 @@ deterministic copy in place, so a slow provider can never block a turn.
 
 `src/server/store/index.ts` picks an adapter at runtime. With `SUPABASE_URL` and
 `SUPABASE_SERVICE_ROLE_KEY` present it uses Supabase; otherwise it writes the tables as json under
-`.data`, which survives hot reloads and restarts and is ignored by git. Both satisfy the same
-interface, so nothing above that line changes.
+`.data`, which survives hot reloads and restarts and is ignored by git. Before it hands out the
+directory store it creates that directory once, because a serverless host serves the app from a read
+only bundle where `mkdir` throws ENOENT and the request dies with it. A host that refuses the
+directory gets the in-process store instead of a failed request, and the footer of the front page
+says which of the three is in force. `CONGLOMERATE_STORE=memory` forces the in-process adapter
+anywhere. All three satisfy the same interface, so nothing above that line changes.
 
 Sessions are cookie based for local play, shaped as `{ userId, name }` so Supabase auth can replace
 them without touching the rest of the server layer.
 
 ### The tests
 
-Twenty seven files, two hundred and forty tests. Geometry and the catalogs are checked against
+Twenty eight files, two hundred and forty five tests. Geometry and the catalogs are checked against
 their own contents, so a catalog edit that breaks an assumption fails a test rather than a screen:
 seventy five commodities, seventy five plants, twenty six charters, sixty seven orders, a hundred and
 seventeen event kinds, and every sprite placement inside its sheet. The table's own rules are pinned
@@ -269,11 +273,12 @@ edition to the rematch. The engine tests cover the exchange, freight, production
 tenders, forced sales, the contract wire, the Record, raids, bonds, audits, arson, chapter 11 and a
 full turn replay. `tests/tick.test.ts` runs the
 same input twice and asserts a byte identical event log, and `tests/rag.test.ts` asserts the paper
-prints the same broadsheet twice from the same ledger. Two of the files read the interface rather
+prints the same broadsheet twice from the same ledger. Three of the files read the deployment rather
 than the engine: `tests/render.test.ts` paints the strip, the register and the board on the server
-and pins what they print, and `tests/copy.test.ts` walks every source file for the house rules, so
-an em dash, a borrowed phrase, a rounded corner, a drop shadow or an emoji fails a check instead of
-reaching a screen.
+and pins what they print, `tests/store.test.ts` points the table directory at a path that cannot
+exist and pins the fallback to the in-process store, and `tests/copy.test.ts` walks every source file
+for the house rules, so an em dash, a borrowed phrase, a rounded corner, a drop shadow or an emoji
+fails a check instead of reaching a screen.
 
 ## Deferred
 
