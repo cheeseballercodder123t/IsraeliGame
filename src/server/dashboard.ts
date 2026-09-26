@@ -31,6 +31,8 @@ export interface LobbySeatView {
 export interface LobbyView {
   code: string;
   status: GameState["game"]["status"];
+  /** Turn based or real time, so the lobby can say which clock it opens on. */
+  mode: GameState["game"]["mode"];
   /** The table's write counter, which is what a watching client polls. */
   revision: number;
   seats: LobbySeatView[];
@@ -63,6 +65,7 @@ function lobbyOf(state: GameState, userId: string | null): LobbyView {
   return {
     code: state.game.code,
     status: state.game.status,
+    mode: state.game.mode,
     revision: state.game.revision,
     seats,
     openSeats: openSeats(state),

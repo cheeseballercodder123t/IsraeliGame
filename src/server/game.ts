@@ -7,17 +7,27 @@ import { composeIssue, type NewspaperIssue } from "@/server/rag";
 import { getStore, type GameStore } from "@/server/store";
 import type { NewspaperRecord } from "@/server/store/types";
 import { planBotTurn } from "@/server/bot";
-import type { Archetype, GameState, Player, QueuedOrder } from "@/domain/types";
+import type { Archetype, GameMode, GameState, Player, QueuedOrder } from "@/domain/types";
 
 export const TICK_INTERVAL_HOURS = Number(process.env.TICK_INTERVAL_HOURS ?? 24);
+/** Seconds a real time window stays open before it closes and resolves. */
+export const REALTIME_WINDOW_SECONDS = Math.max(
+  5,
+  Number(process.env.REALTIME_WINDOW_SECONDS ?? 20),
+);
 export const DEV_TICK = process.env.TICK_DEV_MODE !== "false";
 export { MAX_SEATS, MIN_SEATS };
 
 /** How many times a losing writer re-reads before it gives the table up. */
 const COMMIT_ATTEMPTS = 6;
 
-function nextTickFrom(now: Date): string {
-  return new Date(now.getTime() + TICK_INTERVAL_HOURS * 3_600_000).toISOString();
+/** The window length a mode plays at, in hours, since the engine counts in hours. */
+export function windowHoursFor(mode: GameMode): number {
+  return mode === "REALTIME" ? REALTIME_WINDOW_SECONDS / 3600 : TICK_INTERVAL_HOURS;
+}
+
+function nextTickFrom(now: Date, intervalHours: number): string {
+  return new Date(now.getTime() + intervalHours * 3_600_000).toISOString();
 }
 
 async function uniqueCode(store: GameStore): Promise<string> {
@@ -82,17 +92,20 @@ export async function startMatch(
   host: { userId: string; name: string },
   archetype: Archetype,
   seats = 5,
+  mode: GameMode = "TURN",
 ): Promise<SeatResult> {
   const store = getStore();
   const code = await uniqueCode(store);
   const seedValue = hashSeed(`${code}:${Date.now()}`);
   const total = clampSeats(seats);
+  const intervalHours = windowHoursFor(mode);
 
   const state = await store.createGame({
     code,
     seed: seedValue,
-    tickIntervalHours: TICK_INTERVAL_HOURS,
-    nextTickAt: nextTickFrom(new Date()),
+    mode,
+    tickIntervalHours: intervalHours,
+    nextTickAt: nextTickFrom(new Date(), intervalHours),
     seats: [{ userId: host.userId, name: host.name, archetype, isBot: false }],
     lobbySeats: total,
     status: "LOBBY",
@@ -174,7 +187,9 @@ async function activateMatch(gameId: string): Promise<{ ok: boolean; error?: str
     // Every seat is accounted for; the flag has served its purpose.
     for (const player of state.players) player.lobbySeat = null;
     state.game.status = "ACTIVE";
-    state.game.nextTickAt = nextTickFrom(new Date());
+    // The window opens on the table's own clock, so a real time table starts
+    // counting in seconds rather than the default day.
+    state.game.nextTickAt = nextTickFrom(new Date(), state.game.tickIntervalHours);
     markLobbySeat(state, total);
     return { ok: true as const, value: total };
   });

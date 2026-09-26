@@ -13,6 +13,7 @@ import { Rng, hashSeed } from "./rng";
 import type {
   Archetype,
   Game,
+  GameMode,
   GameState,
   InventoryRow,
   MarketRow,
@@ -44,6 +45,8 @@ export interface NewGameSpec {
   players: NewPlayerSpec[];
   /** Tables open as LOBBY when humans still have seats to take. Defaults to ACTIVE. */
   status?: Game["status"];
+  /** A turn table unless the host asked for real time. */
+  mode?: GameMode;
 }
 
 export function makeGameCode(seed: number): string {
@@ -124,6 +127,7 @@ export function createGameState(spec: NewGameSpec): GameState {
     id: spec.id,
     code: spec.code,
     status: spec.status ?? "ACTIVE",
+    mode: spec.mode ?? "TURN",
     currentTurn: 1,
     tickIntervalHours: spec.tickIntervalHours,
     nextTickAt: spec.nextTickAt,

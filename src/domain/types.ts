@@ -136,10 +136,19 @@ export interface OrderCategoryMeta {
 
 export type GameStatus = "LOBBY" | "ACTIVE" | "FINISHED";
 
+/**
+ * How the window runs. A turn table opens one long window at a time and waits
+ * for the clock; a real time table closes its window every few seconds and the
+ * board keeps moving while anybody is at it.
+ */
+export type GameMode = "TURN" | "REALTIME";
+
 export interface Game {
   id: string;
   code: string;
   status: GameStatus;
+  /** Turn based across a long window, or real time across a short one. */
+  mode: GameMode;
   currentTurn: number;
   tickIntervalHours: number;
   nextTickAt: string;

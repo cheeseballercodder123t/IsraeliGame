@@ -88,7 +88,7 @@ export function Exchange({ state, player, onOrder }: ExchangeProps) {
   const effectiveLimit = limit > 0 ? limit : cents(row.price);
 
   return (
-    <div className="flex min-h-0 flex-col border border-rule bg-steel">
+    <div data-tour="exchange" className="flex min-h-0 flex-col border border-rule bg-steel">
       <div className="flex items-center justify-between border-b border-rule bg-plate px-3 py-1.5">
         <h2 className="text-[10px] tracking-[0.22em] text-dim uppercase">Global exchange</h2>
         <span className="text-[10px] text-faint">

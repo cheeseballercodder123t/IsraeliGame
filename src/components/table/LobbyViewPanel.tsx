@@ -55,6 +55,15 @@ export function LobbyViewPanel({ lobby }: { lobby: LobbyView }) {
           {lobby.seats.length} of {lobby.targetSeats} chairs held · {lobby.openSeats} open ·{" "}
           {lobby.minSeats} houses to open the window
         </p>
+        <p className="mt-1 text-[10px] text-faint">
+          Clock:{" "}
+          <span className="text-brass">
+            {lobby.mode === "REALTIME" ? "real time" : "turn based"}
+          </span>
+          {lobby.mode === "REALTIME"
+            ? " · the window closes every few seconds once it opens"
+            : " · one long window, sealed then played at the close"}
+        </p>
         <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-faint">
           <span className={`flex items-center gap-1 ${live ? "text-bile" : "text-hazard"}`}>
             <span className={`inline-block h-1.5 w-1.5 ${live ? "bg-bile" : "bg-hazard"}`} />

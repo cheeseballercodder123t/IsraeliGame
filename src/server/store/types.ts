@@ -8,6 +8,8 @@ import type { Scandal } from "@/server/rag/template";
  */
 export function withRevision(state: GameState): GameState {
   if (typeof state.game.revision !== "number") state.game.revision = 0;
+  // Tables written before real time existed have no mode and are turn based.
+  if (state.game.mode !== "REALTIME") state.game.mode = "TURN";
   return state;
 }
 
@@ -40,6 +42,8 @@ export interface CreateGameInput {
   lobbySeats?: number;
   /** Tables open as LOBBY while humans still have seats to take. */
   status?: GameState["game"]["status"];
+  /** Turn based unless the host asked for a real time table. */
+  mode?: GameState["game"]["mode"];
 }
 
 export interface GameSummary {
