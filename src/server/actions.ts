@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import type { Archetype } from "@/domain/types";
+import type { Archetype, GameMode } from "@/domain/types";
 import { ensureSession, readSession, signOut } from "@/server/session";
 import {
   DEV_TICK,
@@ -25,14 +25,20 @@ function readArchetype(value: FormDataEntryValue | null): Archetype {
   return ARCHETYPE_IDS.includes(raw as Archetype) ? (raw as Archetype) : "ROBBER_BARON";
 }
 
+/** A turn based table unless the host picked real time. */
+function readMode(value: FormDataEntryValue | null): GameMode {
+  return value === "REALTIME" ? "REALTIME" : "TURN";
+}
+
 export async function foundCompanyAction(formData: FormData): Promise<void> {
   const name = String(formData.get("name") ?? "").trim() || "Unnamed Director";
   const archetype = readArchetype(formData.get("archetype"));
   const seatsRaw = Number(formData.get("seats") ?? 5);
   const seats = Number.isFinite(seatsRaw) ? Math.max(2, Math.min(5, seatsRaw)) : 5;
+  const mode = readMode(formData.get("mode"));
 
   const session = await ensureSession(name);
-  const { state } = await startMatch(session, archetype, seats);
+  const { state } = await startMatch(session, archetype, seats, mode);
   redirect(`/table/${state.game.code}`);
 }
 

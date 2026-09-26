@@ -96,6 +96,11 @@ export function StatusStrip({
         </p>
         <p className="tabular text-[10px] text-dim">
           Turn {state.game.currentTurn} · wind {windLabel(state.game.wind)}
+          {state.game.mode === "REALTIME" ? (
+            <span className="ml-2 text-brass uppercase" title="A short window closes every few seconds">
+              real time
+            </span>
+          ) : null}
         </p>
       </div>
 

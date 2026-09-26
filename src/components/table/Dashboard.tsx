@@ -22,7 +22,8 @@ import { OrdersBoard } from "@/components/panes/OrdersBoard";
 import { StatusStrip } from "@/components/panes/StatusStrip";
 import { FirstMoves } from "@/components/table/FirstMoves";
 import { NewspaperModal } from "@/components/newspaper/NewspaperModal";
-import { useTableSync } from "@/components/table/useTableSync";
+import { HelpOverlay } from "@/components/table/HelpOverlay";
+import { POLL_MS, REALTIME_POLL_MS, useTableSync } from "@/components/table/useTableSync";
 import { Tour, startTour } from "@/components/tour/Tour";
 import { TABLE_RECAP, TABLE_TOUR } from "@/components/tour/steps";
 import { Button, KeyValue, Meter, Notice, Panel } from "@/components/ui/primitives";
@@ -61,6 +62,7 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
     state.tiles.find((tile) => tile.ownerId === meId)?.id ?? null,
   );
   const [ragOpen, setRagOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [view, setView] = useState<"DESK" | "FLOOR">("DESK");
   const [errors, setErrors] = useState<string[]>([]);
   const [receipt, setReceipt] = useState<string | null>(null);
@@ -70,8 +72,14 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
   const me = state.players.find((player) => player.id === meId);
   // The table's revision is watched rather than pushed: when it moves, this
   // browser asks the router for a fresh snapshot, so a rival's sealed order, a
-  // newcomer in a chair or a resolved window lands without a reload.
-  const { live, present } = useTableSync(code, state.game.revision);
+  // newcomer in a chair or a resolved window lands without a reload. A real
+  // time table closes its window in seconds, so its watchers beat faster.
+  const realtime = state.game.mode === "REALTIME";
+  const { live, present } = useTableSync(
+    code,
+    state.game.revision,
+    realtime ? REALTIME_POLL_MS : POLL_MS,
+  );
 
   useEffect(() => {
     if (!latestIssue) return;
@@ -113,8 +121,16 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
     return () => clearTimeout(timer);
   }, [receipt]);
 
-  // Desk, floor and the walk-around, from the keyboard. A dialog owns the keys
-  // while it is open, and so does any field being typed into.
+  /** Brings one panel to the top of the page once the view has switched. */
+  const jumpTo = useCallback((selector: string) => {
+    window.setTimeout(() => {
+      document.querySelector(selector)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 60);
+  }, []);
+
+  // Every room one key away: desk, floor, market, board, orders, book, the
+  // paper and the walk-around. A dialog owns the keys while it is open, and so
+  // does any field being typed into.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.metaKey || event.ctrlKey || event.altKey) return;
@@ -136,14 +152,36 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
       } else if (key === "f") {
         event.preventDefault();
         setView("FLOOR");
+      } else if (key === "m") {
+        event.preventDefault();
+        setView("FLOOR");
+        jumpTo('[data-tour="exchange"]');
+      } else if (key === "b") {
+        event.preventDefault();
+        setView("DESK");
+        jumpTo('[data-tour="board"]');
+      } else if (key === "o") {
+        event.preventDefault();
+        setView("DESK");
+        jumpTo('[data-tour="desk"]');
+      } else if (key === "k") {
+        event.preventDefault();
+        setView("DESK");
+        jumpTo('[data-tour="book"]');
+      } else if (key === "r") {
+        event.preventDefault();
+        setRagOpen(true);
       } else if (key === "t") {
         event.preventDefault();
         startTour();
+      } else if (key === "?" || key === "h") {
+        event.preventDefault();
+        setHelpOpen(true);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [jumpTo]);
 
   const handleCancel = useCallback(
     (orderId: string) => {
@@ -251,13 +289,23 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
             {id === "DESK" ? "Desk and board" : "Floor and register"}
           </button>
         ))}
-        <button
-          type="button"
-          onClick={() => startTour()}
-          className="ml-auto border border-edge px-3 py-1 text-[10px] tracking-[0.16em] text-dim uppercase hover:text-ink"
-        >
-          Take the tour
-        </button>
+        <div className="ml-auto flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setHelpOpen(true)}
+            className="border border-edge px-3 py-1 text-[10px] tracking-[0.16em] text-dim uppercase hover:text-ink"
+            title="Every key at the table"
+          >
+            Guide ?
+          </button>
+          <button
+            type="button"
+            onClick={() => startTour("full")}
+            className="border border-edge px-3 py-1 text-[10px] tracking-[0.16em] text-dim uppercase hover:text-ink"
+          >
+            Take the tour
+          </button>
+        </div>
       </div>
 
       {view === "DESK" ? (
@@ -583,6 +631,7 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
       )}
 
       <NewspaperModal issue={latestIssue} open={ragOpen} onOpenChange={setRagOpen} />
+      <HelpOverlay open={helpOpen} onOpenChange={setHelpOpen} />
 
       <footer className="mt-4 space-y-1 border-t border-rule pt-3">
         <p className="text-[10px] text-faint">
@@ -595,12 +644,15 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
           onto your own plots, and the inspectors fine the air, not the intention.
         </p>
         <p className="text-[10px] text-faint">
-          Keys: d for the desk and board, f for the floor and register, t for the walk-around, and
-          / anywhere on the desk to jump to an order by name.
+          Keys: d desk, f floor, m market, b board, o orders, k book, r the Rag, t the walk-around,
+          / to jump to an order by name, and ? for the whole card.
         </p>
-        <p className="pt-1">
-          <Button tone="quiet" onClick={startTour}>
+        <p className="flex flex-wrap items-center gap-2 pt-1">
+          <Button tone="quiet" onClick={() => startTour("full")}>
             Walk the room again
+          </Button>
+          <Button tone="quiet" onClick={() => setHelpOpen(true)}>
+            Show me the keys
           </Button>
         </p>
       </footer>

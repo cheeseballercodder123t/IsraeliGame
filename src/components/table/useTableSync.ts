@@ -4,7 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 /** How often a watching browser asks whether the table has moved. */
-const POLL_MS = 5000;
+export const POLL_MS = 5000;
+/** A real time table moves on a short clock, so its watchers beat faster. */
+export const REALTIME_POLL_MS = 1500;
 
 export interface TablePresence {
   /** The seat this browser holds, or null for somebody only looking on. */
@@ -35,7 +37,7 @@ interface Summary {
  * arrives without anybody reloading. The same round trip carries the presence
  * roster back, which is why one poll does both jobs.
  */
-export function useTableSync(code: string, revision: number): TableSync {
+export function useTableSync(code: string, revision: number, pollMs = POLL_MS): TableSync {
   const router = useRouter();
   const [live, setLive] = useState(true);
   const [present, setPresent] = useState<TablePresence[]>([]);
@@ -72,10 +74,10 @@ export function useTableSync(code: string, revision: number): TableSync {
           if (!stopped) setLive(false);
         }
       }
-      if (!stopped) timer = setTimeout(poll, POLL_MS);
+      if (!stopped) timer = setTimeout(poll, pollMs);
     };
 
-    timer = setTimeout(poll, POLL_MS);
+    timer = setTimeout(poll, pollMs);
 
     // A tab that was in the background is the one most likely to be stale, so
     // coming back to it checks straight away rather than waiting out the beat.
@@ -93,7 +95,7 @@ export function useTableSync(code: string, revision: number): TableSync {
       document.removeEventListener("visibilitychange", onWake);
       window.removeEventListener("focus", onWake);
     };
-  }, [code, router]);
+  }, [code, pollMs, router]);
 
   return { live, present };
 }

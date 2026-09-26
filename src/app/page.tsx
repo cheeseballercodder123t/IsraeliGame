@@ -29,6 +29,7 @@ const BRIEF: string[] = [
   "Every window is sealed: you plan in the dark, rivals see the count and not the contents, and the tick plays every order at once.",
   "Only the outer band yields raw material, so a chimney has to sit near the thing it eats and haul the difference over track you own.",
   "A rival sealing an order, a stranger taking a chair and a window closing all land on your desk as they happen.",
+  "A turn table closes one long window at a time. A real time table closes a short one every few seconds and never stops moving.",
 ];
 
 /** What the ground will take, by band. The plot counts come off the generator. */
@@ -262,6 +263,16 @@ export default async function LobbyPage({
                       {seat} houses
                     </option>
                   ))}
+                </select>
+              </Field>
+              <Field label="Clock">
+                <select
+                  name="mode"
+                  defaultValue="TURN"
+                  className="w-full border border-rule bg-pit px-2 py-1 text-[12px] text-ink"
+                >
+                  <option value="TURN">Turn based, one long window</option>
+                  <option value="REALTIME">Real time, a short window every few seconds</option>
                 </select>
               </Field>
               <div className="pt-2">

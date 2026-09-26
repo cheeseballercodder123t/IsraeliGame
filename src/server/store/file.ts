@@ -119,6 +119,7 @@ export class FileStore implements GameStore {
       tickIntervalHours: input.tickIntervalHours,
       nextTickAt: input.nextTickAt,
       status: input.status,
+      mode: input.mode,
       players: input.seats.map((seat, index) => ({
         id: crypto.randomUUID(),
         userId: seat.userId,

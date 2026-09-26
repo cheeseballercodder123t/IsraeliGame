@@ -88,6 +88,8 @@ export function Tour({
   const [walk, setWalk] = useState<TourStep[]>(steps);
   /** False while the reminder is running, so the card can offer the rest. */
   const [whole, setWhole] = useState(true);
+  /** True while the first-visit offer is up, before any step has run. */
+  const [prompting, setPrompting] = useState(false);
   const card = useRef<HTMLDivElement | null>(null);
   // The step lives in a ref as well as in state, so the interval that keeps
   // the ring on its panel can walk on without an effect re-registering every
@@ -162,11 +164,24 @@ export function Tour({
     return () => window.removeEventListener(TOUR_START, onStart);
   }, [begin]);
 
+  // A first visit is offered the walk once, and can as easily wave it off. The
+  // offer is what makes skipping a real choice rather than a race to close a
+  // card that already took the screen.
   useEffect(() => {
     if (!auto || seen()) return;
-    const timer = setTimeout(() => begin("auto"), 900);
+    const timer = setTimeout(() => setPrompting(true), 900);
     return () => clearTimeout(timer);
-  }, [auto, begin, seen]);
+  }, [auto, seen]);
+
+  const accept = useCallback(() => {
+    setPrompting(false);
+    begin("auto");
+  }, [begin]);
+
+  const skip = useCallback(() => {
+    setPrompting(false);
+    finish();
+  }, [finish]);
 
   // Ring the panel and keep the ring on it.
   useEffect(() => {
@@ -268,7 +283,40 @@ export function Tour({
     };
   }, [box, cardHeight]);
 
-  if (index === null || !box || !place) return null;
+  if (index === null) {
+    if (!prompting) return null;
+    return (
+      // Deliberately not a dialog: an offer the eye can ignore should not take
+      // the keyboard or the focus the way the walk itself does.
+      <div
+        role="region"
+        aria-label="Guided tour offer"
+        className="fixed right-4 bottom-4 z-[60] w-[300px] border border-brass bg-steel"
+      >
+        <header className="border-b border-rule bg-plate px-3 py-1.5">
+          <p className="text-[10px] tracking-[0.2em] text-brass uppercase">First look</p>
+        </header>
+        <div className="px-3 py-2.5">
+          <h2 className="font-slab text-[15px] leading-tight text-ink">
+            New at this table?
+          </h2>
+          <p className="mt-1 text-[12px] leading-snug text-dim">
+            The walk-around rings each panel in turn and says what it does. It takes a minute and
+            can be left at any step.
+          </p>
+        </div>
+        <div className="flex items-center justify-end gap-1 border-t border-rule px-3 py-2">
+          <Button tone="quiet" onClick={skip}>
+            Skip
+          </Button>
+          <Button tone="brass" onClick={accept}>
+            Take the tour
+          </Button>
+        </div>
+      </div>
+    );
+  }
+  if (!box || !place) return null;
   const step = walk[index];
 
   return (
@@ -342,7 +390,7 @@ export function Tour({
               onClick={finish}
               className="text-[10px] tracking-[0.14em] text-dim uppercase hover:text-ink"
             >
-              Leave the tour
+              {index === 0 ? "Skip the tour" : "Leave the tour"}
             </button>
           </div>
         </header>
