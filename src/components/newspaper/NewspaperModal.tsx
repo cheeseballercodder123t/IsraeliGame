@@ -122,10 +122,15 @@ export function NewspaperModal({
   issue,
   open,
   onOpenChange,
+  shelf = [],
+  onSelect,
 }: {
   issue: NewspaperRecord | null;
   open: boolean;
   onOpenChange: (next: boolean) => void;
+  /** Every edition on the shelf, so the paper can be flipped through in place. */
+  shelf?: NewspaperRecord[];
+  onSelect?: (issue: NewspaperRecord) => void;
 }) {
   if (!issue) return null;
 
@@ -183,6 +188,36 @@ export function NewspaperModal({
                 </li>
               ))}
             </ul>
+          </div>
+        ) : null}
+
+        {shelf.length > 1 && onSelect ? (
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-t-2 border-newsink/60 px-4 py-2.5 sm:px-6">
+            <span className="mr-1 font-mono text-[9px] tracking-[0.24em] uppercase opacity-70">
+              Back issues
+            </span>
+            {shelf.map((entry) => {
+              const here = entry.turn === issue.turn;
+              return (
+                <button
+                  key={`${entry.turn}-${entry.createdAt}`}
+                  type="button"
+                  onClick={() => onSelect(entry)}
+                  aria-current={here ? "true" : undefined}
+                  title={entry.headline}
+                  className={`tabular border px-2 py-[2px] font-mono text-[10px] tracking-[0.12em] uppercase ${
+                    here
+                      ? "border-newsink bg-newsink text-news"
+                      : "border-newsink/50 text-newsink hover:border-newsink"
+                  }`}
+                >
+                  t{entry.turn}
+                </button>
+              );
+            })}
+            <span className="ml-auto font-mono text-[9px] tracking-[0.16em] uppercase opacity-60">
+              {shelf.length} editions kept
+            </span>
           </div>
         ) : null}
 

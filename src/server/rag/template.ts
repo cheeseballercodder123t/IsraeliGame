@@ -1,6 +1,5 @@
 import {
   COMMODITIES,
-  EVENT_SPECS,
   RECIPES,
   SECTIONS,
   SECTION_TITLE,
@@ -8,8 +7,8 @@ import {
   type EventKind,
   type EventSection,
   type WireContext,
-  type WireEvent,
 } from "@/domain/constants";
+import { wireContextOf, wireLineOf } from "@/domain/wire";
 import { winConditionLabel } from "@/domain/endgame";
 import { formatMoney, formatPercent, formatPrice, formatUnits } from "@/domain/format";
 import { streamRng } from "@/domain/rng";
@@ -238,27 +237,8 @@ export function scandalWeight(event: GameEvent): number {
   return 6;
 }
 
-function buildContext(state: GameState): WireContext {
-  const byId = new Map(state.players.map((player) => [player.id, player.name]));
-  const byTile = new Map(state.tiles.map((tile) => [tile.id, `plot ${tile.x}, ${tile.y}`]));
-  return {
-    name: (id) => (id ? byId.get(id) ?? "an unnamed party" : "an unnamed party"),
-    tile: (id) => (id ? byTile.get(id) ?? id : "an unlisted plot"),
-    resource: (id) => (id ? COMMODITIES[id as keyof typeof COMMODITIES]?.name ?? id : "goods"),
-    recipe: (id) => (id ? RECIPES[id as keyof typeof RECIPES]?.name ?? id : "a plant"),
-    gradeName: (id) => (id ? id.toLowerCase() : "unspecified"),
-  };
-}
-
-function toWire(event: GameEvent): WireEvent {
-  return event as unknown as WireEvent;
-}
-
-function wireLine(event: GameEvent, ctx: WireContext): string {
-  const spec = EVENT_SPECS[event.kind];
-  if (!spec) return "";
-  return spec.wire(toWire(event), ctx);
-}
+const buildContext = wireContextOf;
+const wireLine = wireLineOf;
 
 /** One line for the index of the accused, without repeating the body. */
 function indexLine(event: GameEvent, ctx: WireContext): string {

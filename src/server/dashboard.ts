@@ -11,6 +11,7 @@ import { beat } from "@/server/presence";
 import { readSession } from "@/server/session";
 import type { NewspaperRecord } from "@/server/store/types";
 import { winConditionLabel } from "@/domain/endgame";
+import { boardFingerprint, type BoardFingerprint } from "@/domain/world";
 import type { Archetype, GameState, Player, QueuedOrder } from "@/domain/types";
 
 export interface TableView {
@@ -36,6 +37,9 @@ export interface LobbyView {
   mode: GameState["game"]["mode"];
   /** What closes the era, so a seat is taken knowing the length of the match. */
   win: string;
+  /** The seed the country was drawn from, and what it drew. */
+  seed: number;
+  fingerprint: BoardFingerprint;
   /** The table's write counter, which is what a watching client polls. */
   revision: number;
   seats: LobbySeatView[];
@@ -81,6 +85,8 @@ function lobbyOf(state: GameState, userId: string | null): LobbyView {
     status: state.game.status,
     mode: state.game.mode,
     win: winConditionLabel(state.game.winCondition),
+    seed: state.game.seed,
+    fingerprint: boardFingerprint(state.game.seed, Math.max(1, targetSeats(state))),
     revision: state.game.revision,
     seats,
     openSeats: openSeats(state),

@@ -64,6 +64,36 @@ export function makeGameCode(seed: number): string {
   return out;
 }
 
+/**
+ * What a seed actually lays down, cheap enough to print on a lobby card.
+ *
+ * The wind, the deposit draw and the opening plots are the first three things
+ * the board generator does with a seed, so replaying those three draws names
+ * the country a table will be played on without building it. Two tables with
+ * the same fingerprint open on the same map.
+ */
+export interface BoardFingerprint {
+  wind: WindDirection;
+  /** The rim deposits in the order the generator lays them down. */
+  deposits: Resource[];
+  /** Where each opening extractor stands, seat by seat. */
+  holdings: { x: number; y: number }[];
+}
+
+export function boardFingerprint(seed: number, seats = 4): BoardFingerprint {
+  const rng = new Rng(hashSeed(`board:${seed}`));
+  const wind = rng.pick(["NORTH", "SOUTH", "EAST", "WEST"] as WindDirection[]);
+  const deposits = rng.shuffle(DEPOSIT_POOL);
+  const rim: { x: number; y: number }[] = [];
+  for (let x = 0; x < BOARD; x += 1) {
+    for (let y = 0; y < BOARD; y += 1) {
+      if (terrainForRing(ringOf(x, y)) === "DEPOSIT") rim.push({ x, y });
+    }
+  }
+  const holdings = rng.shuffle(rim).slice(0, Math.max(1, seats));
+  return { wind, deposits: deposits.slice(0, 8), holdings };
+}
+
 /** A house at the table. Charters set cash, standing and morale. */
 export function newPlayer(
   spec: {
@@ -235,6 +265,8 @@ export function createGameState(spec: NewGameSpec): GameState {
     shorts: [],
     futures: [],
     supplies: [],
+    offers: [],
+    lots: [],
     patents: [],
     insurance: [],
     cartels: [],
@@ -244,6 +276,7 @@ export function createGameState(spec: NewGameSpec): GameState {
     convertibles: [],
     events: [],
     queue: [],
+    seals: [],
     messages: [],
     scandals: [],
   };

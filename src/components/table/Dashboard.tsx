@@ -17,12 +17,16 @@ import type { NewspaperRecord } from "@/server/store/types";
 import { GridCanvas, ringLegend } from "@/components/grid/GridCanvas";
 import { TileInspector } from "@/components/grid/TileInspector";
 import { Exchange, holdingsByFamily } from "@/components/panes/Exchange";
+import { MarketTape } from "@/components/panes/MarketTape";
 import { OrderDesk } from "@/components/orders/OrderDesk";
 import { OrdersBoard } from "@/components/panes/OrdersBoard";
 import { StatusStrip } from "@/components/panes/StatusStrip";
 import { FirstMoves } from "@/components/table/FirstMoves";
 import { NewspaperModal } from "@/components/newspaper/NewspaperModal";
+import { RagShelf } from "@/components/newspaper/RagShelf";
 import { ChatPanel } from "@/components/table/ChatPanel";
+import { ContractsPanel } from "@/components/table/ContractsPanel";
+import { RecordPane } from "@/components/table/RecordPane";
 import { EraClosing } from "@/components/table/EraClosing";
 import { HelpOverlay } from "@/components/table/HelpOverlay";
 import { HousesRegister } from "@/components/table/HousesRegister";
@@ -65,6 +69,8 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
     state.tiles.find((tile) => tile.ownerId === meId)?.id ?? null,
   );
   const [ragOpen, setRagOpen] = useState(false);
+  /** The edition on the desk, so the shelf can open any issue and not just the latest. */
+  const [ragTurn, setRagTurn] = useState<number | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
   const [view, setView] = useState<"DESK" | "FLOOR">("DESK");
   const [errors, setErrors] = useState<string[]>([]);
@@ -73,6 +79,9 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
   const sound = useSound();
 
   const latestIssue = issues[0] ?? null;
+  const issue =
+    (ragTurn === null ? null : issues.find((entry) => entry.turn === ragTurn) ?? null) ??
+    latestIssue;
   const me = state.players.find((player) => player.id === meId);
   const finished = state.game.status === "FINISHED";
   // The table's revision is watched rather than pushed: when it moves, this
@@ -91,6 +100,8 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
     const key = `rag:${code}`;
     const seen = window.localStorage.getItem(key);
     if (seen === null || Number(seen) < latestIssue.turn) {
+      // A new edition goes on the desk, even if an older one was open.
+      setRagTurn(latestIssue.turn);
       setRagOpen(true);
       window.localStorage.setItem(key, String(latestIssue.turn));
     }
@@ -179,6 +190,10 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
         event.preventDefault();
         setView("DESK");
         jumpTo('[data-tour="book"]');
+      } else if (key === "l") {
+        event.preventDefault();
+        setView("DESK");
+        jumpTo('[data-tour="record"]');
       } else if (key === "r") {
         event.preventDefault();
         setRagOpen(true);
@@ -216,6 +231,13 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
   }, [code]);
 
   const selectedTile = state.tiles.find((tile) => tile.id === selectedTileId) ?? null;
+  /** The lots anyone can bid on this window, listed under the board. */
+  const onTender = state.tiles.filter((tile) => tile.onTender);
+
+  const openIssue = useCallback((record: NewspaperRecord) => {
+    setRagTurn(record.turn);
+    setRagOpen(true);
+  }, []);
 
   const held = useMemo(() => (me ? holdingsByFamily(state, me.id) : []), [state, me]);
 
@@ -293,7 +315,7 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
                 type="button"
                 onClick={() => setView(id)}
                 aria-pressed={view === id}
-                className={`relative border-r border-rule px-3 py-2 text-[10px] tracking-[0.18em] uppercase ${
+                className={`relative flex-1 border-r border-rule px-3 py-2 text-[10px] tracking-[0.18em] uppercase sm:flex-none ${
                   view === id
                     ? "bg-steel text-ink"
                     : "bg-pit text-dim hover:bg-steel hover:text-ink"
@@ -308,12 +330,12 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
           )}
         </div>
 
-        <div className="flex items-stretch border-l border-rule">
+        <div className="flex flex-1 flex-wrap items-stretch border-l border-rule sm:flex-none">
           <button
             type="button"
             onClick={() => toggleSound()}
             aria-pressed={sound}
-            className={`border-r border-rule px-3 py-2 text-[10px] tracking-[0.18em] uppercase ${
+            className={`flex-1 border-r border-rule px-3 py-2 text-[10px] tracking-[0.18em] whitespace-nowrap uppercase sm:flex-none ${
               sound ? "bg-steel text-brass" : "text-dim hover:bg-steel hover:text-ink"
             }`}
             title={
@@ -327,7 +349,7 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
           <button
             type="button"
             onClick={() => setHelpOpen(true)}
-            className="border-r border-rule px-3 py-2 text-[10px] tracking-[0.18em] text-dim uppercase hover:bg-steel hover:text-ink"
+            className="flex-1 border-r border-rule px-3 py-2 text-[10px] tracking-[0.18em] whitespace-nowrap text-dim uppercase hover:bg-steel hover:text-ink sm:flex-none"
             title="Every key at the table"
           >
             Guide ?
@@ -335,7 +357,7 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
           <button
             type="button"
             onClick={() => startTour("full")}
-            className="px-3 py-2 text-[10px] tracking-[0.18em] text-dim uppercase hover:bg-steel hover:text-ink"
+            className="flex-1 px-3 py-2 text-[10px] tracking-[0.18em] whitespace-nowrap text-dim uppercase hover:bg-steel hover:text-ink sm:flex-none"
           >
             Take the tour
           </button>
@@ -387,7 +409,66 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
                   <span className="text-[10px] text-faint">
                     standing idle <span className={idle > 0 ? "text-rust" : "text-dim"}>{idle}</span>
                   </span>
+                  <span className="text-[10px] text-faint">arrows walk the board</span>
                 </div>
+                {onTender.length > 0 ? (
+                  <div className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1 border-t border-rule pt-2">
+                    <span className="text-[10px] tracking-[0.14em] text-faint uppercase">
+                      on the public tender
+                    </span>
+                    {onTender.map((tile) => (
+                      <button
+                        key={tile.id}
+                        type="button"
+                        onClick={() => setSelectedTileId(tile.id)}
+                        title={`Plot ${tile.x}, ${tile.y} · open to envelopes this window`}
+                        className={`tabular border px-1.5 py-[1px] text-[10px] ${
+                          tile.id === selectedTileId
+                            ? "border-brass bg-plate text-ink"
+                            : "border-rule text-dim hover:border-brass hover:text-ink"
+                        }`}
+                      >
+                        {tile.x},{tile.y}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+
+                {/*
+                 * Forced sales. A court or a bank has put a standing plant on
+                 * the block at a reserve, and the envelopes close with the
+                 * tick, so the lots are listed beside the public tender rather
+                 * than left to be found on the board.
+                 */}
+                {state.lots.length > 0 ? (
+                  <div className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1 border-t border-rule pt-2">
+                    <span className="text-[10px] tracking-[0.14em] text-rust uppercase">
+                      on the block at a forced sale
+                    </span>
+                    {state.lots.map((lot) => {
+                      const tile = state.tiles.find((entry) => entry.id === lot.tileId);
+                      if (!tile) return null;
+                      return (
+                        <button
+                          key={lot.tileId}
+                          type="button"
+                          onClick={() => setSelectedTileId(tile.id)}
+                          title={`Plot ${tile.x}, ${tile.y} · reserve ${formatMoney(lot.reserve)} · ${
+                            lot.turnsLeft
+                          } windows left`}
+                          className={`tabular border px-1.5 py-[1px] text-[10px] ${
+                            tile.id === selectedTileId
+                              ? "border-rust bg-plate text-ink"
+                              : "border-rule text-dim hover:border-rust hover:text-ink"
+                          }`}
+                        >
+                          {tile.x},{tile.y}
+                          <span className="ml-1 text-faint">{formatMoney(lot.reserve)}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : null}
               </Panel>
             </div>
 
@@ -415,6 +496,14 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
           <div className="order-3 grid min-w-0 items-start gap-3 md:grid-cols-2 lg:order-none lg:col-start-2 lg:row-start-2 2xl:col-start-3 2xl:row-start-1 2xl:grid-cols-1">
             <div className="min-w-0">
               <ChatPanel code={code} state={state} meId={meId} />
+            </div>
+
+            <div data-tour="contracts" className="min-w-0">
+              <ContractsPanel state={state} meId={meId} onOrder={handleOrder} />
+            </div>
+
+            <div data-tour="record" className="min-w-0">
+              <RecordPane state={state} meId={meId} />
             </div>
 
             <div data-tour="inspector" className="min-w-0">
@@ -511,12 +600,17 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
         <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,340px)] 2xl:grid-cols-[minmax(0,1fr)_360px]">
           {/* A flex column, so the book keeps its own scroll region inside a
               column that is as tall as the panels beside it. */}
-          <div className="flex min-w-0 flex-col">
+          <div className="flex min-w-0 flex-col gap-3">
+            <MarketTape state={state} />
             <Exchange state={state} player={me} onOrder={handleOrder} />
           </div>
 
           <div className="min-w-0 space-y-3">
             <ChatPanel code={code} state={state} meId={meId} />
+
+            <ContractsPanel state={state} meId={meId} onOrder={handleOrder} />
+
+            <RecordPane state={state} meId={meId} />
 
             <Panel title="The desk this window" aside={`${optimistic.length} sealed`}>
               {optimistic.length === 0 ? (
@@ -592,23 +686,22 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
               </div>
             </Panel>
 
-            <Panel title="The Rag" aside={`${issues.length} issues kept`}>
-              <ul className="space-y-1">
-                {issues.slice(0, 6).map((issue) => (
-                  <li key={`${issue.turn}-${issue.createdAt}`} className="border-b border-rule/40 py-1">
-                    <p className="text-[11px] text-ink">{issue.headline}</p>
-                    <p className="text-[10px] text-faint">
-                      turn {issue.turn} · {issue.scandals.length} named
-                    </p>
-                  </li>
-                ))}
-                {issues.length === 0 ? (
-                  <p className="text-[11px] text-faint">The press has not run yet.</p>
-                ) : null}
-              </ul>
+            <Panel title="The Rag" aside={`${issues.length} editions kept`}>
+              <RagShelf
+                issues={issues}
+                current={issue ? issue.turn : null}
+                onOpen={openIssue}
+              />
               <div className="pt-2">
-                <Button tone="quiet" full onClick={() => setRagOpen(true)}>
-                  Open the latest issue
+                <Button
+                  tone="quiet"
+                  full
+                  disabled={!latestIssue}
+                  onClick={() => {
+                    if (latestIssue) openIssue(latestIssue);
+                  }}
+                >
+                  Read the latest edition
                 </Button>
               </div>
             </Panel>
@@ -616,7 +709,13 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
         </div>
       )}
 
-      <NewspaperModal issue={latestIssue} open={ragOpen} onOpenChange={setRagOpen} />
+      <NewspaperModal
+        issue={issue}
+        open={ragOpen}
+        onOpenChange={setRagOpen}
+        shelf={issues}
+        onSelect={openIssue}
+      />
       <HelpOverlay open={helpOpen} onOpenChange={setHelpOpen} />
 
       {/* The colophon: how the window runs, what the tick buys, and every key. */}
@@ -646,8 +745,9 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
               Every room one key away
             </dt>
             <dd className="mt-1.5 text-[10px] leading-relaxed text-dim">
-              Keys: d desk, f floor, m market, b board, o orders, k book, r the Rag, t the
-              walk-around, / to jump to an order by name, and ? for the whole card.
+              Keys: d desk, f floor, m market, b board, o orders, k book, l the Record, r the
+              Rag, t the walk-around, / to jump to an order by name, ? for the whole card, and the
+              arrow keys walk the board one plot at a time.
             </dd>
           </div>
           <div>
@@ -656,9 +756,10 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
             </dt>
             <dd className="mt-1.5 text-[10px] leading-relaxed text-dim">
               The wire on the right of either room carries the table's talk, so a pool, a supply
-              contract or a licence can be named before it is sealed. The sound switch turns the
-              bell at the close and the press for the paper on or off; both are silent until you
-              ask.
+              contract or a licence can be named before it is sealed. Under it, the contracts panel
+              waits for a signature before anything is owed, and the Record prints the window that
+              just closed. The sound switch turns the bell at the close and the press for the paper
+              on or off; both are silent until you ask.
             </dd>
           </div>
         </dl>

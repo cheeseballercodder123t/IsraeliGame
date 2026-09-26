@@ -2,7 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { CHARTER_LIST, charterOf } from "@/domain/constants";
+import { CHARTER_LIST, RESOURCE_LABEL, charterOf } from "@/domain/constants";
+import { windLabel } from "@/lib/labels";
 import type { Archetype } from "@/domain/types";
 import type { LobbyView } from "@/server/dashboard";
 import { claimSeatAction, fillWithBotsAction, startTableAction } from "@/server/actions";
@@ -99,6 +100,33 @@ export function LobbyViewPanel({ lobby }: { lobby: LobbyView }) {
             </div>
           ))}
         </dl>
+
+        {/*
+         * The seed and the country it draws. Two tables opened on the same
+         * seed are the same board, which is what a rematch on the same country
+         * hangs on, so the fingerprint is printed where a chair is taken.
+         */}
+        <div className="mt-4 border border-rule bg-pit px-3 py-2">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
+            <p className="text-[10px] tracking-[0.2em] text-faint uppercase">
+              The country this table draws
+            </p>
+            <p className="tabular text-[11px] text-brass">seed {lobby.seed}</p>
+          </div>
+          <p className="mt-1 text-[10px] leading-relaxed text-dim">
+            Wind <span className="text-ink">{windLabel(lobby.fingerprint.wind)}</span> · rim
+            deposits{" "}
+            <span className="text-ink">
+              {lobby.fingerprint.deposits.map((deposit) => RESOURCE_LABEL[deposit]).join(", ")}
+            </span>
+          </p>
+          <p className="mt-0.5 text-[10px] leading-relaxed text-dim">
+            Opening plots{" "}
+            <span className="tabular text-ink">
+              {lobby.fingerprint.holdings.map((plot) => `${plot.x},${plot.y}`).join(" ")}
+            </span>
+          </p>
+        </div>
 
         <p className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-faint">
           <span className={`flex items-baseline gap-1.5 ${live ? "text-bile" : "text-hazard"}`}>

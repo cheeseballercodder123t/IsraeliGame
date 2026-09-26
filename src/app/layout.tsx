@@ -1,10 +1,15 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Conglomerate: Gilded Age",
   description:
     "A live multiplayer industrial empire and corporate warfare simulator. One hundred and twenty one plots, seventy five commodities, sixty four orders, sealed windows resolved in the open, and a newspaper that prints what you did.",
+};
+
+/** The dark ground carries into the browser chrome rather than a white bar. */
+export const viewport: Viewport = {
+  themeColor: "#14110d",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

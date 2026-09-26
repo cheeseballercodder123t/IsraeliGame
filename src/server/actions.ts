@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { parseWinCondition } from "@/domain/endgame";
+import { ARCHETYPE_IDS } from "@/domain/content/ids";
 import type { Archetype, GameMode } from "@/domain/types";
 import { ensureSession, readSession, signOut } from "@/server/session";
 import {
@@ -21,8 +22,7 @@ import {
   startTable,
 } from "@/server/game";
 
-const ARCHETYPE_IDS: Archetype[] = ["TECH_MESSIAH", "ROBBER_BARON", "PE_VULTURE", "KLEPTOCRAT"];
-
+/** Every charter on the register can be taken, at founding and in a lobby. */
 function readArchetype(value: FormDataEntryValue | null): Archetype {
   const raw = typeof value === "string" ? value : "";
   return ARCHETYPE_IDS.includes(raw as Archetype) ? (raw as Archetype) : "ROBBER_BARON";
@@ -200,12 +200,19 @@ export async function postMessageAction(
   return result;
 }
 
-/** Opens the next era on a table whose books are shut. */
-export async function rematchAction(code: string): Promise<{ ok: boolean; error?: string }> {
+/**
+ * Opens the next era on a table whose books are shut. With `sameSeed` the
+ * country is drawn again from the same seed, so the rematch is played on the
+ * board the houses already know.
+ */
+export async function rematchAction(
+  code: string,
+  sameSeed = false,
+): Promise<{ ok: boolean; error?: string }> {
   const session = await readSession();
   if (!session) return { ok: false, error: "No session." };
 
-  const result = await rematch(code.toUpperCase(), session.userId);
+  const result = await rematch(code.toUpperCase(), session.userId, { sameSeed });
   if (result.ok) revalidatePath(`/table/${code.toUpperCase()}`);
   return result;
 }

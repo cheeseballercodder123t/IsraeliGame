@@ -23,15 +23,22 @@ export default function NotFound() {
             stop answering. Set the Supabase keys in `.env.local` to keep tables between restarts.
           </p>
         ) : null}
-        <div className="mt-6 flex flex-wrap items-center gap-3">
+        <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-3">
           <Link
             href="/"
-            className="border border-edge bg-plate px-3 py-1.5 text-[11px] tracking-[0.14em] text-ink uppercase hover:border-brass hover:bg-tar"
+            className="letterpress-sm border-2 border-brass bg-brass px-3.5 py-2 text-[11px] tracking-[0.16em] text-void uppercase transition-transform duration-150 hover:-translate-y-[2px] active:translate-y-0"
           >
             Back to the lobby
           </Link>
-          <span className="text-[10px] text-faint">
-            Or open a table of your own and send the code to the houses you want at it.
+          <Link
+            href="/#found"
+            className="border border-edge bg-plate px-3.5 py-2 text-[11px] tracking-[0.14em] text-ink uppercase transition-transform duration-150 hover:-translate-y-[2px] hover:border-dim active:translate-y-0"
+          >
+            Open a table of your own
+          </Link>
+          <span className="max-w-sm text-[10px] leading-relaxed text-faint">
+            A table code is printed on the lobby of the table that answers to it, and the house that
+            opened it can send it on.
           </span>
         </div>
       </div>

@@ -1,8 +1,9 @@
 # Conglomerate: Gilded Age
 
 An asynchronous industrial empire and corporate warfare simulator. One hundred and twenty one plots
-on an eleven by eleven board, fifteen lots on sealed tender every window, seventy five commodities
-and seventy five plants, sixty four orders on the card, and a newspaper that prints what you did.
+on an eleven by eleven board, fifteen lots on sealed tender every window, forced sales when a house
+fails, seventy five commodities and seventy five plants, sixty seven orders on the card, supply
+contracts that are not owed until both desks sign, and a newspaper that prints what you did.
 
 The game runs immediately with no accounts and no API keys. Supabase credentials and a language
 model key are both optional and both activate automatically when present.
@@ -12,13 +13,13 @@ model key are both optional and both activate automatically when present.
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # 213 engine tests
+npm test           # 240 engine tests
 npm run typecheck
 npm run build
 ```
 
-Open the lobby, name a director, pick a charter from twenty, choose two to twelve seats, and open a
-table. The empty chairs fill from a roster of twenty five automated directors drawn so no two houses
+Open the lobby, name a director, pick a charter from twenty six, choose two to twelve seats, and open
+a table. The empty chairs fill from a roster of thirty one automated directors drawn so no two houses
 at a table share a charter while the bench lasts. The development desk at the bottom of the centre
 column closes the twenty four hour window on demand, which is how a match is played through in
 minutes.
@@ -125,8 +126,8 @@ million, and the exposure formula is
 counsel has bought off. A caught audit confiscates the balance, fines the same figure again, zeroes
 your standing and freezes your office for one window. Bonds cap at sixty percent of the asset book at
 four percent a window, and three windows of unpaid paper seizes a plant. Chapter 11 clears every
-debt, voids your short book, returns every short margin and hands the cheapest plant to the public
-auction. Insurance settles at one point two times appraised value if you cancel maintenance first,
+debt, voids your short book, returns every short margin and puts the cheapest plant on the block at a
+court reserve. Insurance settles at one point two times appraised value if you cancel maintenance first,
 and the adjuster has a thirty percent nose for it.
 
 **Tenders.** Fifteen lots go up every window, dealt across the bands so a window is never all rim and
@@ -135,7 +136,22 @@ envelope, you pay your own number, and nothing clears the ninetieth thousand. A 
 plot when it clears the defender's escrow plus the appraised value, with the sale price going to the
 defender either way.
 
-**The card.** Sixty four orders stand on the desk in six categories: fifteen planning, eleven
+**Forced sales.** A house that files for protection, or that lets three windows of paper go unpaid,
+loses a deed either way, but the table sets the price. The court or the bank lists the plant at
+forty five percent of appraised value for three windows, and the highest sealed envelope above the
+reserve buys a standing plant rather than bare ground: the deeds list it on the board and the
+inspector says what is on the block. The seller keeps the proceeds less a six percent court cut, and
+a bank sale clears the debtor's paper before the remainder reaches the debtor's cash. An envelope
+below the reserve is dropped, the seller's own envelope is ignored, and if nobody meets the reserve
+the works come down and the ground goes back to the public tender.
+
+**Contracts on the wire.** A supply contract is bilateral. The seller writes the terms as an offer,
+the buyer signs or refuses them from the contracts panel, and nothing is owed until the signature
+lands. Delivery runs every window at the agreed price, a missed delivery is paid for at twice the
+gap, and an unsigned offer comes off the wire after three windows. Houses can also seal a supply
+contract directly, which is what the desk's own order does.
+
+**The card.** Sixty seven orders stand on the desk in six categories: fifteen planning, fourteen
 commerce, ten capital, nine labor, eight city hall and eleven covert. Every one of them is a data
 entry in the order catalog, so the desk builds its own controls, the schema validator accepts it, and
 the tick runs it without any of those three knowing what a derrick is.
@@ -204,6 +220,20 @@ live price to one part base as the anchor, which keeps the mean reversion withou
 everyone route offshore. Here routing requires at least one license, so the slider is inert for a
 house that has none, and the Kleptocrat's head start means something.
 
+### The Record and the share card
+
+Every seal is filed with the window it was made in, so the Record can say who filed before the bell.
+`src/domain/record.ts` reads that ledger and the tick's own event log and files the window across the
+same fourteen desks the paper uses, with the same wire lines, so the Record and the Rag can never
+disagree about what happened. It also plates the net worth thresholds each house has crossed.
+
+`src/app/table/[code]/opengraph-image.tsx` draws the share card with `next/og`: the table code, the
+clock it runs on, the condition that closes the era and the top of the register, in the same palette
+as the board. Pasting a table link into a chat shows the table rather than a blank rectangle.
+
+Lobby cards print the seed and what it draws (the wind, the rim deposits and the opening plots), and
+a rematch can be opened on the same seed, which plays the same country again.
+
 ### The newspaper
 
 `src/server/rag/template.ts` writes the Rag from the turn's event log with a seeded generator, so
@@ -229,14 +259,15 @@ them without touching the rest of the server layer.
 
 ### The tests
 
-Twenty five files, two hundred and thirteen tests. Geometry and the catalogs are checked against
+Twenty seven files, two hundred and forty tests. Geometry and the catalogs are checked against
 their own contents, so a catalog edit that breaks an assumption fails a test rather than a screen:
-seventy five commodities, seventy five plants, twenty charters, sixty four orders, a hundred and
-eleven event kinds, and every sprite placement inside its sheet. The table's own rules are pinned
+seventy five commodities, seventy five plants, twenty six charters, sixty seven orders, a hundred and
+seventeen event kinds, and every sprite placement inside its sheet. The table's own rules are pinned
 the same way: the late seal hold, the wire's length and its refusals, the countdown ring's
 arithmetic, the open tables list's clock, and the ending from the limit window through the closing
 edition to the rematch. The engine tests cover the exchange, freight, production, waste,
-tenders, raids, bonds, audits, arson, chapter 11 and a full turn replay. `tests/tick.test.ts` runs the
+tenders, forced sales, the contract wire, the Record, raids, bonds, audits, arson, chapter 11 and a
+full turn replay. `tests/tick.test.ts` runs the
 same input twice and asserts a byte identical event log, and `tests/rag.test.ts` asserts the paper
 prints the same broadsheet twice from the same ledger. Two of the files read the interface rather
 than the engine: `tests/render.test.ts` paints the strip, the register and the board on the server

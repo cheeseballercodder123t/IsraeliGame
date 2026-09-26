@@ -18,6 +18,7 @@ import {
   parseTileKey,
   ringCensus,
   ringOf,
+  stepCoord,
   tileKey,
 } from "@/domain/grid";
 import { firstOfRing, freshState, tileAt } from "./helpers";
@@ -120,5 +121,34 @@ describe("the eleven by eleven board", () => {
     const state = freshState();
     expect(firstOfRing(state, 0).ring).toBe(0);
     expect(tileAt(state, CENTER, CENTER).terrain).toBe("CROWN");
+  });
+
+  it("walks one plot at a time for the arrow keys, and holds the frame", () => {
+    const middle = { x: CENTER, y: CENTER };
+    expect(stepCoord(middle, "UP")).toEqual({ x: CENTER, y: CENTER - 1 });
+    expect(stepCoord(middle, "DOWN")).toEqual({ x: CENTER, y: CENTER + 1 });
+    expect(stepCoord(middle, "LEFT")).toEqual({ x: CENTER - 1, y: CENTER });
+    expect(stepCoord(middle, "RIGHT")).toEqual({ x: CENTER + 1, y: CENTER });
+
+    // A corner cannot be walked off the board: the step stays where it stands.
+    const corner = { x: 0, y: 0 };
+    expect(stepCoord(corner, "UP")).toEqual(corner);
+    expect(stepCoord(corner, "LEFT")).toEqual(corner);
+    expect(stepCoord(corner, "RIGHT")).toEqual({ x: 1, y: 0 });
+    const far = { x: BOARD - 1, y: BOARD - 1 };
+    expect(stepCoord(far, "DOWN")).toEqual(far);
+    expect(stepCoord(far, "RIGHT")).toEqual(far);
+
+    // Every step off a legal plot lands on a legal plot, for the whole board.
+    const steps = ["UP", "DOWN", "LEFT", "RIGHT"] as const;
+    for (let x = 0; x < BOARD; x += 1) {
+      for (let y = 0; y < BOARD; y += 1) {
+        for (const step of steps) {
+          const landed = stepCoord({ x, y }, step);
+          expect(inBounds(landed.x, landed.y), `${x},${y} ${step}`).toBe(true);
+          expect(distance({ x, y }, landed)).toBeLessThanOrEqual(1);
+        }
+      }
+    }
   });
 });

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { auditRiskOf } from "@/domain/finance";
 import { charterOf } from "@/domain/constants";
 import { netWorthOf } from "@/domain/valuation";
-import { winConditionLabel } from "@/domain/endgame";
+import { winConditionLabel, winProgressLabel } from "@/domain/endgame";
 import {
   SHORT_WINDOW_SECONDS,
   windowClock,
@@ -314,8 +314,11 @@ export function StatusStrip({
               {finished ? "the books are shut" : windowClock(remaining, windowSeconds)}
             </p>
             <p className="tabular mt-0.5 text-[10px] text-faint">
-              {me ? `${mineSealed} sealed` : `${sealedTotal} sealed at the table`} · win:{" "}
-              {winConditionLabel(state.game.winCondition)}
+              {me ? `${mineSealed} sealed` : `${sealedTotal} sealed at the table`} ·{" "}
+              {winProgressLabel(state)}
+            </p>
+            <p className="text-[9px] text-faint">
+              win: {winConditionLabel(state.game.winCondition)}
             </p>
             {held && !finished ? (
               <p
@@ -341,8 +344,12 @@ export function StatusStrip({
         </div>
       </div>
 
-      {/* The register rail: every house, its colour, its seal count and its lamp. */}
-      <div className="flex flex-wrap items-stretch border-t border-rule bg-pit">
+      {/*
+       * The register rail: every house, its colour, its seal count and its lamp.
+       * On a phone it reads as one scrollable strip rather than four stacked
+       * rows, so the collar across the top of the table stays short.
+       */}
+      <div className="flex flex-nowrap items-stretch overflow-x-auto border-t border-rule bg-pit sm:flex-wrap sm:overflow-visible">
         {state.players.map((player) => {
           const sealed = sealedBy(player.id);
           const leads = (worth.get(player.id) ?? 0) >= best && best > 0;

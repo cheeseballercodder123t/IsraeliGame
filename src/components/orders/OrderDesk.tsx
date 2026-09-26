@@ -18,7 +18,7 @@ import {
   type OrderField,
   type OrderSpec,
 } from "@/domain/orders/catalog";
-import { formatMoney, formatPercent, formatPrice } from "@/domain/format";
+import { formatMoney, formatPercent, formatPrice, formatUnits } from "@/domain/format";
 import type {
   GameState,
   LaborModel,
@@ -79,6 +79,8 @@ function initialValue(field: OrderField, state: GameState, player: Player): stri
       const rival = state.players.find((other) => other.id !== player.id);
       return rival ? rival.id : player.id;
     }
+    case "OFFER":
+      return state.offers.find((offer) => offer.buyerId === player.id)?.id ?? "";
     case "RAIL":
       return state.rails[0]?.id ?? "";
     default:
@@ -238,6 +240,34 @@ function FieldControl({
               {other.name} · {formatMoney(other.cash)} clear
             </option>
           ))}
+      </select>
+    );
+  }
+
+  if (field.kind === "OFFER") {
+    const addressed = state.offers.filter((offer) => offer.buyerId === player.id);
+    if (addressed.length === 0) {
+      return (
+        <p className="border border-rule bg-steel px-1.5 py-[3px] text-[10px] text-faint">
+          Nothing on the wire for you. Offers you receive appear here.
+        </p>
+      );
+    }
+    return (
+      <select
+        className={shell}
+        value={String(value)}
+        onChange={(event) => onChange(event.target.value)}
+      >
+        {addressed.map((offer) => {
+          const seller = state.players.find((other) => other.id === offer.sellerId);
+          return (
+            <option key={offer.id} value={offer.id}>
+              {seller?.name ?? "a rival"} · {formatUnits(offer.quantity)} a turn ·{" "}
+              {formatPrice(offer.price)} · closes turn {offer.expiresTurn}
+            </option>
+          );
+        })}
       </select>
     );
   }

@@ -189,7 +189,7 @@ describe("the capital markets", () => {
 });
 
 describe("distress", () => {
-  it("clears the debt and surrenders the cheapest plant", () => {
+  it("clears the debt and puts the cheapest plant on the block", () => {
     const state = solventState();
     const second = state.tiles.find(
       (t) => t.terrain === "DEPOSIT" && t.deposit && t.ownerId === null,
@@ -209,10 +209,19 @@ describe("distress", () => {
     expect(state.convertibles).toHaveLength(0);
     expect(log.some((event) => event.kind === "CHAPTER_11")).toBe(true);
 
-    const surrendered = state.tiles.filter((t) => t.onTender && t.recipeId === "NONE");
-    expect(surrendered.length).toBeGreaterThan(0);
+    // The court lists the works rather than giving them away: the deed stays
+    // in the filer's book while the envelopes are open, and the plant stays
+    // standing for whoever meets the reserve.
+    expect(state.lots).toHaveLength(1);
+    expect(log.some((event) => event.kind === "LOT_OPENED")).toBe(true);
+    const lot = state.lots[0];
+    const listed = state.tiles.find((t) => t.id === lot.tileId)!;
+    expect(listed.ownerId).toBe("p1");
+    expect(listed.recipeId).not.toBe("NONE");
+    expect(lot.reserve).toBeGreaterThan(0);
+    expect(lot.reason).toBe("COURT");
     const mine = state.tiles.filter((t) => t.ownerId === "p1" && t.recipeId !== "NONE");
-    expect(mine).toHaveLength(1);
+    expect(mine).toHaveLength(2);
   });
 
   it("pays a policy once and only to the house that bought it", () => {

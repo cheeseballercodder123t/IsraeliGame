@@ -70,6 +70,16 @@ export type Order =
       price: number;
       turns: number;
     }
+  | {
+      type: "PROPOSE_CONTRACT";
+      playerId: string;
+      resource: Resource;
+      quantity: number;
+      price: number;
+      turns: number;
+    }
+  | { type: "SIGN_CONTRACT"; offerId: string }
+  | { type: "DECLINE_CONTRACT"; offerId: string }
   | { type: "FILE_PATENT"; recipeId: RecipeId }
   | { type: "LICENSE_PATENT"; playerId: string; recipeId: RecipeId; price: number }
   | { type: "CHALLENGE_PATENT"; playerId: string; recipeId: RecipeId }
@@ -363,6 +373,51 @@ export interface SupplyContract {
   shortfall: number;
 }
 
+/**
+ * Paper on the wire waiting for a signature. A supply contract is a bilateral
+ * instrument, so it sits unsigned until the counterparty seals their own name
+ * to it, and it lapses on its own if nobody does.
+ */
+export interface ContractOffer {
+  id: string;
+  /** The house that would deliver. */
+  sellerId: string;
+  /** The house that has to sign before anything is owed. */
+  buyerId: string;
+  resource: Resource;
+  quantity: number;
+  price: number;
+  turns: number;
+  createdTurn: number;
+  expiresTurn: number;
+}
+
+/**
+ * A plot a court or a bank has put up for sealed bids. The deed stays in the
+ * seller's name until an envelope clears the reserve, so a failing house is
+ * not stripped of a plant the table still wants to buy.
+ */
+export interface DistressedLot {
+  tileId: string;
+  sellerId: string;
+  /** Envelopes below this are dropped, the way a public lot has a reserve. */
+  reserve: number;
+  /** Windows the lot stays on the block before the public book takes it. */
+  turnsLeft: number;
+  reason: "COURT" | "BANK";
+}
+
+/**
+ * One seal on the window: who filed, and when. The tick reads the orders, but
+ * the Record reads these, because an order that was pulled before the close
+ * still says a desk was working. Capped in the same spirit as the wire.
+ */
+export interface SealRecord {
+  playerId: string;
+  turn: number;
+  at: string;
+}
+
 export interface Patent {
   id: string;
   recipeId: RecipeId;
@@ -473,6 +528,10 @@ export interface GameState {
   shorts: ShortPosition[];
   futures: FuturesContract[];
   supplies: SupplyContract[];
+  /** Supply contracts offered on the wire and not yet signed. */
+  offers: ContractOffer[];
+  /** Plots on the block at the court's reserve, awaiting sealed envelopes. */
+  lots: DistressedLot[];
   patents: Patent[];
   insurance: InsurancePolicy[];
   cartels: CartelPact[];
@@ -482,6 +541,8 @@ export interface GameState {
   convertibles: ConvertibleNote[];
   events: GameEvent[];
   queue: QueuedOrder[];
+  /** Every seal this era has taken, oldest first and capped. */
+  seals: SealRecord[];
   /** The wire: lines said at the table, oldest first and capped. */
   messages: ChatMessage[];
   /** Scandal lines the paper may print, cleared each tick. */

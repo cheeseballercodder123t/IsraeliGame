@@ -107,6 +107,10 @@ export function advanceInstruments(
   }
   state.supplies = state.supplies.filter((s) => turn < s.expiresTurn);
 
+  // Unsigned offers come off the wire when their window passes, so the table
+  // is never holding a proposal the buyer stopped reading three turns ago.
+  state.offers = state.offers.filter((offer) => turn < offer.expiresTurn);
+
   // Patents pay the holder a slice of a rival's output, and a contested
   // patent survives the court about half the time.
   for (const patent of state.patents) {

@@ -136,9 +136,9 @@ describe("the board", () => {
 });
 
 describe("the order card", () => {
-  it("lists sixty four orders across six categories", () => {
-    expect(Object.keys(ORDER_SPECS).length).toBe(64);
-    expect(ORDER_SPEC_LIST.length).toBe(64);
+  it("lists sixty seven orders across six categories", () => {
+    expect(Object.keys(ORDER_SPECS).length).toBe(67);
+    expect(ORDER_SPEC_LIST.length).toBe(67);
     const byCategory: Record<string, number> = {};
     for (const spec of ORDER_SPEC_LIST) {
       byCategory[spec.category] = (byCategory[spec.category] ?? 0) + 1;
@@ -151,7 +151,7 @@ describe("the order card", () => {
     }
     expect(byCategory).toEqual({
       PLANNING: 15,
-      COMMERCE: 11,
+      COMMERCE: 14,
       CAPITAL: 10,
       LABOR: 9,
       POLITICS: 8,
@@ -169,9 +169,9 @@ describe("the order card", () => {
 });
 
 describe("the register and the wire", () => {
-  it("keeps twenty charters, each with a distinct name and three perks", () => {
-    expect(CHARTER_LIST.length).toBe(20);
-    expect(Object.keys(CHARTERS).length).toBe(20);
+  it("keeps twenty six charters, each with a distinct name and three perks", () => {
+    expect(CHARTER_LIST.length).toBe(26);
+    expect(Object.keys(CHARTERS).length).toBe(26);
     const names = new Set<string>();
     for (const charter of CHARTER_LIST) {
       expect(charter.perks.length).toBeGreaterThanOrEqual(3);
@@ -180,9 +180,18 @@ describe("the register and the wire", () => {
     }
   });
 
-  it("knows a hundred and eleven events and files each one under a section", () => {
-    expect(EVENT_KINDS.length).toBe(111);
-    expect(Object.keys(EVENT_SPECS).length).toBe(111);
+  it("names only real processes in a charter's yield table", () => {
+    for (const charter of CHARTER_LIST) {
+      for (const id of Object.keys(charter.modifiers.yieldByRecipe ?? {})) {
+        expect(RECIPES[id as keyof typeof RECIPES], `${charter.id} yields from nothing`).toBeTruthy();
+        expect(id).not.toBe("NONE");
+      }
+    }
+  });
+
+  it("knows a hundred and seventeen events and files each one under a section", () => {
+    expect(EVENT_KINDS.length).toBe(117);
+    expect(Object.keys(EVENT_SPECS).length).toBe(117);
     expect(SECTIONS.length).toBe(14);
     expect(Object.keys(SECTION_TITLE).length).toBe(14);
     for (const kind of EVENT_KINDS) {

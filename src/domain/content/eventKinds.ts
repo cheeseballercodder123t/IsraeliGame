@@ -14,6 +14,9 @@ export const EVENT_KINDS = [
   "TENDER_OPEN",
   "AUCTION_WON",
   "AUCTION_UNSOLD",
+  "LOT_OPENED",
+  "LOT_WON",
+  "LOT_LAPSED",
   "TAKEOVER",
   "DEED_SOLD",
   "GIFT",
@@ -50,6 +53,9 @@ export const EVENT_KINDS = [
   "SUPPLY_SIGNED",
   "SUPPLY_FILLED",
   "SUPPLY_LAPSED",
+  "CONTRACT_PROPOSED",
+  "CONTRACT_SIGNED",
+  "CONTRACT_DECLINED",
   "PATENT_FILED",
   "PATENT_CHALLENGED",
   "PATENT_ROYALTY",
@@ -177,6 +183,9 @@ export const SECTION_OVERRIDES: Partial<Record<EventKind, EventSection>> = {
   TENDER_OPEN: "DEEDS",
   AUCTION_WON: "DEEDS",
   AUCTION_UNSOLD: "DEEDS",
+  LOT_OPENED: "DEEDS",
+  LOT_WON: "DEEDS",
+  LOT_LAPSED: "DEEDS",
   TAKEOVER: "DEEDS",
   DEED_SOLD: "DEEDS",
   GIFT: "DEEDS",
@@ -232,6 +241,9 @@ export const SECTION_OVERRIDES: Partial<Record<EventKind, EventSection>> = {
   SUPPLY_SIGNED: "FLOOR",
   SUPPLY_FILLED: "FLOOR",
   SUPPLY_LAPSED: "FLOOR",
+  CONTRACT_PROPOSED: "FLOOR",
+  CONTRACT_SIGNED: "FLOOR",
+  CONTRACT_DECLINED: "FLOOR",
   SHORTAGE: "FLOOR",
   BANKRUPT: "NOTICES",
   CHAPTER_11: "NOTICES",
@@ -315,6 +327,15 @@ export const EVENT_SPECS: Record<EventKind, EventSpec> = {
   ),
   AUCTION_UNSOLD: spec("AUCTION_UNSOLD", "RECORD", "Tender", (e, ctx) =>
     `${ctx.tile(e.tileId)} draws no envelope and stays with the public book.`,
+  ),
+  LOT_OPENED: spec("LOT_OPENED", "RECORD", "Forced sale", (e, ctx) =>
+    `The court puts ${ctx.tile(e.tileId)} of ${ctx.name(e.playerId)} on the block at a reserve of ${money(e.amount)}, envelopes open for ${e.count ?? 0} windows.`,
+  ),
+  LOT_WON: spec("LOT_WON", "RECORD", "Forced sale", (e, ctx) =>
+    `${ctx.name(e.playerId)} takes ${ctx.tile(e.tileId)} off ${ctx.name(e.targetId)} at the forced sale for ${money(e.amount)}.`,
+  ),
+  LOT_LAPSED: spec("LOT_LAPSED", "RECORD", "Forced sale", (e, ctx) =>
+    `${ctx.tile(e.tileId)} draws no envelope and the court hands it to the public book.`,
   ),
   TAKEOVER: spec("TAKEOVER", "RECORD", "Deeds", (e, ctx) =>
     e.success
@@ -423,6 +444,15 @@ export const EVENT_SPECS: Record<EventKind, EventSpec> = {
   ),
   SUPPLY_LAPSED: spec("SUPPLY_LAPSED", "FLOOR", "Contracts", (e, ctx) =>
     `${ctx.name(e.playerId)} fails to deliver ${units(e.quantity)} of ${ctx.resource(e.resource)} and pays the penalty.`,
+  ),
+  CONTRACT_PROPOSED: spec("CONTRACT_PROPOSED", "FLOOR", "Contracts", (e, ctx) =>
+    `${ctx.name(e.playerId)} offers ${ctx.name(e.targetId)} ${units(e.quantity)} of ${ctx.resource(e.resource)} a turn at ${money(e.amount)} for ${e.count ?? 0} turns, unsigned.`,
+  ),
+  CONTRACT_SIGNED: spec("CONTRACT_SIGNED", "FLOOR", "Contracts", (e, ctx) =>
+    `${ctx.name(e.targetId)} signs with ${ctx.name(e.playerId)}: ${units(e.quantity)} of ${ctx.resource(e.resource)} a turn at ${money(e.amount)} for ${e.count ?? 0} turns.`,
+  ),
+  CONTRACT_DECLINED: spec("CONTRACT_DECLINED", "FLOOR", "Contracts", (e, ctx) =>
+    `${ctx.name(e.targetId)} declines ${ctx.name(e.playerId)}'s offer on ${ctx.resource(e.resource)} and the paper comes back unsigned.`,
   ),
   PATENT_FILED: spec("PATENT_FILED", "FLOOR", "Patents", (e, ctx) =>
     `${ctx.name(e.playerId)} files on the ${ctx.recipe(e.recipeId)} process.`,

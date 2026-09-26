@@ -40,11 +40,11 @@ export function EraClosing({
   const inCourt = state.players.filter((player) => player.isBankrupt).length;
   const people = state.players.filter((player) => !player.isBot).length;
 
-  const reopen = () => {
+  const reopen = (sameSeed = false) => {
     setBusy(true);
     setFailure(null);
     startTransition(async () => {
-      const result = await rematchAction(code);
+      const result = await rematchAction(code, sameSeed);
       if (!result.ok) setFailure(result.error ?? "The table would not open again.");
       setBusy(false);
     });
@@ -90,15 +90,20 @@ export function EraClosing({
         <div className="p-3">
           <HousesRegister state={state} meId={meId} />
           <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-rule pt-3">
-            <Button tone="brass" disabled={busy} onClick={reopen}>
+            <Button tone="brass" disabled={busy} onClick={() => reopen(false)}>
               {busy ? "Opening" : "Rematch on this table"}
+            </Button>
+            <Button tone="steel" disabled={busy} onClick={() => reopen(true)}>
+              Same country again
             </Button>
             <Button tone="steel" onClick={onOpenRag}>
               Read the closing edition
             </Button>
             <p className="max-w-xl text-[10px] leading-relaxed text-faint">
               A rematch keeps the code, the houses, the clock and the condition. The board, the
-              books and the wire start again, and the paper goes back to turn one.
+              books and the wire start again, and the paper goes back to turn one. Reopening on the
+              same seed draws the same country: seed {state.game.seed}, deposits and opening plots
+              included.
             </p>
           </div>
           {failure ? (

@@ -4,6 +4,8 @@ import {
   INSURANCE_MAX_TURNS,
   INSURANCE_PAYOUT_MULTIPLIER,
   INSURANCE_PREMIUM_RATE,
+  OFFER_CAP,
+  OFFER_TURNS,
   PATENT_CHALLENGE_COST,
   PATENT_FILING_COST,
   RECIPES,
@@ -160,6 +162,100 @@ export const supplyContract: OrderHandler = (ctx, actor, raw) => {
     quantity: raw.quantity,
     amount: raw.price,
     count: turns,
+  });
+};
+
+/**
+ * Puts a supply contract on the wire. Nothing is owed until the other house
+ * signs it, which is the difference between this and sealing the contract
+ * yourself: the paper is bilateral and both desks have to touch it.
+ */
+export const proposeContract: OrderHandler = (ctx, actor, raw) => {
+  if (raw.type !== "PROPOSE_CONTRACT") return;
+  const buyer = playerById(ctx, raw.playerId);
+  if (!buyer || buyer.id === actor.id) return;
+  if (raw.quantity <= 0 || raw.price <= 0) return;
+  const turns = Math.max(1, Math.min(SUPPLY_CONTRACT_MAX_TURNS, Math.round(raw.turns)));
+  const mine = ctx.state.offers.filter((offer) => offer.sellerId === actor.id);
+  if (mine.length >= OFFER_CAP) return;
+  if (
+    mine.some((offer) => offer.buyerId === buyer.id && offer.resource === raw.resource)
+  ) {
+    return;
+  }
+  ctx.state.offers = ctx.state.offers.filter((offer) => offer.expiresTurn > ctx.turn);
+  ctx.state.offers.push({
+    id: `off-${ctx.turn}-${ctx.state.offers.length}`,
+    sellerId: actor.id,
+    buyerId: buyer.id,
+    resource: raw.resource,
+    quantity: raw.quantity,
+    price: raw.price,
+    turns,
+    createdTurn: ctx.turn,
+    expiresTurn: ctx.turn + OFFER_TURNS,
+  });
+  ctx.state.events.push({
+    kind: "CONTRACT_PROPOSED",
+    turn: ctx.turn,
+    playerId: actor.id,
+    targetId: buyer.id,
+    resource: raw.resource,
+    quantity: raw.quantity,
+    amount: raw.price,
+    count: turns,
+  });
+};
+
+/** The buyer's signature. The signed terms are the seller's, unaltered. */
+export const signContract: OrderHandler = (ctx, actor, raw) => {
+  if (raw.type !== "SIGN_CONTRACT") return;
+  const offer = ctx.state.offers.find(
+    (entry) => entry.id === raw.offerId && entry.buyerId === actor.id,
+  );
+  if (!offer) return;
+  ctx.state.offers = ctx.state.offers.filter((entry) => entry.id !== offer.id);
+  const seller = playerById(ctx, offer.sellerId);
+  if (!seller) return;
+  ctx.state.supplies.push({
+    id: `sup-${ctx.turn}-${ctx.state.supplies.length}`,
+    sellerId: seller.id,
+    buyerId: actor.id,
+    resource: offer.resource,
+    quantity: offer.quantity,
+    price: offer.price,
+    signedTurn: ctx.turn,
+    expiresTurn: ctx.turn + offer.turns,
+    shortfall: 0,
+  });
+  ctx.state.events.push({
+    kind: "CONTRACT_SIGNED",
+    turn: ctx.turn,
+    playerId: seller.id,
+    targetId: actor.id,
+    resource: offer.resource,
+    quantity: offer.quantity,
+    amount: offer.price,
+    count: offer.turns,
+  });
+};
+
+/** Sending the paper back unsigned, so the seller can quote somebody else. */
+export const declineContract: OrderHandler = (ctx, actor, raw) => {
+  if (raw.type !== "DECLINE_CONTRACT") return;
+  const offer = ctx.state.offers.find(
+    (entry) => entry.id === raw.offerId && entry.buyerId === actor.id,
+  );
+  if (!offer) return;
+  ctx.state.offers = ctx.state.offers.filter((entry) => entry.id !== offer.id);
+  ctx.state.events.push({
+    kind: "CONTRACT_DECLINED",
+    turn: ctx.turn,
+    playerId: offer.sellerId,
+    targetId: actor.id,
+    resource: offer.resource,
+    quantity: offer.quantity,
+    amount: offer.price,
   });
 };
 
@@ -384,6 +480,9 @@ export const DEAL_HANDLERS: Record<string, OrderHandler> = {
   FUTURES_LONG: futuresOrder,
   FUTURES_SHORT: futuresOrder,
   SUPPLY_CONTRACT: supplyContract,
+  PROPOSE_CONTRACT: proposeContract,
+  SIGN_CONTRACT: signContract,
+  DECLINE_CONTRACT: declineContract,
   FILE_PATENT: filePatent,
   LICENSE_PATENT: licensePatent,
   CHALLENGE_PATENT: challengePatent,

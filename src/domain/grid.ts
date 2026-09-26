@@ -58,6 +58,24 @@ export function neighbours(tiles: Tile[], tile: Tile): Tile[] {
   return tiles.filter((other) => other.id !== tile.id && distance(tile, other) === 1);
 }
 
+/** The four ways a hand can walk the board, one plot at a time. */
+export type BoardStep = "UP" | "DOWN" | "LEFT" | "RIGHT";
+
+/**
+ * One plot over, clamped to the frame. The inspector, the arrow keys and the
+ * coordinate in a plot's title all have to agree on where a step lands, so the
+ * arithmetic lives here rather than in the canvas.
+ */
+export function stepCoord(from: Coord, step: BoardStep): Coord {
+  const next: Coord = {
+    UP: { x: from.x, y: from.y - 1 },
+    DOWN: { x: from.x, y: from.y + 1 },
+    LEFT: { x: from.x - 1, y: from.y },
+    RIGHT: { x: from.x + 1, y: from.y },
+  }[step];
+  return inBounds(next.x, next.y) ? next : { x: from.x, y: from.y };
+}
+
 export function orthogonalNeighbours(x: number, y: number): Coord[] {
   const raw: Coord[] = [
     { x: x + 1, y },
