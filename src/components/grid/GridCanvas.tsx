@@ -21,6 +21,15 @@ const ART = 64;
 const GAP = CELL - ART;
 
 const BOARD_PX = BOARD * CELL;
+/**
+ * The drafting gutter. Coordinates are printed along the top and the left of
+ * the drawn board, so a plot is named the same way on the screen as it is in
+ * the inspector and on the wire.
+ */
+const AXIS = 20;
+const TOTAL_PX = BOARD_PX + AXIS * 2;
+/** Length of a corner mark on the drawn frame. */
+const MARK = 16;
 
 /**
  * Below this the tile labels stop being legible at their drawn size, so the
@@ -80,6 +89,27 @@ function Glyph({ tile, color }: { tile: Tile; color: string }) {
   );
 }
 
+/** One L shaped mark, so the board is framed the way a drawing is framed. */
+function Corner({ x, y, at }: { x: number; y: number; at: "tl" | "tr" | "bl" | "br" }) {
+  const brass = "2px solid var(--color-brass)";
+  return (
+    <span
+      className="pointer-events-none absolute"
+      style={{
+        left: x,
+        top: y,
+        width: MARK,
+        height: MARK,
+        borderTop: at === "tl" || at === "tr" ? brass : undefined,
+        borderBottom: at === "bl" || at === "br" ? brass : undefined,
+        borderLeft: at === "tl" || at === "bl" ? brass : undefined,
+        borderRight: at === "tr" || at === "br" ? brass : undefined,
+      }}
+      aria-hidden
+    />
+  );
+}
+
 export interface GridCanvasProps {
   state: GameState;
   selectedTileId: string | null;
@@ -93,8 +123,8 @@ export function GridCanvas({ state, selectedTileId, onSelect, highlightPlayerId 
   const [scale, setScale] = useState(1);
 
   // The board is drawn at one pitch and scaled as a whole, so a laptop that
-  // cannot give it eight hundred and fourteen pixels still sees all one
-  // hundred and twenty one plots instead of a strip of them.
+  // cannot give it the drawn frame still sees all one hundred and twenty one
+  // plots instead of a strip of them.
   useEffect(() => {
     const element = holder.current;
     if (!element) return;
@@ -103,7 +133,7 @@ export function GridCanvas({ state, selectedTileId, onSelect, highlightPlayerId 
     const fit = () => {
       const width = element.clientWidth;
       if (width < 1) return;
-      const next = Math.min(1, width / BOARD_PX);
+      const next = Math.min(1, width / TOTAL_PX);
       setScale((current) => (Math.abs(current - next) < 0.005 ? current : next));
     };
     fit();
@@ -114,6 +144,7 @@ export function GridCanvas({ state, selectedTileId, onSelect, highlightPlayerId 
 
   const compact = scale < COMPACT_AT;
   const bare = scale < BARE_AT;
+  const selected = state.tiles.find((tile) => tile.id === selectedTileId) ?? null;
 
   const rails = useMemo(
     () =>
@@ -136,156 +167,236 @@ export function GridCanvas({ state, selectedTileId, onSelect, highlightPlayerId 
 
   return (
     <div ref={holder} className="w-full">
-      <div className="relative" style={{ width: BOARD_PX * scale, height: BOARD_PX * scale }}>
-        <div
-          className="absolute top-0 left-0 border border-rule bg-pit"
-          style={{
-            width: BOARD_PX,
-            height: BOARD_PX,
-            transform: `scale(${scale})`,
-            transformOrigin: "top left",
-          }}
-          role="group"
-          aria-label={`Industrial grid, eleven by eleven, ${PLOT_COUNT} plots`}
-        >
-          {state.tiles.map((tile) => {
-            const color = ownerColor(state, tile.ownerId);
-            const mine = highlightPlayerId ? tile.ownerId === highlightPlayerId : false;
-            const selected = tile.id === selectedTileId;
-            const recipe = RECIPES[tile.recipeId];
-            const occupied = recipe.id !== "NONE";
-            const groundKey =
-              tile.feature === "RIVER" ? "ground_refinery" : `ground_${tile.terrain.toLowerCase()}`;
-            const label = tile.deposit ? RESOURCE_ABBR[tile.deposit] : RECIPE_ABBR[tile.recipeId];
+      <div className="relative border border-rule bg-void p-1.5">
+        <div className="relative" style={{ width: TOTAL_PX * scale, height: TOTAL_PX * scale }}>
+          <Corner at="tl" x={AXIS * scale - MARK} y={AXIS * scale - MARK} />
+          <Corner at="tr" x={(AXIS + BOARD_PX) * scale} y={AXIS * scale - MARK} />
+          <Corner at="bl" x={AXIS * scale - MARK} y={(AXIS + BOARD_PX) * scale} />
+          <Corner at="br" x={(AXIS + BOARD_PX) * scale} y={(AXIS + BOARD_PX) * scale} />
 
-            return (
-              <button
-                key={tile.id}
-                type="button"
-                onClick={() => onSelect(tile.id)}
-                title={`Plot ${tile.x}, ${tile.y} · ${recipe.name}`}
-                // The plot's own record, readable by the inspector tools and by
-                // anyone auditing what the board actually painted.
-                data-ring={tile.ring}
-                data-terrain={tile.terrain}
-                data-feature={tile.feature ?? "OPEN"}
-                data-deposit={tile.deposit ?? ""}
-                data-recipe={tile.recipeId}
-                data-owner={tile.ownerId ?? ""}
-                data-condition={Math.round(tile.condition)}
-                data-pollution={Math.round(tile.pollution)}
-                data-scorched={tile.scorchedTurns}
-                data-stalled={tile.stalled ? "true" : "false"}
-                data-scrubber={tile.scrubber ? "true" : "false"}
-                data-tender={tile.onTender ? "true" : "false"}
-                className="absolute cursor-pointer text-left outline-offset-[-2px]"
-                style={{
-                  left: tile.x * CELL + GAP / 2,
-                  top: tile.y * CELL + GAP / 2,
-                  width: ART,
-                  height: ART,
-                  boxShadow: selected
-                    ? `inset 0 0 0 2px var(--color-ink)`
-                    : `inset 0 0 0 1px ${tile.ownerId ? color : "var(--color-rule)"}`,
-                }}
+          <div
+            className="absolute top-0 left-0 bg-pit"
+            style={{
+              width: TOTAL_PX,
+              height: TOTAL_PX,
+              transform: `scale(${scale})`,
+              transformOrigin: "top left",
+            }}
+            role="group"
+            aria-label={`Industrial grid, eleven by eleven, ${PLOT_COUNT} plots`}
+          >
+            {/* Coordinates. The crown jewel is the middle of the frame either way. */}
+            {Array.from({ length: BOARD }, (_, column) => (
+              <span
+                key={`x-${column}`}
+                className="tabular absolute -translate-x-1/2 text-[9px] text-faint"
+                style={{ left: AXIS + column * CELL + CELL / 2, top: 5 }}
               >
-                {ready ? (
-                  <>
-                    <Art keyName={groundKey} scale={2} />
-                    {occupied ? <Art keyName={recipe.sprite} scale={2} /> : null}
-                  </>
-                ) : (
-                  <>
-                    <span
-                      className="absolute inset-0"
-                      style={{ background: "var(--color-plate)" }}
-                      aria-hidden
-                    />
-                    <Glyph tile={tile} color={color} />
-                  </>
-                )}
+                {column}
+              </span>
+            ))}
+            {Array.from({ length: BOARD }, (_, row) => (
+              <span
+                key={`y-${row}`}
+                className="tabular absolute text-[9px] text-faint"
+                style={{ left: 6, top: AXIS + row * CELL + CELL / 2 - 4.5 }}
+              >
+                {row}
+              </span>
+            ))}
 
-                {occupied && tile.ownerId ? (
+            <div
+              className="absolute"
+              style={{ left: AXIS, top: AXIS, width: BOARD_PX, height: BOARD_PX }}
+            >
+              {/* The crosshair runs the row and column of the plot in hand. */}
+              {selected ? (
+                <>
                   <span
-                    className="absolute inset-x-0 bottom-0 h-[3px]"
-                    style={{ background: color, opacity: mine ? 1 : 0.7 }}
+                    className="pointer-events-none absolute bg-edge/60"
+                    style={{
+                      left: 0,
+                      top: selected.y * CELL + CELL / 2,
+                      width: BOARD_PX,
+                      height: 1,
+                    }}
                     aria-hidden
                   />
-                ) : null}
-
-                {ready && tile.pollution > 1 ? (
                   <span
-                    className="absolute inset-0"
-                    style={{ opacity: smogOpacity(tile.pollution) }}
-                    data-overlay="smog"
+                    className="pointer-events-none absolute bg-edge/60"
+                    style={{
+                      left: selected.x * CELL + CELL / 2,
+                      top: 0,
+                      width: 1,
+                      height: BOARD_PX,
+                    }}
                     aria-hidden
+                  />
+                </>
+              ) : null}
+
+              {state.tiles.map((tile) => {
+                const color = ownerColor(state, tile.ownerId);
+                const mine = highlightPlayerId ? tile.ownerId === highlightPlayerId : false;
+                const inHand = tile.id === selectedTileId;
+                const recipe = RECIPES[tile.recipeId];
+                const occupied = recipe.id !== "NONE";
+                const groundKey =
+                  tile.feature === "RIVER" ? "ground_refinery" : `ground_${tile.terrain.toLowerCase()}`;
+                const label = tile.deposit ? RESOURCE_ABBR[tile.deposit] : RECIPE_ABBR[tile.recipeId];
+
+                return (
+                  <button
+                    key={tile.id}
+                    type="button"
+                    onClick={() => onSelect(tile.id)}
+                    title={`Plot ${tile.x}, ${tile.y} · ${recipe.name}`}
+                    // The plot's own record, readable by the inspector tools and by
+                    // anyone auditing what the board actually painted.
+                    data-ring={tile.ring}
+                    data-terrain={tile.terrain}
+                    data-feature={tile.feature ?? "OPEN"}
+                    data-deposit={tile.deposit ?? ""}
+                    data-recipe={tile.recipeId}
+                    data-owner={tile.ownerId ?? ""}
+                    data-condition={Math.round(tile.condition)}
+                    data-pollution={Math.round(tile.pollution)}
+                    data-scorched={tile.scorchedTurns}
+                    data-stalled={tile.stalled ? "true" : "false"}
+                    data-scrubber={tile.scrubber ? "true" : "false"}
+                    data-tender={tile.onTender ? "true" : "false"}
+                    className="plot absolute cursor-pointer text-left"
+                    style={{
+                      left: tile.x * CELL + GAP / 2,
+                      top: tile.y * CELL + GAP / 2,
+                      width: ART,
+                      height: ART,
+                      boxShadow: inHand
+                        ? `inset 0 0 0 2px var(--color-ink)`
+                        : `inset 0 0 0 1px ${tile.ownerId ? color : "var(--color-rule)"}`,
+                    }}
                   >
-                    <Art keyName="over_smog" scale={2} />
-                  </span>
-                ) : null}
+                    {ready ? (
+                      <>
+                        <Art keyName={groundKey} scale={2} />
+                        {occupied ? <Art keyName={recipe.sprite} scale={2} /> : null}
+                      </>
+                    ) : (
+                      <>
+                        <span
+                          className="absolute inset-0"
+                          style={{ background: "var(--color-plate)" }}
+                          aria-hidden
+                        />
+                        <Glyph tile={tile} color={color} />
+                      </>
+                    )}
 
-                {ready && tile.scorchedTurns > 0 ? (
-                  <span className="absolute inset-0" data-overlay="wreck" aria-hidden>
-                    <Art keyName="over_wreck" scale={2} />
-                  </span>
-                ) : null}
+                    {occupied && tile.ownerId ? (
+                      <span
+                        className="absolute inset-x-0 bottom-0 h-[3px]"
+                        style={{ background: color, opacity: mine ? 1 : 0.7 }}
+                        aria-hidden
+                      />
+                    ) : null}
 
-                {ready && tile.stalled ? (
-                  <span className="absolute inset-0" data-overlay="picket" aria-hidden>
-                    <Art keyName="over_picket" scale={2} />
-                  </span>
-                ) : null}
+                    {ready && tile.pollution > 1 ? (
+                      <span
+                        className="absolute inset-0"
+                        style={{ opacity: smogOpacity(tile.pollution) }}
+                        data-overlay="smog"
+                        aria-hidden
+                      >
+                        <Art keyName="over_smog" scale={2} />
+                      </span>
+                    ) : null}
 
-                {ready && tile.scrubber ? (
-                  // A chip in the corner, cropped to the scrubber unit itself: the
-                  // cell paints it at 12,20 and two pixels to the display pixel.
-                  <span
-                    className="absolute right-0 bottom-0 overflow-hidden"
-                    style={{ width: 16, height: 16 }}
-                    data-overlay="scrubber"
-                    aria-hidden
-                  >
-                    <Art keyName="over_scrubber" scale={2} left={-24} top={-40} />
-                  </span>
-                ) : null}
+                    {ready && tile.scorchedTurns > 0 ? (
+                      <span className="absolute inset-0" data-overlay="wreck" aria-hidden>
+                        <Art keyName="over_wreck" scale={2} />
+                      </span>
+                    ) : null}
 
-                {ready && tile.onTender ? (
-                  <span className="absolute inset-0" data-overlay="tender" aria-hidden>
-                    <Art keyName="over_tender" scale={2} />
-                  </span>
-                ) : null}
+                    {ready && tile.stalled ? (
+                      <span className="absolute inset-0" data-overlay="picket" aria-hidden>
+                        <Art keyName="over_picket" scale={2} />
+                      </span>
+                    ) : null}
 
-                {bare ? null : (
-                  <span className="absolute top-[3px] left-[4px] text-[8px] tracking-[0.1em] text-faint">
-                    {label}
-                  </span>
-                )}
-                {!compact && occupied && tile.condition < 100 ? (
-                  <span className="tabular absolute top-[3px] right-[4px] text-[8px] text-dim">
-                    {tile.condition.toFixed(0)}
-                  </span>
-                ) : null}
-                {compact ? null : (
-                  <span className="tabular absolute bottom-[3px] left-[4px] text-[8px] text-edge">
-                    {tile.x},{tile.y}
-                  </span>
-                )}
-              </button>
-            );
-          })}
+                    {ready && tile.scrubber ? (
+                      // A chip in the corner, cropped to the scrubber unit itself: the
+                      // cell paints it at 12,20 and two pixels to the display pixel.
+                      <span
+                        className="absolute right-0 bottom-0 overflow-hidden"
+                        style={{ width: 16, height: 16 }}
+                        data-overlay="scrubber"
+                        aria-hidden
+                      >
+                        <Art keyName="over_scrubber" scale={2} left={-24} top={-40} />
+                      </span>
+                    ) : null}
 
-          {rails.map(({ rail, style }) => (
-            <span
-              key={rail.id}
-              className="pointer-events-none absolute"
-              style={{
-                ...style,
-                background: ownerColor(state, rail.ownerId),
-                opacity: rail.condition < 60 ? 0.55 : 0.9,
-              }}
-              aria-hidden
-            />
-          ))}
+                    {ready && tile.onTender ? (
+                      <span className="absolute inset-0" data-overlay="tender" aria-hidden>
+                        <Art keyName="over_tender" scale={2} />
+                      </span>
+                    ) : null}
+
+                    {bare ? null : (
+                      <span className="absolute top-[3px] left-[4px] text-[8px] tracking-[0.1em] text-faint">
+                        {label}
+                      </span>
+                    )}
+                    {!compact && occupied && tile.condition < 100 ? (
+                      <span className="tabular absolute top-[3px] right-[4px] text-[8px] text-dim">
+                        {tile.condition.toFixed(0)}
+                      </span>
+                    ) : null}
+                    {compact ? null : (
+                      <span className="tabular absolute bottom-[3px] left-[4px] text-[8px] text-edge">
+                        {tile.x},{tile.y}
+                      </span>
+                    )}
+
+                    {/* The plot in hand is bracketed, not merely outlined. */}
+                    {inHand ? (
+                      <>
+                        <span
+                          className="pointer-events-none absolute top-0 left-0 h-2 w-2 border-t border-l border-brass"
+                          aria-hidden
+                        />
+                        <span
+                          className="pointer-events-none absolute top-0 right-0 h-2 w-2 border-t border-r border-brass"
+                          aria-hidden
+                        />
+                        <span
+                          className="pointer-events-none absolute bottom-0 left-0 h-2 w-2 border-b border-l border-brass"
+                          aria-hidden
+                        />
+                        <span
+                          className="pointer-events-none absolute right-0 bottom-0 h-2 w-2 border-r border-b border-brass"
+                          aria-hidden
+                        />
+                      </>
+                    ) : null}
+                  </button>
+                );
+              })}
+
+              {rails.map(({ rail, style }) => (
+                <span
+                  key={rail.id}
+                  className="pointer-events-none absolute"
+                  style={{
+                    ...style,
+                    background: ownerColor(state, rail.ownerId),
+                    opacity: rail.condition < 60 ? 0.55 : 0.9,
+                  }}
+                  aria-hidden
+                />
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     </div>

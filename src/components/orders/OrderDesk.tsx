@@ -419,10 +419,12 @@ export function OrderDesk({ state, player, sealed, onQueue }: OrderDeskProps) {
       title="Operations desk"
       aside={`${sealed.length} sealed · ${ORDER_SPEC_LIST.length} orders on the card`}
     >
-      <div className="flex flex-wrap items-center gap-1 border-b border-rule pb-2">
+      {/* The six phases as one control, with the sealed count riding along. */}
+      <div className="flex flex-wrap items-stretch border border-rule bg-pit">
         {ORDER_CATEGORIES.map((id) => {
           const count = ordersOfCategory(id).length;
           const taken = sealedIn[id] ?? 0;
+          const active = id === category;
           return (
             <button
               key={id}
@@ -436,10 +438,9 @@ export function OrderDesk({ state, player, sealed, onQueue }: OrderDeskProps) {
                   ? `${taken} of the ${count} orders in this phase are sealed`
                   : `${count} orders in this phase`
               }
-              className={`border px-2 py-[3px] text-[10px] tracking-[0.1em] uppercase ${
-                id === category
-                  ? "border-brass bg-plate text-ink"
-                  : "border-rule bg-pit text-dim hover:text-ink"
+              aria-pressed={active}
+              className={`relative border-r border-rule px-2 py-1.5 text-[10px] tracking-[0.14em] uppercase last:border-r-0 ${
+                active ? "bg-plate text-ink" : "text-dim hover:bg-plate hover:text-ink"
               }`}
             >
               {CATEGORY_NAME[id]}
@@ -450,22 +451,29 @@ export function OrderDesk({ state, player, sealed, onQueue }: OrderDeskProps) {
                   {count}
                 </span>
               </span>
+              {active ? (
+                <span className="absolute inset-x-0 bottom-0 h-[2px] bg-brass" aria-hidden />
+              ) : null}
             </button>
           );
         })}
-        <label className="ml-auto flex w-full items-center gap-1 sm:w-44">
+        <label className="ml-auto flex w-full items-center gap-2 border-t border-rule px-2 py-1.5 sm:w-48 sm:border-t-0 sm:border-l">
           <input
             ref={search}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Find an order"
-            className="w-full border border-rule bg-pit px-1.5 py-[3px] text-[11px] text-ink placeholder:text-faint"
+            aria-label="Find an order by name"
+            className="w-full border border-rule bg-steel px-2 py-1 text-[11px] text-ink placeholder:text-faint"
           />
           <span className="text-[10px] text-faint">/</span>
         </label>
       </div>
 
-      <ul ref={list} className="mt-2 max-h-[52vh] space-y-1 overflow-y-auto pr-1 lg:max-h-[440px]">
+      <ul
+        ref={list}
+        className="mt-2 max-h-[52vh] overflow-y-auto border border-rule lg:max-h-[460px]"
+      >
         {specs.map((spec) => {
           const values = draft(spec);
           const open = openType === spec.type;
@@ -473,23 +481,36 @@ export function OrderDesk({ state, player, sealed, onQueue }: OrderDeskProps) {
           const cost = orderCost(state, player, order);
           const affordable = cost === null || cost <= player.cash;
           return (
-            <li key={spec.type} data-order={spec.type} className="border border-rule">
+            <li
+              key={spec.type}
+              data-order={spec.type}
+              className="border-b border-rule/50 last:border-b-0"
+            >
               <button
                 type="button"
                 onClick={() => setOpenType(open ? null : spec.type)}
-                className="flex w-full items-baseline justify-between gap-2 px-2 py-1 text-left"
+                aria-expanded={open}
+                className={`flex w-full items-baseline justify-between gap-2 px-2.5 py-1.5 text-left ${
+                  open ? "bg-plate" : "hover:bg-pit"
+                }`}
               >
                 <span className="text-[11px] text-ink">
                   {spec.name}
-                  {spec.lastResort ? <span className="ml-2 text-[9px] text-hazard">last place</span> : null}
+                  {spec.lastResort ? (
+                    <span className="ml-2 text-[9px] text-hazard">last place</span>
+                  ) : null}
                 </span>
                 <span className="tabular text-[10px] text-faint">
-                  {cost === null ? "quoted at settlement" : cost === 0 ? "no fee" : formatMoney(cost)}
+                  {cost === null
+                    ? "quoted at settlement"
+                    : cost === 0
+                      ? "no fee"
+                      : formatMoney(cost)}
                 </span>
               </button>
 
               {open ? (
-                <div className="border-t border-rule px-2 py-2">
+                <div className="border-t border-rule bg-pit px-2.5 py-2.5">
                   <p className="mb-2 text-[11px] text-dim">{spec.blurb}</p>
                   <div className="grid gap-2 sm:grid-cols-2">
                     {spec.fields.map((field) => (
@@ -510,8 +531,8 @@ export function OrderDesk({ state, player, sealed, onQueue }: OrderDeskProps) {
                       </label>
                     ))}
                   </div>
-                  <div className="mt-2 flex items-center justify-between gap-2">
-                    <span className="text-[10px] text-faint">{orderLabel(order)}</span>
+                  <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 border-t border-rule pt-2">
+                    <span className="text-[10px] text-dim">{orderLabel(order)}</span>
                     <Button
                       tone="brass"
                       disabled={!affordable}

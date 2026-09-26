@@ -62,7 +62,7 @@ export function SpectatorView({
   }, [ragOpen]);
 
   return (
-    <main className="mx-auto max-w-[1780px] p-2 sm:p-3">
+    <main className="ledger mx-auto max-w-[1780px] p-2 sm:p-3">
       <StatusStrip
         state={state}
         meId={null}
@@ -72,11 +72,12 @@ export function SpectatorView({
         present={present}
       />
 
-      <section className="mt-3 border border-brass/40 bg-steel px-3 py-2">
-        <p className="text-[10px] tracking-[0.22em] text-brass uppercase">
+      <section className="mt-3 border border-edge bg-plate px-3 py-2.5">
+        <p className="flex items-baseline gap-2 text-[10px] tracking-[0.24em] text-brass uppercase">
+          <span className="inline-block h-2.5 w-[3px] bg-brass" aria-hidden />
           Watching table {code} from the rail
         </p>
-        <p className="mt-1 text-[11px] text-dim">
+        <p className="mt-1.5 max-w-4xl text-[11px] leading-relaxed text-dim">
           {finished && winner
             ? `The era has closed: ${winner.name} stands first at ${formatMoney(winner.value)}.`
             : `${state.players.length} houses playing ${winConditionLabel(state.game.winCondition)} · ${
@@ -151,14 +152,21 @@ export function SpectatorView({
           </Panel>
 
           <Panel title="What a watcher gets" aside="no seat, no ledger">
-            <ul className="space-y-1 text-[11px] text-dim">
-              <li>Every house, ranked by net worth, with what each one shipped last window.</li>
-              <li>The board, the overlays and the countdown ring, refreshed on the same poll.</li>
-              <li>The table wire and the whole shelf of the Rag.</li>
-              <li>
-                No orders, no cash, no seat: the rail cannot seal, bid, or take a chair that is
-                already held.
-              </li>
+            <ul>
+              {[
+                "Every house, ranked by net worth, with what each one shipped last window.",
+                "The board, the overlays and the countdown ring, refreshed on the same poll.",
+                "The table wire and the whole shelf of the Rag.",
+                "No orders, no cash, no seat: the rail cannot seal, bid, or take a chair that is already held.",
+              ].map((line) => (
+                <li
+                  key={line}
+                  className="flex items-baseline gap-2.5 border-b border-rule/40 py-1.5 last:border-b-0"
+                >
+                  <span className="mt-[6px] inline-block h-1.5 w-1.5 shrink-0 bg-brass/80" aria-hidden />
+                  <span className="text-[11px] leading-relaxed text-dim">{line}</span>
+                </li>
+              ))}
             </ul>
           </Panel>
         </div>

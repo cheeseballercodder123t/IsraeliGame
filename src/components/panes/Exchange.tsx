@@ -97,33 +97,34 @@ export function Exchange({ state, player, onOrder }: ExchangeProps) {
       </div>
 
       <div className="border-b border-rule px-3 py-2">
-        <div className="flex flex-wrap items-center gap-1">
-          <button
-            type="button"
-            onClick={() => setFamily("ALL")}
-            className={`border px-2 py-[2px] text-[10px] uppercase ${
-              family === "ALL" ? "border-brass bg-plate text-ink" : "border-rule text-dim"
-            }`}
-          >
-            All
-          </button>
-          {FAMILY_ORDER.filter((id) => id !== "WASTE").map((id) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setFamily(id)}
-              className={`border px-2 py-[2px] text-[10px] uppercase ${
-                family === id ? "border-brass bg-plate text-ink" : "border-rule text-dim"
-              }`}
-            >
-              {FAMILY_LABEL[id]}
-            </button>
-          ))}
+        <div className="flex flex-wrap items-stretch gap-2">
+          <div className="flex flex-wrap items-stretch border border-rule bg-pit">
+            {(["ALL", ...FAMILY_ORDER.filter((id) => id !== "WASTE")] as const).map((id) => {
+              const active = family === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setFamily(id)}
+                  aria-pressed={active}
+                  className={`relative border-r border-rule px-2 py-1 text-[10px] tracking-[0.12em] uppercase last:border-r-0 ${
+                    active ? "bg-steel text-ink" : "text-dim hover:bg-steel hover:text-ink"
+                  }`}
+                >
+                  {id === "ALL" ? "All" : FAMILY_LABEL[id]}
+                  {active ? (
+                    <span className="absolute inset-x-0 bottom-0 h-[2px] bg-brass" aria-hidden />
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Find goods"
-            className="ml-auto w-full border border-rule bg-pit px-1.5 py-[2px] text-[11px] text-ink placeholder:text-faint sm:w-36"
+            aria-label="Find a commodity"
+            className="w-full border border-rule bg-pit px-2 py-1 text-[11px] text-ink placeholder:text-faint sm:ml-auto sm:w-40"
           />
         </div>
 
@@ -158,12 +159,16 @@ export function Exchange({ state, player, onOrder }: ExchangeProps) {
               ].map(([head, hide]) => (
                 <th
                   key={head}
-                  className={`border-b border-rule px-2 py-1 text-left text-[9px] tracking-[0.14em] text-faint uppercase ${hide}`}
+                  scope="col"
+                  className={`border-b border-rule px-2 py-1 text-left text-[9px] tracking-[0.16em] text-faint uppercase ${hide}`}
                 >
                   {head}
                 </th>
               ))}
-              <th className="hidden border-b border-rule px-2 py-1 text-right text-[9px] tracking-[0.14em] text-faint uppercase sm:table-cell">
+              <th
+                scope="col"
+                className="hidden border-b border-rule px-2 py-1 text-right text-[9px] tracking-[0.16em] text-faint uppercase sm:table-cell"
+              >
                 Turn
               </th>
             </tr>
@@ -193,13 +198,23 @@ export function Exchange({ state, player, onOrder }: ExchangeProps) {
                     active ? "bg-plate" : "hover:bg-pit"
                   }`}
                 >
-                  <td className="px-2 py-[3px] text-[11px] text-ink">
+                  <td className="px-2 py-1 text-[11px] text-ink">
                     <span
                       className="mr-1.5 inline-block h-2 w-2 align-middle"
                       style={{ background: RESOURCE_TINT[resource] }}
                     />
-                    <span className="text-faint">{RESOURCE_ABBR[resource]}</span>
+                    <span className={active ? "text-brass" : "text-faint"}>
+                      {RESOURCE_ABBR[resource]}
+                    </span>
                     <span className="ml-1.5">{RESOURCE_LABEL[resource]}</span>
+                    {active ? (
+                      <span
+                        className="ml-2 text-[9px] tracking-[0.16em] text-brass uppercase"
+                        title="The book the ticket below is written against"
+                      >
+                        on ticket
+                      </span>
+                    ) : null}
                   </td>
                   <td className="hidden px-2 py-[3px] text-[10px] text-faint sm:table-cell">
                     {FAMILY_LABEL[COMMODITIES[resource].family]}
