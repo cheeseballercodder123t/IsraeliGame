@@ -44,6 +44,12 @@ export function formatCount(value: number): string {
   return Math.round(value).toLocaleString("en-US");
 }
 
+/** A short clock, minutes and seconds, for a window that closes in one sitting. */
+export function clock(value: number): string {
+  const seconds = Math.max(0, Math.floor(value));
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+}
+
 export function countdown(seconds: number): string {
   if (seconds <= 0) return "window closed";
   const hours = Math.floor(seconds / 3600);

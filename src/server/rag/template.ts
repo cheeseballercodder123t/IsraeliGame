@@ -10,6 +10,7 @@ import {
   type WireContext,
   type WireEvent,
 } from "@/domain/constants";
+import { winConditionLabel } from "@/domain/endgame";
 import { formatMoney, formatPercent, formatPrice, formatUnits } from "@/domain/format";
 import { streamRng } from "@/domain/rng";
 import { movers } from "@/domain/market";
@@ -433,6 +434,107 @@ export function generateIssue(state: GameState, events: GameEvent[], turn: numbe
     deck,
     contentMarkdown: markdown,
     sections,
+    scandals,
+    mastheadDate: `Turn ${turn}`,
+  };
+}
+
+/** The last front page. The era closes, so the paper ranks the houses instead. */
+const CLOSING_HEADLINES: string[] = [
+  "THE ERA CLOSES",
+  "THE ERA CLOSES AND THE BOOKS ARE SHUT",
+  "THE GATES COME DOWN AND THE REGISTER IS READ",
+];
+
+const CLOSING_DECKS: string[] = [
+  "Smoke, strikes and sealed envelopes come to an end, and one name sits at the head of the table",
+  "The floor is swept, the presses run one last edition, and the houses are ranked as they stand",
+];
+
+/**
+ * The closing edition. It is written from the finished ledger rather than from
+ * the last window's wire, so the ranking it prints is the ranking the table
+ * ended on, and it always names what ended the era.
+ */
+export function generateClosingIssue(state: GameState, turn: number): NewspaperIssue {
+  const rng = streamRng(state.game.seed, turn, "rag-close");
+  const ctx = buildContext(state);
+  const table = netWorthTable(state);
+  const winner = table[0] ?? null;
+  const condition = winConditionLabel(state.game.winCondition);
+
+  const headline = rng.pick(CLOSING_HEADLINES);
+  const deck = rng.pick(CLOSING_DECKS);
+
+  const rows = table
+    .map((row, index) => {
+      const player = state.players.find((p) => p.id === row.playerId);
+      const plots = state.tiles.filter((tile) => tile.ownerId === row.playerId).length;
+      const plants = state.tiles.filter(
+        (tile) => tile.ownerId === row.playerId && RECIPES[tile.recipeId].id !== "NONE",
+      ).length;
+      return `| ${index + 1} | ${row.name} | ${formatMoney(row.value)} | ${plots} | ${plants} | ${(player?.pr ?? 0).toFixed(0)} |`;
+    })
+    .join("\n");
+
+  const ruined = state.players
+    .filter((player) => player.isBankrupt)
+    .map((player) => player.name);
+
+  const scandals: Scandal[] = state.events
+    .map((event) => ({ event, weight: scandalWeight(event) }))
+    .filter((entry) => entry.weight >= 20)
+    .sort((a, b) => b.weight - a.weight)
+    .slice(0, 8)
+    .map((entry) => ({
+      kind: entry.event.kind,
+      playerId: entry.event.playerId ?? null,
+      weight: entry.weight,
+      summary: indexLine(entry.event, ctx),
+    }));
+
+  const winnerLine = winner
+    ? `${winner.name} stands at the head of the table at ${formatMoney(winner.value)}.`
+    : "No house stood up to be counted.";
+  const second = table[1];
+  const chaseLine =
+    winner && second
+      ? ` ${second.name} held second at ${formatMoney(second.value)} when the books were shut.`
+      : "";
+  const ruinedLine =
+    ruined.length > 0
+      ? ` The court carried ${ruined.join(" and ")} out of the era with the paper still on the desk.`
+      : "";
+
+  const markdown = [
+    `## ${headline}`,
+    "",
+    `*${deck}*`,
+    "",
+    `The table was opened to ${condition} and it played ${turn} windows. ${winnerLine}${chaseLine}${ruinedLine}`,
+    "",
+    "### The houses at the close",
+    "",
+    "| Rank | House | Net worth | Plots | Plants | Standing |",
+    "| --- | --- | --- | --- | --- | --- |",
+    rows || "| 1 | no houses | | | | |",
+    "",
+    "### Index of the accused",
+    "",
+    scandals.length > 0
+      ? scandals.map((entry) => `- ${entry.summary}`).join("\n")
+      : "- The last window closed without a name on the page.",
+    "",
+    "### The presses stop",
+    "",
+    `The floor is swept, the furnaces banked, and the clerks have gone home with the ledgers. A rematch on this table is open: the code does not change, the same houses sit down again, and the next era starts from turn one. Printed at the close of turn ${turn}.`,
+  ].join("\n");
+
+  return {
+    headline,
+    deck,
+    contentMarkdown: markdown,
+    sections: [],
     scandals,
     mastheadDate: `Turn ${turn}`,
   };

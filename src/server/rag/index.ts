@@ -1,9 +1,9 @@
 import type { GameEvent, GameState } from "@/domain/types";
 import { generateProse, ragProvider } from "./llm";
-import { generateIssue, type NewspaperIssue } from "./template";
+import { generateClosingIssue, generateIssue, type NewspaperIssue } from "./template";
 
 export type { NewspaperIssue } from "./template";
-export { generateIssue } from "./template";
+export { generateClosingIssue, generateIssue } from "./template";
 
 /** The heading the deterministic writer puts above its market tables. */
 const TABLES_HEADING = "### Prices at the close";
@@ -33,4 +33,16 @@ export async function composeIssue(
     headline: prose.headline || issue.headline,
     contentMarkdown: tables ? `${prose.body.trim()}\n\n${tables}` : prose.body.trim(),
   };
+}
+
+/**
+ * The closing edition is written off the finished ledger and is deliberately
+ * not handed to a language model: the ranking it prints is the result of the
+ * era, and the paper should not be able to paraphrase a placing.
+ */
+export async function composeClosingIssue(
+  state: GameState,
+  turn: number,
+): Promise<NewspaperIssue> {
+  return generateClosingIssue(state, turn);
 }

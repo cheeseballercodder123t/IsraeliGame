@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { composeIssue } from "@/server/rag";
+import { composeClosingIssue, composeIssue } from "@/server/rag";
 import { ragProvider } from "@/server/rag/llm";
 import { getStore } from "@/server/store";
 import type { GameEvent } from "@/domain/types";
@@ -37,6 +37,14 @@ export async function POST(request: Request) {
   if (!state) return NextResponse.json({ ok: false, error: "unknown table" }, { status: 404 });
 
   const turn = body.turn ?? Math.max(1, state.game.currentTurn - 1);
+
+  // The last edition of a closed era ranks the houses, and a reprint must not
+  // be able to paraphrase a placing. Asking for it returns the closing edition.
+  if (state.game.status === "FINISHED" && turn >= state.game.currentTurn - 1) {
+    const closing = await composeClosingIssue(state, state.game.currentTurn - 1);
+    return NextResponse.json({ ok: true, provider: ragProvider(), issue: closing, closing: true });
+  }
+
   const issue = await composeIssue(state, body.events ?? [], turn);
 
   if (body.events) {

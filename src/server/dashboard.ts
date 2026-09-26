@@ -10,6 +10,7 @@ import {
 import { beat } from "@/server/presence";
 import { readSession } from "@/server/session";
 import type { NewspaperRecord } from "@/server/store/types";
+import { winConditionLabel } from "@/domain/endgame";
 import type { Archetype, GameState, Player, QueuedOrder } from "@/domain/types";
 
 export interface TableView {
@@ -33,6 +34,8 @@ export interface LobbyView {
   status: GameState["game"]["status"];
   /** Turn based or real time, so the lobby can say which clock it opens on. */
   mode: GameState["game"]["mode"];
+  /** What closes the era, so a seat is taken knowing the length of the match. */
+  win: string;
   /** The table's write counter, which is what a watching client polls. */
   revision: number;
   seats: LobbySeatView[];
@@ -42,6 +45,16 @@ export interface LobbyView {
   me: LobbySeatView | null;
 }
 
+/**
+ * What the rail sees: the whole table, read only. Every chair is taken, so a
+ * watcher rides the same poll as the players and never holds a seat.
+ */
+export interface SpectateView {
+  code: string;
+  state: GameState;
+  issues: NewspaperRecord[];
+}
+
 export interface TableMiss {
   reason: "no-session" | "no-table";
 }
@@ -49,6 +62,7 @@ export interface TableMiss {
 export type TableResult =
   | { kind: "table"; view: TableView }
   | { kind: "lobby"; lobby: LobbyView }
+  | { kind: "spectate"; view: SpectateView }
   | { kind: "miss"; miss: TableMiss };
 
 function lobbyOf(state: GameState, userId: string | null): LobbyView {
@@ -66,6 +80,7 @@ function lobbyOf(state: GameState, userId: string | null): LobbyView {
     code: state.game.code,
     status: state.game.status,
     mode: state.game.mode,
+    win: winConditionLabel(state.game.winCondition),
     revision: state.game.revision,
     seats,
     openSeats: openSeats(state),
@@ -106,7 +121,11 @@ export async function openTable(code: string): Promise<TableResult> {
     if (openSeats(loaded) > 0) {
       return { kind: "lobby", lobby: lobbyOf(loaded, session.userId) };
     }
-    return { kind: "miss", miss: { reason: "no-table" } };
+    // Every chair is taken, but the rail is open. The watcher gets the same
+    // snapshot and the same heartbeat, read only, past the capacity.
+    const { state } = await resolveIfDue(loaded);
+    const issues = await listIssues(state.game.id);
+    return { kind: "spectate", view: { code: state.game.code, state, issues } };
   }
 
   const { state } = await resolveIfDue(loaded);

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { parseWinCondition } from "@/domain/endgame";
 import type { Archetype, GameMode } from "@/domain/types";
 import { ensureSession, readSession, signOut } from "@/server/session";
 import {
@@ -14,6 +15,8 @@ import {
   loadGameByCode,
   playerOf,
   queueOrder,
+  rematch,
+  say,
   startMatch,
   startTable,
 } from "@/server/game";
@@ -36,9 +39,10 @@ export async function foundCompanyAction(formData: FormData): Promise<void> {
   const seatsRaw = Number(formData.get("seats") ?? 5);
   const seats = Number.isFinite(seatsRaw) ? Math.max(2, Math.min(5, seatsRaw)) : 5;
   const mode = readMode(formData.get("mode"));
+  const winCondition = parseWinCondition(formData.get("win"));
 
   const session = await ensureSession(name);
-  const { state } = await startMatch(session, archetype, seats, mode);
+  const { state } = await startMatch(session, archetype, seats, mode, winCondition);
   redirect(`/table/${state.game.code}`);
 }
 
@@ -50,7 +54,13 @@ export async function joinTableAction(formData: FormData): Promise<void> {
 
   const session = await ensureSession(name);
   const joined = await joinMatch(code, session, archetype);
-  if (!joined) redirect(`/?missing=${encodeURIComponent(code)}`);
+  if (!joined) {
+    // Every chair is taken. The table page still opens on the rail, read only,
+    // which is better than a refusal for somebody who was sent the code.
+    const running = await loadGameByCode(code);
+    if (running && running.game.status !== "LOBBY") redirect(`/table/${code}`);
+    redirect(`/?missing=${encodeURIComponent(code)}`);
+  }
   redirect(`/table/${code}`);
 }
 
@@ -117,6 +127,9 @@ export async function queueOrderAction(
   if (state.game.status === "LOBBY") {
     return { ok: false, error: "The window is not open yet. Open the table first." };
   }
+  if (state.game.status === "FINISHED") {
+    return { ok: false, error: "The era has closed. Open a new one from the closing desk." };
+  }
 
   const me = playerOf(state, session.userId);
   if (!me) return { ok: false, error: "You are not seated at this table." };
@@ -156,10 +169,45 @@ export async function forceTickAction(code: string): Promise<{ ok: boolean; erro
   if (state.game.status === "LOBBY") {
     return { ok: false, error: "The table is still a lobby. Open the window first." };
   }
+  if (state.game.status === "FINISHED") {
+    return { ok: false, error: "The era has closed. Open a new one from the closing desk." };
+  }
 
   await advanceTurn(state);
   revalidatePath(`/table/${code}`);
   return { ok: true };
+}
+
+/**
+ * Says something on the table wire. Seats only: a watcher can read the room
+ * but not bid in it, which is what read only means at this table.
+ */
+export async function postMessageAction(
+  code: string,
+  body: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const session = await readSession();
+  if (!session) return { ok: false, error: "No session." };
+
+  const state = await loadGameByCode(code.toUpperCase());
+  if (!state) return { ok: false, error: "No such table." };
+
+  const me = playerOf(state, session.userId);
+  if (!me) return { ok: false, error: "Only a seated house speaks on the wire." };
+
+  const result = await say(state.game.id, me.id, me.name, body);
+  if (result.ok) revalidatePath(`/table/${code.toUpperCase()}`);
+  return result;
+}
+
+/** Opens the next era on a table whose books are shut. */
+export async function rematchAction(code: string): Promise<{ ok: boolean; error?: string }> {
+  const session = await readSession();
+  if (!session) return { ok: false, error: "No session." };
+
+  const result = await rematch(code.toUpperCase(), session.userId);
+  if (result.ok) revalidatePath(`/table/${code.toUpperCase()}`);
+  return result;
 }
 
 export async function leaveAction(): Promise<void> {

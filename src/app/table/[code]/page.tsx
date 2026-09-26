@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { Dashboard } from "@/components/table/Dashboard";
 import { LobbyViewPanel } from "@/components/table/LobbyViewPanel";
+import { SpectatorView } from "@/components/table/SpectatorView";
 import { openTable } from "@/server/dashboard";
 import { DEV_TICK } from "@/server/game";
 
@@ -17,6 +18,17 @@ export default async function TablePage({ params }: { params: Promise<{ code: st
 
   if (result.kind === "lobby") {
     return <LobbyViewPanel lobby={result.lobby} />;
+  }
+
+  // Every chair is taken: the rail reads the same snapshot, without a seat.
+  if (result.kind === "spectate") {
+    return (
+      <SpectatorView
+        code={result.view.code}
+        state={result.view.state}
+        issues={result.view.issues}
+      />
+    );
   }
 
   return (

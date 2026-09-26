@@ -8,6 +8,7 @@ import {
   TRADEABLE,
   modifiersOf,
 } from "./constants";
+import { defaultWinCondition } from "./endgame";
 import { featureAt, ringOf, terrainForRing } from "./grid";
 import { Rng, hashSeed } from "./rng";
 import type {
@@ -22,6 +23,7 @@ import type {
   Resource,
   Tile,
   WindDirection,
+  WinCondition,
 } from "./types";
 
 export { ALL_RESOURCES } from "./constants";
@@ -47,6 +49,8 @@ export interface NewGameSpec {
   status?: Game["status"];
   /** A turn table unless the host asked for real time. */
   mode?: GameMode;
+  /** What closes the era, chosen at founding. Defaults to a turn limit. */
+  winCondition?: WinCondition;
 }
 
 export function makeGameCode(seed: number): string {
@@ -137,6 +141,9 @@ export function createGameState(spec: NewGameSpec): GameState {
     powerTariff: 1,
     lastLeaderId: null,
     revision: 0,
+    winCondition: spec.winCondition ?? defaultWinCondition(),
+    lastSealAt: null,
+    holdsUsed: 0,
   };
 
   const deposits = rng.shuffle(DEPOSIT_POOL);
@@ -237,6 +244,7 @@ export function createGameState(spec: NewGameSpec): GameState {
     convertibles: [],
     events: [],
     queue: [],
+    messages: [],
     scandals: [],
   };
 }

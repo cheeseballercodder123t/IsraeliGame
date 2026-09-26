@@ -1,3 +1,11 @@
+import {
+  NET_WORTH_CHOICES,
+  TURN_LIMIT_CHOICES,
+  defaultWinCondition,
+  winConditionCode,
+  winConditionLabel,
+} from "@/domain/endgame";
+import { countdown } from "@/domain/format";
 import { foundCompanyAction, joinTableAction } from "@/server/actions";
 import { listJoinableTables } from "@/server/game";
 import { CHARTER_TABLE, MAX_SEATS, MIN_SEATS } from "@/server/personas";
@@ -23,13 +31,27 @@ export const dynamic = "force-dynamic";
 
 const SEAT_CHOICES = Array.from({ length: MAX_SEATS - MIN_SEATS + 1 }, (_, index) => MIN_SEATS + index);
 
-/** The brief. Four lines, because a director reads the front of the envelope. */
+/** The conditions a host can open a table to, as the form carries them. */
+const WIN_CHOICES: { code: string; label: string }[] = [
+  ...TURN_LIMIT_CHOICES.map((turns) => {
+    const condition = { kind: "TURNS" as const, turns };
+    return { code: winConditionCode(condition), label: winConditionLabel(condition) };
+  }),
+  ...NET_WORTH_CHOICES.map((target) => {
+    const condition = { kind: "NET_WORTH" as const, target };
+    return { code: winConditionCode(condition), label: winConditionLabel(condition) };
+  }),
+];
+
+/** The brief. Short lines, because a director reads the front of the envelope. */
 const BRIEF: string[] = [
   `${TENDERS_PER_TURN} plots go to sealed tender every window. The highest envelope wins and pays a dollar above the second highest.`,
   "Every window is sealed: you plan in the dark, rivals see the count and not the contents, and the tick plays every order at once.",
   "Only the outer band yields raw material, so a chimney has to sit near the thing it eats and haul the difference over track you own.",
   "A rival sealing an order, a stranger taking a chair and a window closing all land on your desk as they happen.",
   "A turn table closes one long window at a time. A real time table closes a short one every few seconds and never stops moving.",
+  "Cartel pools, supply contracts and licences are agreed on the table wire before anybody seals them.",
+  "Every table is opened to a win condition, and a table whose chairs are all taken can still be watched from the rail.",
 ];
 
 /** What the ground will take, by band. The plot counts come off the generator. */
@@ -132,8 +154,12 @@ export default async function LobbyPage({
                   {table.code}
                 </a>
                 <span className="text-[10px] text-faint">
-                  {table.status === "LOBBY" ? "gathering" : "in play"} · {table.humans} human ·{" "}
-                  {table.players} seated · {table.open} open
+                  {table.status === "LOBBY" ? "gathering" : "in play"} ·{" "}
+                  <span className={table.mode === "REALTIME" ? "text-hazard" : "text-brass"}>
+                    {table.mode === "REALTIME" ? "real time" : "turn based"}
+                  </span>
+                  , {countdown(table.windowSeconds)} window · win: {table.win} · {table.humans} human
+                  · {table.players} seated · {table.open} open
                 </span>
               </li>
             ))}
@@ -275,6 +301,19 @@ export default async function LobbyPage({
                   <option value="REALTIME">Real time, a short window every few seconds</option>
                 </select>
               </Field>
+              <Field label="Win condition">
+                <select
+                  name="win"
+                  defaultValue={winConditionCode(defaultWinCondition())}
+                  className="w-full border border-rule bg-pit px-2 py-1 text-[12px] text-ink"
+                >
+                  {WIN_CHOICES.map((choice) => (
+                    <option key={choice.code} value={choice.code}>
+                      {choice.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
               <div className="pt-2">
                 <Button tone="brass" type="submit" full>
                   Open the table
@@ -323,6 +362,10 @@ export default async function LobbyPage({
                   Join
                 </Button>
               </div>
+              <p className="pt-2 text-[10px] text-faint">
+                A code whose chairs are all taken opens the table from the rail: the board, the
+                register, the wire and the paper, read only.
+              </p>
             </form>
           </Panel>
         </aside>

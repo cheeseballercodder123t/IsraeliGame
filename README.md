@@ -12,7 +12,7 @@ model key are both optional and both activate automatically when present.
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # 99 engine tests
+npm test           # 201 engine tests
 npm run typecheck
 npm run build
 ```
@@ -62,6 +62,36 @@ decides which extractor may be raised on it, and a chimney has to sit near the t
 11. The revenue service taxes, then audits, then the debt collector calls.
 12. Tenders and raids settle, then construction held back for a winning envelope is raised.
 13. The Rag goes to press.
+
+## The table
+
+**Two clocks.** A table opens turn based, one long window sealed and then played at the close, or
+real time, a short window every few seconds (`REALTIME_WINDOW_SECONDS`, twenty by default). The
+clock is on the open tables list before you sit at it, and the status strip carries a countdown
+ring that turns hazard at three quarters spent and blood as it runs out, with one flash when it
+closes.
+
+**The fairness rule.** A short window used to punish whoever was slowest to click. A seal that
+lands in the last seconds of a window now holds it for a short grace period
+(`FAIRNESS_GRACE_SECONDS`, three by default), twice at most (`FAIRNESS_HOLDS`), and the cron sweep
+honours the hold the way a page load does. A window nobody was sealing still closes on time.
+
+**The wire.** Cartel pools, supply contracts, licences and tender truces are agreed rather than
+executed, so every table carries a message channel in `GameState.messages`: a composer with a
+handful of period barbs at the desk, and a read-only copy on the rail.
+
+**The end.** A table is opened to a turn limit or a net worth figure, chosen at founding and printed
+in the lobby, on the strip and on the open tables list. The window that meets it sets
+`GameStatus.FINISHED`, closes the order book, and the Rag prints a closing edition that ranks the
+houses instead of filing the wire. The closing desk offers a rematch on the same code, with the same
+houses and the same condition, from turn one.
+
+**The rail.** Once every chair is taken the code still opens the table: board, register, wire and
+paper, read only, riding the same heartbeat the players do. The rail cannot seal, bid or speak.
+
+**Sound.** A brass bell when the window runs out and a press thump when the paper lands, both
+synthesised in the browser. Silent until the switch beside the guide is turned on, and remembered
+per browser after that.
 
 ## Rules worth knowing
 
@@ -199,10 +229,13 @@ them without touching the rest of the server layer.
 
 ### The tests
 
-Nine files, ninety nine tests. Geometry and the catalogs are checked against their own contents, so a
-catalog edit that breaks an assumption fails a test rather than a screen: seventy five commodities,
-seventy five plants, twenty charters, sixty four orders, a hundred and eleven event kinds, and every
-sprite placement inside its sheet. The engine tests cover the exchange, freight, production, waste,
+Twenty three files, two hundred and one tests. Geometry and the catalogs are checked against their
+own contents, so a catalog edit that breaks an assumption fails a test rather than a screen:
+seventy five commodities, seventy five plants, twenty charters, sixty four orders, a hundred and
+eleven event kinds, and every sprite placement inside its sheet. The table's own rules are pinned
+the same way: the late seal hold, the wire's length and its refusals, the countdown ring's
+arithmetic, the open tables list's clock, and the ending from the limit window through the closing
+edition to the rematch. The engine tests cover the exchange, freight, production, waste,
 tenders, raids, bonds, audits, arson, chapter 11 and a full turn replay. `tests/tick.test.ts` runs the
 same input twice and asserts a byte identical event log, and `tests/rag.test.ts` asserts the paper
 prints the same broadsheet twice from the same ledger.
