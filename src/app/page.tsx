@@ -106,8 +106,8 @@ function roman(value: number): string {
 function Heading({ children, note }: { children: ReactNode; note?: ReactNode }) {
   return (
     <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 border-b border-rule pb-1.5">
-      <h2 className="flex items-baseline gap-2 text-[10px] tracking-[0.24em] text-dim uppercase">
-        <span className="inline-block h-2.5 w-[3px] bg-brass" aria-hidden />
+      <h2 className="flex items-baseline gap-2 text-[10px] tracking-[0.24em] text-ink/80 uppercase">
+        <span className="brass-tick inline-block h-2.5 w-[3px] bg-brass" aria-hidden />
         {children}
       </h2>
       {note ? <span className="text-[10px] text-faint">{note}</span> : null}
@@ -151,7 +151,7 @@ export default async function LobbyPage({
 
           <div className="mt-5 flex items-end justify-between gap-8">
             <div className="min-w-0">
-              <h1 className="font-slab text-[44px] leading-[0.9] font-extrabold tracking-tight text-ink sm:text-[64px] lg:text-[80px]">
+              <h1 className="foil settle pb-1 font-slab text-[48px] leading-[0.95] font-extrabold tracking-tight sm:text-[72px] lg:text-[92px]">
                 Conglomerate
               </h1>
               <p className="mt-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -168,14 +168,18 @@ export default async function LobbyPage({
 
           <Plate name="rule" scale={3} className="mt-4 hidden max-w-full sm:block" />
 
-          <dl className="mt-4 grid gap-x-10 sm:grid-cols-2">
+          <div className="engraved mt-4 sm:hidden" aria-hidden />
+
+          <dl className="settle settle-2 mt-5 grid grid-cols-2 border border-rule bg-steel/60 sm:grid-cols-3 lg:grid-cols-6">
             {PROSPECTUS.map(([figure, note]) => (
               <div
                 key={note}
-                className="flex items-baseline justify-between gap-3 border-b border-rule/50 py-1.5"
+                className="row-warm flex flex-col-reverse gap-1.5 border-rule/60 px-3 py-3 [&:not(:last-child)]:border-r"
               >
-                <dt className="text-[10px] tracking-[0.14em] text-faint uppercase">{note}</dt>
-                <dd className="tabular font-slab text-[17px] leading-none text-brass">{figure}</dd>
+                <dt className="text-[9.5px] leading-snug tracking-[0.14em] text-faint uppercase">
+                  {note}
+                </dt>
+                <dd className="tabular font-slab text-[22px] leading-none text-brass">{figure}</dd>
               </div>
             ))}
           </dl>
@@ -189,8 +193,8 @@ export default async function LobbyPage({
         ) : null}
 
         {joinable.length > 0 ? (
-          <section className="mt-5 border border-brass/50 bg-steel">
-            <div className="border-b border-rule bg-plate px-3 py-2">
+          <section className="plate relief settle settle-3 mt-5 border border-brass/50 bg-steel">
+            <div className="plate-head border-b border-rule bg-plate px-3 py-2">
               <h2 className="text-[10px] tracking-[0.24em] text-brass uppercase">
                 Chairs open at these tables
               </h2>
@@ -203,7 +207,7 @@ export default async function LobbyPage({
               {joinable.map((table) => (
                 <li
                   key={table.code}
-                  className="flex flex-wrap items-baseline justify-between gap-x-5 gap-y-1 border-b border-rule/50 py-2.5 last:border-b-0"
+                  className="row-warm -mx-3 flex flex-wrap items-baseline justify-between gap-x-5 gap-y-1 border-b border-rule/50 px-3 py-2.5 last:border-b-0"
                 >
                   <a
                     href={`/table/${table.code}`}
@@ -234,13 +238,13 @@ export default async function LobbyPage({
             </ul>
           </section>
         ) : (
-          <p className="mt-5 border border-rule bg-steel px-3 py-2 text-[11px] text-dim">
+          <p className="plate relief settle settle-3 mt-5 border border-rule bg-steel px-3 py-2.5 text-[11px] text-dim">
             No table is gathering a lobby right now. Found one below and the code is yours to send.
           </p>
         )}
 
-        <div className="mt-6 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_356px]">
-          <div className="space-y-6">
+        <div className="settle settle-4 mt-8 grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_356px]">
+          <div className="space-y-8">
             <section>
               <Heading note={`${TRADEABLE.length} of ${RESOURCE_IDS.length} commodities trade`}>
                 The brief
@@ -280,7 +284,7 @@ export default async function LobbyPage({
                 </thead>
                 <tbody>
                   {CHARTER_TABLE.map((charter, index) => (
-                    <tr key={charter.id} className="border-b border-rule/50 align-top">
+                    <tr key={charter.id} className="row-warm border-b border-rule/50 align-top">
                       <td className="tabular py-2.5 pr-3 text-[10px] text-faint">
                         {roman(index + 1)}
                       </td>
@@ -299,7 +303,7 @@ export default async function LobbyPage({
               </table>
             </section>
 
-            <section className="border border-rule bg-steel p-3">
+            <section className="plate relief plate-body border border-rule bg-steel p-4">
               <Heading note="in this order, every window">How a window resolves</Heading>
               <ol className="grid gap-x-10 md:grid-cols-2">
                 {RESOLUTION.map((step, index) => (
@@ -339,7 +343,7 @@ export default async function LobbyPage({
                       <div className="mt-1.5 flex items-center gap-3">
                         <span className="block h-[6px] flex-1 border-y border-rule/60 bg-tar">
                           <span
-                            className="block h-full bg-brass"
+                            className="gauge-fill block h-full bg-brass text-brass"
                             style={{ width: `${share * 100}%`, opacity: 1 - index * 0.13 }}
                           />
                         </span>

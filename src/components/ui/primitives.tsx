@@ -27,9 +27,9 @@ export function Panel({
   className?: string;
 }) {
   return (
-    <section className={`relief border border-rule bg-steel ${className}`}>
+    <section className={`plate relief border border-rule bg-steel ${className}`}>
       <header className="plate-head flex items-center justify-between gap-3 border-b border-rule bg-plate px-3 py-2">
-        <h2 className="flex items-baseline gap-2 text-[10px] tracking-[0.24em] text-dim uppercase">
+        <h2 className="flex items-baseline gap-2 text-[10px] tracking-[0.24em] text-ink/80 uppercase">
           <span className="brass-tick inline-block h-2.5 w-[3px] bg-brass" aria-hidden />
           {title}
         </h2>
@@ -37,7 +37,7 @@ export function Panel({
           <div className="truncate text-right text-[10px] text-faint">{aside}</div>
         ) : null}
       </header>
-      <div className="p-3">{children}</div>
+      <div className="plate-body p-3">{children}</div>
     </section>
   );
 }
@@ -98,7 +98,7 @@ export function Meter({
         <span className="tabular text-[11px] text-dim">{readout ?? value.toFixed(0)}</span>
       </div>
       <div className="mt-1 h-[4px] w-full border-y border-rule bg-tar">
-        <div className={`h-full ${fills[tone]}`} style={{ width: `${pct}%` }} />
+        <div className={`gauge-fill h-full ${fills[tone]}`} style={{ width: `${pct}%` }} />
       </div>
     </div>
   );
@@ -134,7 +134,7 @@ export function Button({
       title={title}
       onClick={onClick}
       disabled={disabled}
-      className={`border px-2.5 py-1 text-[11px] tracking-[0.1em] whitespace-nowrap uppercase disabled:cursor-not-allowed disabled:opacity-40 ${tones[tone]} ${full ? "w-full" : ""}`}
+      className={`lever border px-2.5 py-1 text-[11px] tracking-[0.1em] whitespace-nowrap uppercase disabled:cursor-not-allowed disabled:opacity-40 ${tones[tone]} ${full ? "w-full" : ""}`}
     >
       {children}
     </button>
@@ -264,7 +264,7 @@ export function Chooser({
         <Select.Content
           position="popper"
           sideOffset={2}
-          className="z-50 max-h-72 border border-edge bg-pit"
+          className="z-50 max-h-72 border border-edge bg-pit shadow-[0_18px_40px_-12px_rgba(0,0,0,0.8)]"
         >
           <Select.Viewport>
             {options.map((option) => (
@@ -299,7 +299,7 @@ export function TabSet({
           <Tabs.Trigger
             key={tab.value}
             value={tab.value}
-            className="-mb-px border-b-2 border-transparent px-3 py-1.5 text-[10px] tracking-[0.18em] text-faint uppercase data-[state=active]:border-brass data-[state=active]:text-ink"
+            className="tab-lit -mb-px border-b-2 border-transparent px-3 py-1.5 text-[10px] tracking-[0.18em] text-faint uppercase data-[state=active]:border-brass data-[state=active]:text-ink"
           >
             {tab.label}
             {tab.badge ? <span className="tabular ml-1.5 text-brass">{tab.badge}</span> : null}
@@ -331,9 +331,9 @@ export function Modal({
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-40 bg-void/85" />
+        <Dialog.Overlay className="smoke-in fixed inset-0 z-40 bg-void/80" />
         <Dialog.Content
-          className={`fixed top-1/2 left-1/2 z-50 w-[92vw] ${width} max-h-[88vh] -translate-x-1/2 -translate-y-1/2 overflow-auto border border-edge bg-steel outline-none ${contentClassName}`}
+          className={`dialog-rise fixed top-1/2 left-1/2 z-50 w-[92vw] ${width} max-h-[88vh] -translate-x-1/2 -translate-y-1/2 overflow-auto border border-edge bg-steel outline-none ${contentClassName}`}
         >
           {bare ? null : (
             <header className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b-2 border-double border-edge bg-plate px-3 py-2">
@@ -341,7 +341,7 @@ export function Modal({
                 <span className="inline-block h-3 w-[3px] bg-brass" aria-hidden />
                 {title}
               </Dialog.Title>
-              <Dialog.Close className="border border-rule px-2 py-0.5 text-[10px] tracking-[0.1em] text-dim uppercase hover:border-edge hover:text-ink">
+              <Dialog.Close className="lever border border-rule px-2 py-0.5 text-[10px] tracking-[0.1em] text-dim uppercase hover:border-edge hover:text-ink">
                 Close
               </Dialog.Close>
             </header>
