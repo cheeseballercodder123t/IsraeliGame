@@ -107,8 +107,11 @@ function FieldControl({
   state: GameState;
   player: Player;
 }) {
+  // One sheet of metal for the whole desk, cut to the desk's own measure, and
+  // the same sheet again for a picker, which is given a chevron of its own.
   const shell =
-    "w-full border border-rule bg-pit px-1.5 py-[3px] text-[11px] text-ink placeholder:text-faint";
+    "sheet w-full px-1.5 py-[3px] text-[11px] text-ink placeholder:text-faint";
+  const picker = `${shell} sheet-select`;
 
   if (field.kind === "BOOLEAN") {
     return (
@@ -126,7 +129,7 @@ function FieldControl({
   if (field.kind === "TEXT" && field.name === "labor") {
     return (
       <select
-        className={shell}
+        className={picker}
         value={String(value)}
         onChange={(event) => onChange(event.target.value)}
       >
@@ -153,7 +156,7 @@ function FieldControl({
   if (field.kind === "RESOURCE") {
     return (
       <select
-        className={shell}
+        className={picker}
         value={String(value)}
         onChange={(event) => onChange(event.target.value)}
       >
@@ -170,7 +173,7 @@ function FieldControl({
   if (field.kind === "RECIPE") {
     return (
       <select
-        className={shell}
+        className={picker}
         value={String(value)}
         onChange={(event) => onChange(event.target.value)}
       >
@@ -206,7 +209,7 @@ function FieldControl({
     ];
     return (
       <select
-        className={shell}
+        className={picker}
         value={String(value)}
         onChange={(event) => onChange(event.target.value)}
       >
@@ -229,7 +232,7 @@ function FieldControl({
   if (field.kind === "PLAYER") {
     return (
       <select
-        className={shell}
+        className={picker}
         value={String(value)}
         onChange={(event) => onChange(event.target.value)}
       >
@@ -255,7 +258,7 @@ function FieldControl({
     }
     return (
       <select
-        className={shell}
+        className={picker}
         value={String(value)}
         onChange={(event) => onChange(event.target.value)}
       >
@@ -275,7 +278,7 @@ function FieldControl({
   if (field.kind === "RAIL") {
     return (
       <select
-        className={shell}
+        className={picker}
         value={String(value)}
         onChange={(event) => onChange(event.target.value)}
       >
@@ -292,7 +295,7 @@ function FieldControl({
   if (field.kind === "GRADE") {
     return (
       <select
-        className={shell}
+        className={picker}
         value={String(value)}
         onChange={(event) => onChange(event.target.value)}
       >
@@ -494,7 +497,7 @@ export function OrderDesk({ state, player, sealed, onQueue }: OrderDeskProps) {
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Find an order"
             aria-label="Find an order by name"
-            className="w-full border border-rule bg-steel px-2 py-1 text-[11px] text-ink placeholder:text-faint"
+            className="sheet w-full px-2 py-1 text-[11px] text-ink placeholder:text-faint"
           />
           <span className="text-[10px] text-faint">/</span>
         </label>

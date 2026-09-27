@@ -37,6 +37,7 @@ import { TABLE_RECAP, TABLE_TOUR } from "@/components/tour/steps";
 import { Button, KeyValue, Meter, Notice, Panel } from "@/components/ui/primitives";
 import { cancelOrderAction, forceTickAction, queueOrderAction } from "@/server/actions";
 import {
+  bandTint,
   formatMoney,
   formatPercent,
   formatUnits,
@@ -247,7 +248,7 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
   if (!me) return null;
 
   return (
-    <div className="ledger mx-auto max-w-[1780px] p-2 sm:p-3">
+    <div className="ground mx-auto max-w-[1780px] p-2 sm:p-3">
       <Tour name="table" steps={TABLE_TOUR} recap={TABLE_RECAP} />
 
       <StatusStrip
@@ -294,7 +295,7 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
        */}
       <div
         data-tour="views"
-        className="mt-3 flex flex-wrap items-stretch border border-edge bg-pit"
+        className="mt-4 flex flex-wrap items-stretch border border-edge/70 bg-pit"
       >
         <p className="hidden min-w-[186px] flex-col justify-center border-r border-rule bg-plate px-3 py-2 lg:flex">
           <span className="font-slab text-[15px] leading-none text-ink">Conglomerate</span>
@@ -315,7 +316,7 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
                 type="button"
                 onClick={() => setView(id)}
                 aria-pressed={view === id}
-                className={`relative flex-1 border-r border-rule px-3 py-2 text-[10px] tracking-[0.18em] uppercase sm:flex-none ${
+                className={`relative flex-1 border-r border-rule px-3 py-2 text-[10px] tracking-[0.18em] uppercase transition-colors duration-150 sm:flex-none ${
                   view === id
                     ? "bg-steel text-ink"
                     : "bg-pit text-dim hover:bg-steel hover:text-ink"
@@ -335,7 +336,7 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
             type="button"
             onClick={() => toggleSound()}
             aria-pressed={sound}
-            className={`flex-1 border-r border-rule px-3 py-2 text-[10px] tracking-[0.18em] whitespace-nowrap uppercase sm:flex-none ${
+            className={`flex-1 border-r border-rule px-3 py-2 text-[10px] tracking-[0.18em] whitespace-nowrap uppercase transition-colors duration-150 sm:flex-none ${
               sound ? "bg-steel text-brass" : "text-dim hover:bg-steel hover:text-ink"
             }`}
             title={
@@ -349,7 +350,7 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
           <button
             type="button"
             onClick={() => setHelpOpen(true)}
-            className="flex-1 border-r border-rule px-3 py-2 text-[10px] tracking-[0.18em] whitespace-nowrap text-dim uppercase hover:bg-steel hover:text-ink sm:flex-none"
+            className="flex-1 border-r border-rule px-3 py-2 text-[10px] tracking-[0.18em] whitespace-nowrap text-dim uppercase transition-colors duration-150 hover:bg-steel hover:text-ink sm:flex-none"
             title="Every key at the table"
           >
             Guide ?
@@ -357,7 +358,7 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
           <button
             type="button"
             onClick={() => startTour("full")}
-            className="flex-1 px-3 py-2 text-[10px] tracking-[0.18em] whitespace-nowrap text-dim uppercase hover:bg-steel hover:text-ink sm:flex-none"
+            className="flex-1 px-3 py-2 text-[10px] tracking-[0.18em] whitespace-nowrap text-dim uppercase transition-colors duration-150 hover:bg-steel hover:text-ink sm:flex-none"
           >
             Take the tour
           </button>
@@ -372,10 +373,10 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
          * the desk down the left, and the board, the register and the inspector
          * stacked down the right so the grid can have the width it needs.
          */
-        <div className="mt-3 grid items-start gap-3 lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)] 2xl:grid-cols-[360px_minmax(0,1fr)_340px]">
+        <div className="mt-4 grid items-start gap-4 lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)] 2xl:grid-cols-[360px_minmax(0,1fr)_340px]">
           <div
             data-tour="desk"
-            className="order-2 min-w-0 space-y-3 lg:order-none lg:col-start-1 lg:row-span-2 lg:row-start-1 2xl:col-start-1 2xl:row-span-1 2xl:row-start-1"
+            className="order-2 min-w-0 space-y-4 lg:order-none lg:col-start-1 lg:row-span-2 lg:row-start-1 2xl:col-start-1 2xl:row-span-1 2xl:row-start-1"
           >
             <FirstMoves state={state} player={me} onShow={setSelectedTileId} />
             <OrderDesk state={state} player={me} sealed={optimistic} onQueue={handleOrder} />
@@ -384,7 +385,7 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
             </div>
           </div>
 
-          <div className="order-1 min-w-0 space-y-3 lg:order-none lg:col-start-2 lg:row-start-1 2xl:col-start-2 2xl:row-start-1">
+          <div className="order-1 min-w-0 space-y-4 lg:order-none lg:col-start-2 lg:row-start-1 2xl:col-start-2 2xl:row-start-1">
             <div data-tour="board">
               <Panel
                 title="Industrial grid"
@@ -396,10 +397,16 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
                   highlightPlayerId={meId}
                   onSelect={setSelectedTileId}
                 />
-                <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 border-t border-rule pt-2">
+                <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-rule pt-2">
                   {ringLegend().map((entry) => (
-                    <span key={entry.ring} className="text-[10px] text-faint">
-                      {entry.name} <span className="text-dim">{entry.count}</span>{" "}
+                    <span key={entry.ring} className="flex items-center gap-1.5 text-[10px]">
+                      <span
+                        className="inline-block h-2 w-2 shrink-0"
+                        style={{ background: bandTint(entry.terrain) }}
+                        aria-hidden
+                      />
+                      <span className="text-faint">{entry.name}</span>
+                      <span className="tabular text-dim">{entry.count}</span>
                       <span className="text-edge">tier {entry.tiers.join("/")}</span>
                     </span>
                   ))}
@@ -493,7 +500,7 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
             ) : null}
           </div>
 
-          <div className="order-3 grid min-w-0 items-start gap-3 md:grid-cols-2 lg:order-none lg:col-start-2 lg:row-start-2 2xl:col-start-3 2xl:row-start-1 2xl:grid-cols-1">
+          <div className="order-3 grid min-w-0 items-start gap-4 md:grid-cols-2 lg:order-none lg:col-start-2 lg:row-start-2 2xl:col-start-3 2xl:row-start-1 2xl:grid-cols-1">
             <div className="min-w-0">
               <ChatPanel code={code} state={state} meId={meId} />
             </div>
@@ -597,15 +604,15 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
           </div>
         </div>
       ) : (
-        <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,340px)] 2xl:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,340px)] 2xl:grid-cols-[minmax(0,1fr)_360px]">
           {/* A flex column, so the book keeps its own scroll region inside a
               column that is as tall as the panels beside it. */}
-          <div className="flex min-w-0 flex-col gap-3">
+          <div className="flex min-w-0 flex-col gap-4">
             <MarketTape state={state} />
             <Exchange state={state} player={me} onOrder={handleOrder} />
           </div>
 
-          <div className="min-w-0 space-y-3">
+          <div className="min-w-0 space-y-4">
             <ChatPanel code={code} state={state} meId={meId} />
 
             <ContractsPanel state={state} meId={meId} onOrder={handleOrder} />
@@ -719,7 +726,7 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
       <HelpOverlay open={helpOpen} onOpenChange={setHelpOpen} />
 
       {/* The colophon: how the window runs, what the tick buys, and every key. */}
-      <footer className="mt-6 border-t-2 border-double border-edge pt-4">
+      <footer className="mt-6 border-t-[3px] border-double border-edge pt-4">
         <dl className="grid gap-x-10 gap-y-4 sm:grid-cols-2 xl:grid-cols-4">
           <div>
             <dt className="text-[9px] tracking-[0.2em] text-faint uppercase">

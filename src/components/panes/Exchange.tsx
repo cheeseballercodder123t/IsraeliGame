@@ -88,13 +88,18 @@ export function Exchange({ state, player, onOrder }: ExchangeProps) {
   const effectiveLimit = limit > 0 ? limit : cents(row.price);
 
   return (
-    <div data-tour="exchange" className="flex min-h-0 flex-col border border-rule bg-steel">
-      <div className="flex items-center justify-between border-b border-rule bg-plate px-3 py-1.5">
-        <h2 className="text-[10px] tracking-[0.22em] text-dim uppercase">Global exchange</h2>
+    <div data-tour="exchange" className="flex min-h-0 flex-col border border-edge/70 bg-steel">
+      <div className="flex items-center justify-between gap-3 bg-plate px-3 py-1.5">
+        <h2 className="flex items-baseline gap-2 text-[10px] tracking-[0.24em] text-dim uppercase">
+          <span className="inline-block h-[10px] w-[2px] bg-brass" aria-hidden />
+          Global exchange
+        </h2>
         <span className="text-[10px] text-faint">
           {TRADEABLE.length} commodities · {state.market.length} books
         </span>
       </div>
+      {/* The joint between header plate and body steel, as every other plate is cut. */}
+      <div className="seam" aria-hidden />
 
       <div className="border-b border-rule px-3 py-2">
         <div className="flex flex-wrap items-stretch gap-2">
@@ -124,7 +129,7 @@ export function Exchange({ state, player, onOrder }: ExchangeProps) {
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Find goods"
             aria-label="Find a commodity"
-            className="w-full border border-rule bg-pit px-2 py-1 text-[11px] text-ink placeholder:text-faint sm:ml-auto sm:w-40"
+            className="sheet w-full px-2 py-1 text-[11px] text-ink placeholder:text-faint sm:ml-auto sm:w-40"
           />
         </div>
 
@@ -266,8 +271,10 @@ export function Exchange({ state, player, onOrder }: ExchangeProps) {
                 key={option}
                 type="button"
                 onClick={() => setSide(option)}
-                className={`border px-3 py-[3px] text-[10px] uppercase ${
-                  side === option ? "border-brass bg-plate text-ink" : "border-rule text-dim"
+                className={`border px-3 py-[3px] text-[10px] uppercase transition-colors duration-150 active:translate-y-[1px] ${
+                  side === option
+                    ? "border-brass bg-plate text-ink"
+                    : "border-rule text-dim hover:border-edge hover:text-ink"
                 }`}
               >
                 {option}
@@ -281,7 +288,7 @@ export function Exchange({ state, player, onOrder }: ExchangeProps) {
               min={1}
               value={quantity}
               onChange={(event) => setQuantity(Math.max(1, Number(event.target.value)))}
-              className="tabular w-24 border border-rule bg-pit px-1.5 py-[3px] text-[11px] text-ink"
+              className="sheet tabular w-24 px-1.5 py-[3px] text-[11px] text-ink"
             />
           </label>
           <label className="block">
@@ -292,7 +299,7 @@ export function Exchange({ state, player, onOrder }: ExchangeProps) {
               step={0.01}
               value={effectiveLimit}
               onChange={(event) => setLimit(Number(event.target.value))}
-              className="tabular w-24 border border-rule bg-pit px-1.5 py-[3px] text-[11px] text-ink"
+              className="sheet tabular w-24 px-1.5 py-[3px] text-[11px] text-ink"
             />
           </label>
           <div className="text-[10px] text-faint">

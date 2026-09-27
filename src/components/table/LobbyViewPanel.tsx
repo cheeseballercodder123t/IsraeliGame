@@ -54,10 +54,10 @@ export function LobbyViewPanel({ lobby }: { lobby: LobbyView }) {
   };
 
   return (
-    <main className="ledger mx-auto max-w-4xl px-3 py-6 sm:px-5 sm:py-10">
+    <main className="ground mx-auto max-w-4xl px-3 py-6 sm:px-5 sm:py-10">
       <Tour name="lobby" steps={LOBBY_TOUR} />
 
-      <header data-tour="lobby-head" className="border-b-2 border-double border-edge pb-4">
+      <header data-tour="lobby-head" className="border-b-[3px] border-double border-edge pb-4">
         <p className="text-[10px] tracking-[0.3em] text-faint uppercase">
           {lobby.status === "LOBBY" ? "The table is gathering" : "A chair is open at the table"}
         </p>
@@ -144,7 +144,7 @@ export function LobbyViewPanel({ lobby }: { lobby: LobbyView }) {
           <button
             type="button"
             onClick={() => startTour()}
-            className="border border-edge px-2 py-[2px] tracking-[0.16em] text-dim uppercase hover:border-brass hover:text-ink"
+            className="border border-edge px-2 py-[2px] tracking-[0.16em] text-dim uppercase transition-colors duration-150 hover:border-brass hover:text-ink active:translate-y-[1px]"
           >
             Take the tour
           </button>
@@ -160,7 +160,7 @@ export function LobbyViewPanel({ lobby }: { lobby: LobbyView }) {
       <section data-tour="lobby-seats" className="mt-6">
         <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 border-b border-rule pb-1.5">
           <h2 className="flex items-baseline gap-2 text-[10px] tracking-[0.24em] text-dim uppercase">
-            <span className="inline-block h-2.5 w-[3px] bg-brass" aria-hidden />
+            <span className="inline-block h-[10px] w-[2px] bg-brass" aria-hidden />
             Houses at the table
           </h2>
           <span className="text-[10px] text-faint">
@@ -188,7 +188,7 @@ export function LobbyViewPanel({ lobby }: { lobby: LobbyView }) {
             return (
               <li
                 key={seat.id}
-                className="flex items-baseline justify-between gap-3 border border-rule bg-steel px-3 py-2"
+                className="flex items-baseline justify-between gap-3 border border-edge/70 bg-steel px-3 py-2"
               >
                 <span className="flex min-w-0 items-baseline gap-2">
                   <span className="tabular text-[10px] text-faint">{number}</span>
@@ -267,7 +267,7 @@ export function LobbyViewPanel({ lobby }: { lobby: LobbyView }) {
                 <select
                   value={archetype}
                   onChange={(event) => setArchetype(event.target.value as Archetype)}
-                  className="w-56 border border-rule bg-pit px-2 py-1 text-[12px] text-ink"
+                  className="sheet sheet-select w-56 px-2 py-1 text-[12px] text-ink"
                 >
                   {CHARTER_LIST.map((charter) => (
                     <option key={charter.id} value={charter.id}>

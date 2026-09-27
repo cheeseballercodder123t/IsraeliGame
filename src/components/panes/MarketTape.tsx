@@ -67,10 +67,10 @@ export function MarketTape({ state }: { state: GameState }) {
     <section
       data-tour="tape"
       aria-label="The price tape, every commodity against its base price"
-      className="flex items-stretch border border-rule bg-plate"
+      className="flex items-stretch border border-edge/70 bg-plate"
     >
       <p className="flex shrink-0 items-center gap-2 border-r border-edge px-3 py-1">
-        <span className="inline-block h-2 w-[3px] bg-brass" aria-hidden />
+        <span className="inline-block h-[10px] w-[2px] bg-brass" aria-hidden />
         <span className="text-[9px] tracking-[0.24em] text-dim uppercase">The tape</span>
       </p>
       <div className="min-w-0 flex-1 overflow-hidden">

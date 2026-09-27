@@ -57,7 +57,13 @@ function CountdownRing({
       className="relative inline-flex h-12 w-12 shrink-0 items-center justify-center"
       aria-hidden
     >
-      <svg viewBox="0 0 40 40" className="h-12 w-12 -rotate-90">
+      {/*
+       * The graduations are drawn upright and the arc is drawn turned, so the
+       * collar can keep its own bearings: the zero mark stands at the top
+       * where a dial keeps it, and the arc still starts there and sweeps with
+       * the window.
+       */}
+      <svg viewBox="0 0 40 40" className="absolute inset-0 h-12 w-12">
         <circle
           cx="20"
           cy="20"
@@ -67,6 +73,9 @@ function CountdownRing({
           strokeWidth="1.3"
           strokeDasharray={`1.2 ${(TICK_CIRCUMFERENCE - TICK_COUNT * 1.2) / TICK_COUNT}`}
         />
+        <rect x="19.4" y="0.5" width="1.2" height="3.6" fill="#c19a3a" />
+      </svg>
+      <svg viewBox="0 0 40 40" className="absolute inset-0 h-12 w-12 -rotate-90">
         <circle cx="20" cy="20" r={RING_RADIUS} fill="none" stroke="#2f2a24" strokeWidth="3.4" />
         <circle
           cx="20"
@@ -203,10 +212,13 @@ export function StatusStrip({
         ? clock(remaining)
         : `${Math.floor(remaining / 3600)}h`;
 
+  // The collar of the table: gilt along the top edge, plate below it, and a
+  // heavy rule under the whole faceplate. Only the front page wears the same
+  // trim, which is what makes the two read as the same building.
   return (
     <header
       data-tour="strip"
-      className={`sticky top-0 z-30 border border-b-2 bg-plate ${
+      className={`gilt-t sticky top-0 z-30 border-x border-b-[3px] border-double bg-plate ${
         flash ? "window-flash border-blood" : "border-edge"
       }`}
     >
@@ -334,7 +346,7 @@ export function StatusStrip({
               type="button"
               data-tour="rag"
               onClick={onOpenRag}
-              className="border border-edge bg-pit px-2 py-1 text-[10px] tracking-[0.14em] text-dim uppercase hover:border-brass hover:text-ink"
+              className="border border-edge bg-pit px-2 py-1 text-[10px] tracking-[0.14em] text-dim uppercase transition-colors duration-150 hover:border-brass hover:text-ink active:translate-y-[1px]"
             >
               The Rag
             </button>
@@ -349,7 +361,7 @@ export function StatusStrip({
        * On a phone it reads as one scrollable strip rather than four stacked
        * rows, so the collar across the top of the table stays short.
        */}
-      <div className="flex flex-nowrap items-stretch overflow-x-auto border-t border-rule bg-pit sm:flex-wrap sm:overflow-visible">
+      <div className="seam flex flex-nowrap items-stretch overflow-x-auto bg-pit sm:flex-wrap sm:overflow-visible">
         {state.players.map((player) => {
           const sealed = sealedBy(player.id);
           const leads = (worth.get(player.id) ?? 0) >= best && best > 0;
