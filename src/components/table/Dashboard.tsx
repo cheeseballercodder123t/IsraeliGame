@@ -350,10 +350,10 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
          * the desk down the left, and the board, the register and the inspector
          * stacked down the right so the grid can have the width it needs.
          */
-        <div className="mt-3 grid items-start gap-3 lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)] 2xl:grid-cols-[360px_minmax(0,1fr)_340px]">
+        <div className="mt-3 grid items-start gap-3 lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)] xl:grid-cols-[360px_minmax(0,1fr)_360px]">
           <div
             data-tour="desk"
-            className="order-2 min-w-0 space-y-3 lg:order-none lg:col-start-1 lg:row-span-2 lg:row-start-1 2xl:col-start-1 2xl:row-span-1 2xl:row-start-1"
+            className="order-2 min-w-0 space-y-3 lg:order-none lg:col-start-1 lg:row-start-1 xl:col-start-1 xl:row-start-1"
           >
             <FirstMoves state={state} player={me} onShow={setSelectedTileId} />
             <OrderDesk state={state} player={me} sealed={optimistic} onQueue={handleOrder} />
@@ -362,7 +362,7 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
             </div>
           </div>
 
-          <div className="order-1 min-w-0 space-y-3 lg:order-none lg:col-start-2 lg:row-start-1 2xl:col-start-2 2xl:row-start-1">
+          <div className="order-1 min-w-0 space-y-3 lg:order-none lg:col-start-2 lg:row-start-1 xl:col-start-2 xl:row-start-1">
             <div data-tour="board">
               <Panel
                 title="Industrial grid"
@@ -412,7 +412,7 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
             ) : null}
           </div>
 
-          <div className="order-3 grid min-w-0 items-start gap-3 md:grid-cols-2 lg:order-none lg:col-start-2 lg:row-start-2 2xl:col-start-3 2xl:row-start-1 2xl:grid-cols-1">
+          <div className="order-3 grid min-w-0 items-start gap-3 md:grid-cols-2 lg:order-none lg:col-span-2 lg:col-start-1 lg:row-start-2 lg:grid-cols-3 xl:col-span-1 xl:col-start-3 xl:row-start-1 xl:grid-cols-1">
             <div className="min-w-0">
               <ChatPanel code={code} state={state} meId={meId} />
             </div>
@@ -478,7 +478,7 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
               </Panel>
             </div>
 
-            <div className="min-w-0 md:col-span-2 2xl:col-span-1">
+            <div className="min-w-0 md:col-span-2 lg:col-span-3 xl:col-span-1">
               <Panel title="Goods on hand" aside={`${held.length} families`}>
                 {held.length === 0 ? (
                   <p className="text-[11px] text-faint">
