@@ -59,8 +59,8 @@ export function EraClosing({
 
   return (
     <div className="mt-3 space-y-3">
-      <section className="border border-brass/60 bg-steel">
-        <header className="border-b border-rule bg-plate px-3 py-3">
+      <section className="border border-edge/70 bg-steel">
+        <header className="bg-plate px-3 py-3">
           <p className="text-[10px] tracking-[0.3em] text-brass uppercase">The era closes</p>
           <h2 className="mt-2 font-slab text-[28px] leading-[1.05] font-extrabold text-ink sm:text-[38px]">
             {winner ? `${winner.name} stands first` : "The books are shut"}
@@ -86,6 +86,7 @@ export function EraClosing({
             ))}
           </dl>
         </header>
+        <div className="seam" aria-hidden />
 
         <div className="p-3">
           <HousesRegister state={state} meId={meId} />

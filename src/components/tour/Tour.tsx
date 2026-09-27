@@ -380,7 +380,7 @@ export function Tour({
               <button
                 type="button"
                 onClick={() => begin("full")}
-                className="text-[10px] tracking-[0.14em] text-brass uppercase hover:text-ink"
+                className="text-[10px] tracking-[0.14em] text-brass uppercase transition-colors duration-150 hover:text-ink"
               >
                 The whole walk
               </button>
@@ -388,7 +388,7 @@ export function Tour({
             <button
               type="button"
               onClick={finish}
-              className="text-[10px] tracking-[0.14em] text-dim uppercase hover:text-ink"
+              className="text-[10px] tracking-[0.14em] text-dim uppercase transition-colors duration-150 hover:text-ink"
             >
               {index === 0 ? "Skip the tour" : "Leave the tour"}
             </button>

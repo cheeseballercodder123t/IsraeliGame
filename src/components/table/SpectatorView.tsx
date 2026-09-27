@@ -77,7 +77,7 @@ export function SpectatorView({
   }, [ragOpen]);
 
   return (
-    <main className="ledger mx-auto max-w-[1780px] p-2 sm:p-3">
+    <main className="ground mx-auto max-w-[1780px] p-2 sm:p-3">
       <StatusStrip
         state={state}
         meId={null}
@@ -87,9 +87,9 @@ export function SpectatorView({
         present={present}
       />
 
-      <section className="mt-3 border border-edge bg-plate px-3 py-2.5">
+      <section className="mt-3 border border-edge/70 bg-plate px-3 py-2.5">
         <p className="flex items-baseline gap-2 text-[10px] tracking-[0.24em] text-brass uppercase">
-          <span className="inline-block h-2.5 w-[3px] bg-brass" aria-hidden />
+          <span className="inline-block h-[10px] w-[2px] bg-brass" aria-hidden />
           Watching table {code} from the rail
         </p>
         <p className="mt-1.5 max-w-4xl text-[11px] leading-relaxed text-dim">
@@ -153,7 +153,7 @@ export function SpectatorView({
               <button
                 type="button"
                 onClick={() => openIssue(latestIssue)}
-                className="mt-2 border border-edge px-2 py-1 text-[10px] tracking-[0.14em] text-dim uppercase hover:border-brass hover:text-ink"
+                className="mt-2 border border-edge px-2 py-1 text-[10px] tracking-[0.14em] text-dim uppercase transition-colors duration-150 hover:border-brass hover:text-ink active:translate-y-[1px]"
               >
                 Read the latest edition
               </button>

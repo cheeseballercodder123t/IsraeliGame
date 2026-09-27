@@ -229,7 +229,7 @@ export function NewspaperModal({
           <button
             type="button"
             onClick={() => onOpenChange(false)}
-            className="border border-newsink px-3 py-1 font-mono text-[10px] tracking-[0.16em] uppercase hover:bg-newsink hover:text-news"
+            className="border border-newsink px-3 py-1 font-mono text-[10px] tracking-[0.16em] uppercase transition-colors duration-150 hover:bg-newsink hover:text-news active:translate-y-[1px]"
           >
             Fold it up
           </button>

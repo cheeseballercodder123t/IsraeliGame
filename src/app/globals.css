@@ -12,7 +12,10 @@
   /* Type on metal */
   --color-ink: #ded4c3;
   --color-dim: #9c9180;
-  --color-faint: #6d6457;
+  /* Faint is lifted one step off the old value: the smallest type in the
+     building is set in it, and it has to read on plate steel, not just on the
+     page. It still sits well below dim, so the ranking of the three stands. */
+  --color-faint: #7d7365;
 
   /* Pigments */
   --color-rust: #a9542a;
@@ -73,33 +76,48 @@ p {
   text-wrap: pretty;
 }
 
-/* Paper grain. Fine fractal noise, no dot lattice, no gradient wash. */
-.grain::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  opacity: 0.035;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
-}
-
-.rule-grid {
-  background-image: none;
+/*
+ * The ground every room stands on.
+ *
+ * One quiet field of warm steel. The building sits on this, so nothing in it
+ * is allowed to repeat at a scale the eye can catch, and nothing in it is a
+ * line. Two fields of fractal noise are enough to read as the surface of a
+ * rolled sheet: a wide mottle underneath, and a fine grain over it that keeps
+ * a wide screen from looking flat. There is no rule work down here at all.
+ * Rules belong to the panels that have something to say, which is why a long
+ * page reads as plate after plate rather than as stripes.
+ *
+ * Both tiles are stitched, and that is the whole point of them. Noise does not
+ * normally close on itself, so a plain tile leaves a hard edge wherever it
+ * lands; stitched turbulence makes the pattern meet its own edge, which is the
+ * difference between a texture and a rule drawn the width of the page every
+ * five hundred pixels.
+ */
+.ground {
+  background-color: var(--color-void);
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='520' height='520'%3E%3Cfilter id='m'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.011' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='520' height='520' filter='url(%23m)' opacity='0.075'/%3E%3C/svg%3E");
 }
 
 /*
- * The daybook ground. Fine horizontal rules, one every eight lines of type,
- * the way a works' ledger is printed. It sits behind everything and never
- * reads as a pattern: at this contrast it is closer to paper than to ink.
+ * A machined seam. Two hairlines laid against each other, one dark and one
+ * light, which is how a joint between two sheets of plate reads. It is drawn
+ * with borders rather than a shadow, so it stays flat at any zoom.
  */
-.ledger {
-  background-image: repeating-linear-gradient(
-    to bottom,
-    transparent 0,
-    transparent 27px,
-    rgba(58, 50, 42, 0.5) 27px,
-    rgba(58, 50, 42, 0.5) 28px
-  );
+.seam {
+  border-top: 1px solid var(--color-rule);
+  border-bottom: 1px solid var(--color-plate);
+}
+
+/*
+ * A gilt edge. The building allows itself exactly one flourish: a thin line of
+ * brass along a top margin, the way a works' own letterhead is trimmed. It is
+ * worn by the two faceplates a director meets first, the front page and the
+ * collar of a table, and by nothing else. A line, never a gradient.
+ */
+.gilt-t {
+  border-top: 2px solid rgba(193, 154, 58, 0.55);
 }
 
 /* Numeric readouts stay on a fixed advance so columns line up. */
@@ -123,34 +141,76 @@ p {
   border-right: 1px solid var(--color-rule);
 }
 
-/* Hazard hatch used on sealed, frozen, or struck states. */
+/* Anything a link can land on stands clear of the edge it lands against. */
+[id] {
+  scroll-margin-top: 16px;
+}
+
+/*
+ * Every control in the building is cut from the same sheet: one hairline box
+ * on pit steel, from the same colours the panels are made of. Only the metal
+ * is declared here, no size and no type colour, so a field keeps whatever
+ * measure and tone the room it stands in asks for.
+ */
+.sheet {
+  border: 1px solid var(--color-rule);
+  background-color: var(--color-pit);
+  transition: border-color 120ms linear;
+}
+
+.sheet:hover {
+  border-color: var(--color-edge);
+}
+
+.sheet:focus {
+  border-color: var(--color-brass);
+}
+
+/*
+ * A native picker, cut square and given a chevron of its own, so a select in
+ * the front of the house matches the rest of the metal instead of the
+ * browser's idea of a dropdown.
+ */
+.sheet-select {
+  appearance: none;
+  padding-right: 26px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='6'%3E%3Cpath d='M0 0h9L4.5 6z' fill='%237d7365'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 9px center;
+}
+
+/*
+ * Hazard tape, woven fine. One hairline to the weft rather than a stripe: at
+ * this pitch it reads as tape laid under the type, so a sealed or frozen state
+ * is legible without the notice turning into a pattern.
+ */
 .hatch {
   background-image: repeating-linear-gradient(
-    135deg,
-    rgba(217, 154, 26, 0.22) 0px,
-    rgba(217, 154, 26, 0.22) 2px,
-    transparent 2px,
-    transparent 7px
+    115deg,
+    rgba(217, 154, 26, 0.16) 0px,
+    rgba(217, 154, 26, 0.16) 1px,
+    transparent 1px,
+    transparent 6px
   );
 }
 
 .hatch-blood {
   background-image: repeating-linear-gradient(
-    135deg,
-    rgba(140, 47, 40, 0.28) 0px,
-    rgba(140, 47, 40, 0.28) 2px,
-    transparent 2px,
-    transparent 7px
+    115deg,
+    rgba(140, 47, 40, 0.2) 0px,
+    rgba(140, 47, 40, 0.2) 1px,
+    transparent 1px,
+    transparent 6px
   );
 }
 
 .hatch-verdigris {
   background-image: repeating-linear-gradient(
-    135deg,
-    rgba(74, 122, 106, 0.24) 0px,
-    rgba(74, 122, 106, 0.24) 2px,
-    transparent 2px,
-    transparent 7px
+    115deg,
+    rgba(74, 122, 106, 0.18) 0px,
+    rgba(74, 122, 106, 0.18) 1px,
+    transparent 1px,
+    transparent 6px
   );
 }
 
@@ -231,7 +291,11 @@ input[type="radio"] {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--color-rule);
+  background: var(--color-edge);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-dim);
 }
 
 /* A pasted page in the paper reads on newsprint, so its scrollbar and its

@@ -126,7 +126,7 @@ export function ChatPanel({
               maxLength={MAX_WIRE_CHARS}
               onChange={(event) => setDraft(event.target.value)}
               placeholder="A figure, a threat, a name"
-              className="min-w-0 flex-1 border border-rule bg-pit px-2 py-1 text-[12px] text-ink placeholder:text-faint"
+              className="sheet min-w-0 flex-1 px-2 py-1 text-[12px] text-ink placeholder:text-faint"
             />
             <Button tone="brass" type="submit" disabled={pending || tidyLine(draft).length === 0}>
               Say
@@ -143,7 +143,7 @@ export function ChatPanel({
                     type="button"
                     disabled={pending}
                     onClick={() => send(barb)}
-                    className="border border-rule bg-pit px-2 py-1 text-left text-[10px] leading-snug text-dim hover:border-brass hover:text-ink disabled:opacity-40"
+                    className="border border-rule bg-pit px-2 py-1 text-left text-[10px] leading-snug text-dim transition-colors duration-150 hover:border-brass hover:text-ink active:translate-y-[1px] disabled:opacity-40"
                   >
                     {barb}
                   </button>

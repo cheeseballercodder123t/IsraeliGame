@@ -8,6 +8,7 @@ import { RagShelf } from "@/components/newspaper/RagShelf";
 import { ContractsPanel } from "@/components/table/ContractsPanel";
 import { HousesRegister } from "@/components/table/HousesRegister";
 import { RecordPane } from "@/components/table/RecordPane";
+import { BOARD } from "@/domain/constants";
 import type { NewspaperRecord } from "@/server/store/types";
 import { build, freshState, tileAt } from "./helpers";
 
@@ -63,6 +64,13 @@ describe("the status strip, as painted", () => {
     expect(html).toContain("leads");
     expect(html).toContain("No paper yet");
     expect(html).toContain("0 sealed");
+    // The faceplate is closed with a doubled rule rather than a plain one, and
+    // the dial is graduated around a brass zero at the top, the way every
+    // other instrument in the building is marked.
+    expect(html).toContain("border-b-[3px] border-double");
+    expect(html).toContain('fill="#c19a3a"');
+    // The two rails of the collar are joined with a machined seam.
+    expect(html).toContain("seam flex");
   });
 
   it("reads as the rail for somebody without a chair", () => {
@@ -259,5 +267,12 @@ describe("the board, as painted", () => {
     // The gutter is numbered on both axes, so a plot can be named off the screen.
     expect(html.match(/>10</g)?.length ?? 0).toBeGreaterThanOrEqual(2);
     expect(html).toContain('title="Plot 0, 0');
+    // The gutter is graduated against every plot on both axes, and the plot
+    // field is ruled off from it, so the margin reads as a margin.
+    expect(html.match(/width:1px;height:4px/g)?.length).toBe(BOARD);
+    expect(html.match(/width:4px;height:1px/g)?.length).toBe(BOARD);
+    expect(html).toContain("absolute border border-rule");
+    // The fit controls answer on press the way every other control does.
+    expect(html).toContain("active:translate-y-[1px]");
   });
 });

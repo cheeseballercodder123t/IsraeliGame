@@ -40,6 +40,7 @@ import type {
   RecipeId,
   Resource,
   RollingStock,
+  Terrain,
   WindDirection,
 } from "@/domain/types";
 
@@ -108,6 +109,24 @@ const WIND_LABEL: Record<WindDirection, string> = {
 
 export function windLabel(wind: WindDirection): string {
   return WIND_LABEL[wind];
+}
+
+/**
+ * The ground, in pigment. One palette for the six bands, so the census at the
+ * front of the house and the legend under the board are read as one drawing
+ * rather than two that happen to describe the same map.
+ */
+const BAND_TINT: Record<Terrain, string> = {
+  DEPOSIT: "#a9542a",
+  REFINERY: "#8f7a3f",
+  WORKS: "#b06a4a",
+  ADVANCED: "#4a7a6a",
+  CAMPUS: "#c9bda1",
+  CROWN: "#c19a3a",
+};
+
+export function bandTint(terrain: Terrain): string {
+  return BAND_TINT[terrain];
 }
 
 /** The bracket a house's net worth sits in, by name and rate. */

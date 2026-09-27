@@ -20,23 +20,28 @@ export function Panel({
   aside,
   children,
   className = "",
+  id,
 }: {
   title: string;
   aside?: ReactNode;
   children: ReactNode;
   className?: string;
+  /** Set when something links to the panel rather than to the page. */
+  id?: string;
 }) {
   return (
-    <section className={`border border-rule bg-steel ${className}`}>
-      <header className="flex items-center justify-between gap-3 border-b border-rule bg-plate px-3 py-1.5">
+    <section id={id} className={`border border-edge/70 bg-steel ${className}`}>
+      <header className="flex items-center justify-between gap-3 bg-plate px-3 py-1.5">
         <h2 className="flex items-baseline gap-2 text-[10px] tracking-[0.24em] text-dim uppercase">
-          <span className="inline-block h-2.5 w-[3px] bg-brass" aria-hidden />
+          <span className="inline-block h-[10px] w-[2px] bg-brass" aria-hidden />
           {title}
         </h2>
         {aside ? (
           <div className="truncate text-right text-[10px] text-faint">{aside}</div>
         ) : null}
       </header>
+      {/* The joint between header plate and body steel. Two hairlines, no blur. */}
+      <div className="seam" aria-hidden />
       <div className="p-3">{children}</div>
     </section>
   );
@@ -134,7 +139,7 @@ export function Button({
       title={title}
       onClick={onClick}
       disabled={disabled}
-      className={`border px-2.5 py-1 text-[11px] tracking-[0.1em] whitespace-nowrap uppercase disabled:cursor-not-allowed disabled:opacity-40 ${tones[tone]} ${full ? "w-full" : ""}`}
+      className={`border px-2.5 py-1 text-[11px] tracking-[0.1em] whitespace-nowrap uppercase transition-colors duration-150 active:translate-y-[1px] disabled:cursor-not-allowed disabled:opacity-40 ${tones[tone]} ${full ? "w-full" : ""}`}
     >
       {children}
     </button>
@@ -153,7 +158,7 @@ export function Field({ label, children }: { label: string; children: ReactNode 
 }
 
 /** Every field on the desk is cut from the same sheet of metal. */
-const SHELL = "w-full border border-rule bg-pit px-2 py-1 text-[12px] text-ink";
+const SHELL = "sheet w-full px-2 py-1 text-[12px] text-ink";
 
 export function TextInput({
   value,
@@ -299,7 +304,7 @@ export function TabSet({
           <Tabs.Trigger
             key={tab.value}
             value={tab.value}
-            className="-mb-px border-b-2 border-transparent px-3 py-1.5 text-[10px] tracking-[0.18em] text-faint uppercase data-[state=active]:border-brass data-[state=active]:text-ink"
+            className="-mb-px border-b-2 border-transparent px-3 py-1.5 text-[10px] tracking-[0.18em] text-faint uppercase transition-colors duration-150 hover:text-ink data-[state=active]:border-brass data-[state=active]:text-ink"
           >
             {tab.label}
             {tab.badge ? <span className="tabular ml-1.5 text-brass">{tab.badge}</span> : null}
@@ -336,12 +341,12 @@ export function Modal({
           className={`fixed top-1/2 left-1/2 z-50 w-[92vw] ${width} max-h-[88vh] -translate-x-1/2 -translate-y-1/2 overflow-auto border border-edge bg-steel outline-none ${contentClassName}`}
         >
           {bare ? null : (
-            <header className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b-2 border-double border-edge bg-plate px-3 py-2">
+            <header className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b-[3px] border-double border-edge bg-plate px-3 py-2">
               <Dialog.Title className="flex items-baseline gap-2 text-[11px] tracking-[0.24em] text-ink uppercase">
-                <span className="inline-block h-3 w-[3px] bg-brass" aria-hidden />
+                <span className="inline-block h-[10px] w-[2px] bg-brass" aria-hidden />
                 {title}
               </Dialog.Title>
-              <Dialog.Close className="border border-rule px-2 py-0.5 text-[10px] tracking-[0.1em] text-dim uppercase hover:border-edge hover:text-ink">
+              <Dialog.Close className="border border-rule px-2 py-0.5 text-[10px] tracking-[0.1em] text-dim uppercase transition-colors duration-150 hover:border-edge hover:text-ink active:translate-y-[1px]">
                 Close
               </Dialog.Close>
             </header>

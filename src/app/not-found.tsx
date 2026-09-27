@@ -5,7 +5,7 @@ export default function NotFound() {
   const kind = storeKind();
 
   return (
-    <main className="ledger relative min-h-screen">
+    <main className="ground relative min-h-screen">
       <div className="mx-auto max-w-2xl px-4 py-16 sm:py-24">
         <p className="text-[10px] tracking-[0.3em] text-faint uppercase">Notice of non-existence</p>
         <h1 className="mt-3 font-slab text-[36px] leading-none font-extrabold text-ink sm:text-[44px]">

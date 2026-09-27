@@ -10,7 +10,7 @@ import {
   spriteStyle,
 } from "@/domain/constants";
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent } from "react";
-import type { GameState, Tile } from "@/domain/types";
+import type { GameState, Terrain, Tile } from "@/domain/types";
 import { RECIPE_ABBR, RESOURCE_ABBR } from "@/domain/constants";
 import { stepCoord } from "@/domain/grid";
 import type { BoardStep } from "@/domain/grid";
@@ -32,6 +32,12 @@ const AXIS = 20;
 const TOTAL_PX = BOARD_PX + AXIS * 2;
 /** Length of a corner mark on the drawn frame. */
 const MARK = 16;
+/**
+ * Length of one graduation of the gutter scale. A tick is ruled against every
+ * plot on both axes, the way the collar of the table is graduated, so the
+ * margin measures the board rather than merely numbering it.
+ */
+const TICK = 4;
 
 /** The arrows walk the board, one plot at a time. */
 const STEP_KEYS: Record<string, BoardStep> = {
@@ -204,7 +210,7 @@ export function GridCanvas({ state, selectedTileId, onSelect, highlightPlayerId 
   return (
     <div ref={holder} className="w-full" onKeyDown={walk}>
       <div
-        className={`relative border border-rule bg-void p-1.5 ${
+        className={`relative border border-edge bg-void p-1.5 ${
           zoomed ? "overflow-x-auto" : "overflow-hidden"
         }`}
       >
@@ -244,6 +250,42 @@ export function GridCanvas({ state, selectedTileId, onSelect, highlightPlayerId 
                 {row}
               </span>
             ))}
+
+            {/* The scale, ruled against every plot on both axes. */}
+            {Array.from({ length: BOARD }, (_, column) => (
+              <span
+                key={`gx-${column}`}
+                className="absolute bg-rule"
+                style={{
+                  left: AXIS + column * CELL + CELL / 2,
+                  top: AXIS - TICK,
+                  width: 1,
+                  height: TICK,
+                }}
+                aria-hidden
+              />
+            ))}
+            {Array.from({ length: BOARD }, (_, row) => (
+              <span
+                key={`gy-${row}`}
+                className="absolute bg-rule"
+                style={{
+                  left: AXIS - TICK,
+                  top: AXIS + row * CELL + CELL / 2,
+                  width: TICK,
+                  height: 1,
+                }}
+                aria-hidden
+              />
+            ))}
+
+            {/* The plot field is ruled off from the gutter, so the margin reads
+                as a margin and the board reads as a board. */}
+            <span
+              className="pointer-events-none absolute border border-rule"
+              style={{ left: AXIS - 1, top: AXIS - 1, width: BOARD_PX + 2, height: BOARD_PX + 2 }}
+              aria-hidden
+            />
 
             <div
               className="absolute"
@@ -457,7 +499,7 @@ export function GridCanvas({ state, selectedTileId, onSelect, highlightPlayerId 
        * and legible, so the reader chooses: the fitted frame shows all one
        * hundred and twenty one plots, and the drawn frame is scrolled by hand.
        */}
-      <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 border-t border-rule pt-2">
         <p className="text-[10px] text-faint">
           {zoomed ? "Drawn at full size, scroll to cross it" : "Fitted to the frame"}
           {Math.round(shown * 100) < 100 ? ` at ${Math.round(shown * 100)} percent` : ""}
@@ -467,7 +509,7 @@ export function GridCanvas({ state, selectedTileId, onSelect, highlightPlayerId 
             type="button"
             onClick={() => setZoomed(false)}
             aria-pressed={!zoomed}
-            className={`border px-2 py-[2px] text-[10px] tracking-[0.12em] uppercase ${
+            className={`border px-2 py-[2px] text-[10px] tracking-[0.12em] uppercase transition-colors duration-150 active:translate-y-[1px] ${
               zoomed
                 ? "border-rule bg-pit text-dim hover:border-edge hover:text-ink"
                 : "border-brass bg-plate text-ink"
@@ -479,7 +521,7 @@ export function GridCanvas({ state, selectedTileId, onSelect, highlightPlayerId 
             type="button"
             onClick={() => setZoomed(true)}
             aria-pressed={zoomed}
-            className={`border px-2 py-[2px] text-[10px] tracking-[0.12em] uppercase ${
+            className={`border px-2 py-[2px] text-[10px] tracking-[0.12em] uppercase transition-colors duration-150 active:translate-y-[1px] ${
               zoomed
                 ? "border-brass bg-plate text-ink"
                 : "border-rule bg-pit text-dim hover:border-edge hover:text-ink"
@@ -493,8 +535,17 @@ export function GridCanvas({ state, selectedTileId, onSelect, highlightPlayerId 
   );
 }
 
-/** The bands, outermost first, with what each one will take. */
-export function ringLegend(): { ring: number; name: string; count: number; tiers: number[] }[] {
+/**
+ * The bands, outermost first, with what each one will take and the pigment it
+ * is drawn in, so the legend under the board matches the board itself.
+ */
+export function ringLegend(): {
+  ring: number;
+  name: string;
+  count: number;
+  terrain: Terrain;
+  tiers: number[];
+}[] {
   return [...bandCensus()]
     .reverse()
     .map((band) => ({ ...band, tiers: BAND_TIERS[band.terrain] }));
