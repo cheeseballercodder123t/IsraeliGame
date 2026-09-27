@@ -81,18 +81,52 @@ p {
 }
 
 /*
- * The daybook ground. Fine horizontal rules, one every eight lines of type,
- * the way a works' ledger is printed. It sits behind everything and never
- * reads as a pattern: at this contrast it is closer to paper than to ink.
+ * The works floor at night: one warm lamp hung over the middle of the room,
+ * the corners falling off into soot. Fixed to the viewport so it never
+ * scrolls into stripes or seams, and quiet enough to read as light, not paint.
  */
+body {
+  background-color: var(--color-void);
+  background-image:
+    radial-gradient(ellipse 80% 55% at 50% -10%, rgba(193, 154, 58, 0.09), transparent 70%),
+    radial-gradient(ellipse 60% 50% at 100% 100%, rgba(169, 84, 42, 0.05), transparent 70%),
+    radial-gradient(ellipse 120% 90% at 50% 50%, transparent 55%, rgba(0, 0, 0, 0.45) 100%);
+  background-attachment: fixed;
+}
+
 .ledger {
-  background-image: repeating-linear-gradient(
-    to bottom,
-    transparent 0,
-    transparent 27px,
-    rgba(58, 50, 42, 0.5) 27px,
-    rgba(58, 50, 42, 0.5) 28px
-  );
+  background-image: none;
+}
+
+/* Plate relief: a lit top lip and a soft cast shadow, still square. */
+.relief {
+  box-shadow:
+    inset 0 1px 0 rgba(222, 212, 195, 0.045),
+    0 1px 0 rgba(0, 0, 0, 0.35),
+    0 18px 36px -18px rgba(0, 0, 0, 0.7);
+}
+
+.plate-head {
+  background-image: linear-gradient(to bottom, rgba(222, 212, 195, 0.035), transparent);
+}
+
+/* The brass tick on a plate header carries a little of the lamp. */
+.brass-tick {
+  box-shadow: 0 0 8px rgba(193, 154, 58, 0.45);
+}
+
+/* Brass levers are polished where the hand goes. */
+.lever-brass {
+  background-image: linear-gradient(to bottom, rgba(255, 240, 200, 0.18), transparent 55%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 240, 200, 0.3),
+    0 0 0 1px rgba(0, 0, 0, 0.25),
+    0 6px 18px -8px rgba(217, 154, 26, 0.55);
+}
+
+.lever-steel {
+  background-image: linear-gradient(to bottom, rgba(222, 212, 195, 0.05), transparent);
+  box-shadow: inset 0 1px 0 rgba(222, 212, 195, 0.05);
 }
 
 /* Numeric readouts stay on a fixed advance so columns line up. */

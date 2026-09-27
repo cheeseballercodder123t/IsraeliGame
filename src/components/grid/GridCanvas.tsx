@@ -131,7 +131,8 @@ export function GridCanvas({ state, selectedTileId, onSelect, highlightPlayerId 
     // Fit, never crop: a phone gets the whole board at a third size rather
     // than a corner of it at full size.
     const fit = () => {
-      const width = element.clientWidth;
+      // The frame's border and padding (1px + 6px each side) sit outside the board.
+      const width = element.clientWidth - 14;
       if (width < 1) return;
       const next = Math.min(1, width / TOTAL_PX);
       setScale((current) => (Math.abs(current - next) < 0.005 ? current : next));

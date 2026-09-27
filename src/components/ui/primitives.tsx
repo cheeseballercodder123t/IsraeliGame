@@ -27,10 +27,10 @@ export function Panel({
   className?: string;
 }) {
   return (
-    <section className={`border border-rule bg-steel ${className}`}>
-      <header className="flex items-center justify-between gap-3 border-b border-rule bg-plate px-3 py-1.5">
+    <section className={`relief border border-rule bg-steel ${className}`}>
+      <header className="plate-head flex items-center justify-between gap-3 border-b border-rule bg-plate px-3 py-2">
         <h2 className="flex items-baseline gap-2 text-[10px] tracking-[0.24em] text-dim uppercase">
-          <span className="inline-block h-2.5 w-[3px] bg-brass" aria-hidden />
+          <span className="brass-tick inline-block h-2.5 w-[3px] bg-brass" aria-hidden />
           {title}
         </h2>
         {aside ? (
@@ -122,8 +122,8 @@ export function Button({
   title?: string;
 }) {
   const tones: Record<string, string> = {
-    steel: "border-edge bg-plate text-ink hover:border-dim hover:bg-tar",
-    brass: "border-brass bg-brass text-void hover:border-hazard hover:bg-hazard",
+    steel: "lever-steel border-edge bg-plate text-ink hover:border-dim hover:bg-tar",
+    brass: "lever-brass border-brass bg-brass text-void hover:border-hazard hover:bg-hazard",
     rust: "border-rust bg-rust text-ink hover:border-blood hover:bg-blood",
     blood: "border-blood bg-blood text-ink hover:border-rust hover:bg-rust",
     quiet: "border-rule bg-transparent text-dim hover:border-edge hover:text-ink",
