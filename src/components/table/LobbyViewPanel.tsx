@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { CHARTER_LIST, RESOURCE_LABEL, charterOf } from "@/domain/constants";
 import { windLabel } from "@/lib/labels";
@@ -8,6 +8,7 @@ import type { Archetype } from "@/domain/types";
 import type { LobbyView } from "@/server/dashboard";
 import { claimSeatAction, fillWithBotsAction, startTableAction } from "@/server/actions";
 import { useTableSync } from "@/components/table/useTableSync";
+import { setTableTitle } from "@/lib/parts";
 import { Tour, startTour } from "@/components/tour/Tour";
 import { LOBBY_TOUR } from "@/components/tour/steps";
 import { Button, Notice, Panel } from "@/components/ui/primitives";
@@ -22,6 +23,10 @@ export function LobbyViewPanel({ lobby }: { lobby: LobbyView }) {
   // A gathering table is watched the same way a running one is, so a friend
   // taking the next chair shows up without anybody reloading.
   const { live, present } = useTableSync(lobby.code, lobby.revision);
+  useEffect(() => {
+    setTableTitle(`Table ${lobby.code.toUpperCase()} · Conglomerate`);
+    return () => setTableTitle("");
+  }, [lobby.code]);
 
   const waiting = lobby.seats.length < lobby.minSeats;
   const canStart = lobby.me !== null && lobby.seats.length >= lobby.minSeats;
@@ -141,6 +146,22 @@ export function LobbyViewPanel({ lobby }: { lobby: LobbyView }) {
           ) : (
             <span>nobody else has this page open</span>
           )}
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                const url = `${window.location.origin}/table/${lobby.code}`;
+                await navigator.clipboard.writeText(url);
+                setCopied(true);
+                window.setTimeout(() => setCopied(false), 2200);
+              } catch {
+                setCopied(false);
+              }
+            }}
+            className="border border-edge px-2 py-[2px] tracking-[0.16em] text-dim uppercase transition-colors duration-150 hover:border-brass hover:text-ink active:translate-y-[1px]"
+          >
+            {copied ? "Link copied" : "Copy the invite"}
+          </button>
           <button
             type="button"
             onClick={() => startTour()}

@@ -9,6 +9,12 @@
  */
 
 const PRESENCE_TTL_MS = 15_000;
+/**
+ * A composing beat dies faster than a presence stamp. A hand lifted off the
+ * keyboard for a few seconds stops being news, and the beat is refreshed on
+ * every poll while the hand stays down.
+ */
+const COMPOSING_TTL_MS = 6_000;
 
 interface Stamp {
   userId: string;
@@ -17,6 +23,8 @@ interface Stamp {
 }
 
 const tables = new Map<string, Map<string, Stamp>>();
+/** The same roster, for the hands that are on the wire right now. */
+const composing = new Map<string, Map<string, Stamp>>();
 
 export interface PresenceEntry {
   userId: string;
@@ -36,6 +44,20 @@ export function beat(gameId: string, userId: string, name: string, now = Date.no
   table.set(userId, { userId, name, at: now });
 }
 
+/** Records that a hand is down on the wire at this table. */
+export function beatComposing(gameId: string, userId: string, name: string, now = Date.now()): void {
+  beat(gameId, userId, name, now);
+  let hands = composing.get(gameId);
+  if (!hands) {
+    hands = new Map();
+    composing.set(gameId, hands);
+  }
+  for (const [id, stamp] of hands) {
+    if (now - stamp.at > COMPOSING_TTL_MS) hands.delete(id);
+  }
+  hands.set(userId, { userId, name, at: now });
+}
+
 /** Everybody whose heartbeat is still warm, in a stable order. */
 export function present(gameId: string, now = Date.now()): PresenceEntry[] {
   const table = tables.get(gameId);
@@ -47,7 +69,24 @@ export function present(gameId: string, now = Date.now()): PresenceEntry[] {
   return out.sort((a, b) => a.name.localeCompare(b.name));
 }
 
+/** Everybody whose hand is still down on the wire, in a stable order. */
+export function composers(gameId: string, now = Date.now()): PresenceEntry[] {
+  const hands = composing.get(gameId);
+  if (!hands) return [];
+  const out: PresenceEntry[] = [];
+  for (const stamp of hands.values()) {
+    if (now - stamp.at <= COMPOSING_TTL_MS) out.push({ userId: stamp.userId, name: stamp.name });
+  }
+  return out.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** A line left the composer, so the hand is no longer news. */
+export function clearComposing(gameId: string, userId: string): void {
+  composing.get(gameId)?.delete(userId);
+}
+
 /** Tests and cold starts. */
 export function clearPresence(): void {
   tables.clear();
+  composing.clear();
 }

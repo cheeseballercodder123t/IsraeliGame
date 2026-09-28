@@ -31,7 +31,8 @@ import { EraClosing } from "@/components/table/EraClosing";
 import { HelpOverlay } from "@/components/table/HelpOverlay";
 import { HousesRegister } from "@/components/table/HousesRegister";
 import { POLL_MS, REALTIME_POLL_MS, useTableSync } from "@/components/table/useTableSync";
-import { thump, toggleSound, useSound } from "@/lib/sound";
+import { thump, ticker, toggleSound, useSound } from "@/lib/sound";
+import { setTableTitle, setUnreadWire } from "@/lib/parts";
 import { Tour, startTour } from "@/components/tour/Tour";
 import { TABLE_RECAP, TABLE_TOUR } from "@/components/tour/steps";
 import { Button, KeyValue, Meter, Notice, Panel } from "@/components/ui/primitives";
@@ -90,11 +91,31 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
   // newcomer in a chair or a resolved window lands without a reload. A real
   // time table closes its window in seconds, so its watchers beat faster.
   const realtime = state.game.mode === "REALTIME";
-  const { live, present } = useTableSync(
+  const { live, present, composers, arrivals, unreadNames, noteComposing } = useTableSync(
     code,
     state.game.revision,
     realtime ? REALTIME_POLL_MS : POLL_MS,
+    { wire: state.messages, meId },
   );
+
+  // The tab title carries the room to a director working in another tab. The
+  // base is the full metadata title of this route, which React re-applies on
+  // every refresh, so the store keeps it and re-asserts around it. The unread
+  // feed is the latched kind: names stay in the title until the desk is back,
+  // because a parked tab is read through its title alone.
+  const tableTitle = `Table ${code.toUpperCase()} · Conglomerate`;
+  useEffect(() => {
+    setTableTitle(tableTitle);
+    return () => setTableTitle("");
+  }, [tableTitle]);
+  useEffect(() => {
+    setUnreadWire(unreadNames);
+  }, [unreadNames]);
+
+  // A line from another house is the tick of the telegraph.
+  useEffect(() => {
+    if (arrivals.length > 0) ticker();
+  }, [arrivals]);
 
   useEffect(() => {
     if (!latestIssue) return;
@@ -502,7 +523,13 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
 
           <div className="order-3 grid min-w-0 items-start gap-4 md:grid-cols-2 lg:order-none lg:col-start-2 lg:row-start-2 2xl:col-start-3 2xl:row-start-1 2xl:grid-cols-1">
             <div className="min-w-0">
-              <ChatPanel code={code} state={state} meId={meId} />
+              <ChatPanel
+                code={code}
+                state={state}
+                meId={meId}
+                composers={composers}
+                onComposing={noteComposing}
+              />
             </div>
 
             <div data-tour="contracts" className="min-w-0">
@@ -613,7 +640,13 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
           </div>
 
           <div className="min-w-0 space-y-4">
-            <ChatPanel code={code} state={state} meId={meId} />
+            <ChatPanel
+              code={code}
+              state={state}
+              meId={meId}
+              composers={composers}
+              onComposing={noteComposing}
+            />
 
             <ContractsPanel state={state} meId={meId} onOrder={handleOrder} />
 

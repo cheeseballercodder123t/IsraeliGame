@@ -14,6 +14,7 @@ import { ChatPanel } from "@/components/table/ChatPanel";
 import { HousesRegister } from "@/components/table/HousesRegister";
 import { RecordPane } from "@/components/table/RecordPane";
 import { POLL_MS, REALTIME_POLL_MS, useTableSync } from "@/components/table/useTableSync";
+import { setTableTitle } from "@/lib/parts";
 import { Panel } from "@/components/ui/primitives";
 import { thump } from "@/lib/sound";
 import { formatMoney, ownerColor } from "@/lib/labels";
@@ -41,11 +42,13 @@ export function SpectatorView({
   const [ragTurn, setRagTurn] = useState<number | null>(null);
   const [selectedTileId, setSelectedTileId] = useState<string | null>(null);
   const realtime = state.game.mode === "REALTIME";
-  const { live, present } = useTableSync(
-    code,
-    state.game.revision,
-    realtime ? REALTIME_POLL_MS : POLL_MS,
-  );
+  const { live, present, composers } = useTableSync(code, state.game.revision, realtime ? REALTIME_POLL_MS : POLL_MS);
+
+  // The tab title names the room on the rail too.
+  useEffect(() => {
+    setTableTitle(`Table ${code.toUpperCase()} · Conglomerate`);
+    return () => setTableTitle("");
+  }, [code]);
 
   const latestIssue = issues[0] ?? null;
   const issue =
@@ -145,7 +148,7 @@ export function SpectatorView({
         </div>
 
         <div className="min-w-0 space-y-3">
-          <ChatPanel code={code} state={state} readOnly />
+          <ChatPanel code={code} state={state} readOnly composers={composers} />
 
           <Panel title="The Rag" aside={`${issues.length} editions kept`}>
             <RagShelf issues={issues} current={issue ? issue.turn : null} onOpen={openIssue} />

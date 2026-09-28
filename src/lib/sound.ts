@@ -112,6 +112,35 @@ export function bell(): void {
   }
 }
 
+/**
+ * The telegraph: a rival's hand has moved on the wire. Two ticks of a key, one
+ * higher than the other, and gone. Quiet by design: it is a sound a table
+ * hears dozens of times a window, so it has to sit under the bell and the
+ * press rather than compete with them.
+ */
+export function ticker(): void {
+  if (!on) return;
+  const ctx = audio();
+  if (!ctx) return;
+  const at = ctx.currentTime;
+  for (const [offset, frequency] of [
+    [0, 1180],
+    [0.07, 1560],
+  ] as [number, number][]) {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "square";
+    osc.frequency.setValueAtTime(frequency, at + offset);
+    gain.gain.setValueAtTime(0.0001, at + offset);
+    gain.gain.exponentialRampToValueAtTime(0.06, at + offset + 0.004);
+    gain.gain.exponentialRampToValueAtTime(0.0001, at + offset + 0.09);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(at + offset);
+    osc.stop(at + offset + 0.11);
+  }
+}
+
 /** The paper arriving: the press comes down, then the sheet slides out. */
 export function thump(): void {
   if (!on) return;

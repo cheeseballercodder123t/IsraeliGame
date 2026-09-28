@@ -503,6 +503,11 @@ export default async function LobbyPage({
                       <span className="tabular">
                         {table.humans} human of {table.players} seated
                       </span>
+                      {table.atTable > 0 ? (
+                        <span className="text-bile">
+                          {table.atTable} at the table now
+                        </span>
+                      ) : null}
                       <span className="tabular text-faint">
                         {table.open} chair{table.open === 1 ? "" : "s"} open
                       </span>
