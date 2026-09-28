@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import type { LadderEntry } from "@/domain/ladder";
 import { createGameState } from "@/domain/world";
 import type { GameState, QueuedOrder } from "@/domain/types";
 import type {
@@ -218,5 +219,46 @@ export class SupabaseStore implements GameStore {
       .maybeSingle();
     if (error) throw new Error(error.message);
     return data !== null;
+  }
+
+  /**
+   * The ladder is its own table, keyed by the house's user, because it is the
+   * one thing in this schema that is not scoped to a game. It is written whole
+   * on the window an era closes, which is rare enough that a plain upsert is
+   * the honest shape.
+   */
+  async listLadder(): Promise<LadderEntry[]> {
+    const { data, error } = await this.client
+      .from("ladder")
+      .select("user_id, name, games, wins, points, best, updated_at")
+      .order("points", { ascending: false })
+      .limit(500);
+    if (error) throw new Error(error.message);
+    return (data ?? []).map((row) => ({
+      userId: row.user_id as string,
+      name: row.name as string,
+      games: Number(row.games ?? 0),
+      wins: Number(row.wins ?? 0),
+      points: Number(row.points ?? 0),
+      best: Number(row.best ?? 0),
+      updatedAt: row.updated_at as string,
+    }));
+  }
+
+  async saveLadder(entries: LadderEntry[]): Promise<void> {
+    if (entries.length === 0) return;
+    const { error } = await this.client.from("ladder").upsert(
+      entries.map((entry) => ({
+        user_id: entry.userId,
+        name: entry.name,
+        games: entry.games,
+        wins: entry.wins,
+        points: entry.points,
+        best: entry.best,
+        updated_at: entry.updatedAt,
+      })),
+      { onConflict: "user_id" },
+    );
+    if (error) throw new Error(error.message);
   }
 }

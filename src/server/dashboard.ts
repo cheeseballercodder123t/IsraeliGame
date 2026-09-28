@@ -9,16 +9,28 @@ import {
 } from "@/server/game";
 import { beat } from "@/server/presence";
 import { readSession } from "@/server/session";
+import { getStore } from "@/server/store";
 import type { NewspaperRecord } from "@/server/store/types";
 import { winConditionLabel } from "@/domain/endgame";
 import { boardFingerprint, type BoardFingerprint } from "@/domain/world";
-import type { Archetype, GameState, Player, QueuedOrder } from "@/domain/types";
+import { publicWire, visibleWire } from "@/domain/channels";
+import { rankLadder } from "@/domain/ladder";
+import type { Archetype, ChatMessage, GameState, Player, QueuedOrder } from "@/domain/types";
 
 export interface TableView {
   state: GameState;
   me: Player;
   issues: NewspaperRecord[];
   pending: QueuedOrder[];
+  /**
+   * The wire as this desk may read it: the open room, its own side lines, and
+   * whatever it has had tapped. The snapshot keeps every line, so the filter
+   * happens here rather than in the panel.
+   */
+  wire: ChatMessage[];
+  /** Where this house sits on the cross-table ladder, or null with no record. */
+  ladderRank: number | null;
+  ladderPoints: number;
 }
 
 export interface LobbySeatView {
@@ -57,6 +69,8 @@ export interface SpectateView {
   code: string;
   state: GameState;
   issues: NewspaperRecord[];
+  /** The rail reads the open wire only. Side lines are not for the gallery. */
+  wire: ChatMessage[];
 }
 
 export interface TableMiss {
@@ -131,7 +145,10 @@ export async function openTable(code: string): Promise<TableResult> {
     // snapshot and the same heartbeat, read only, past the capacity.
     const { state } = await resolveIfDue(loaded);
     const issues = await listIssues(state.game.id);
-    return { kind: "spectate", view: { code: state.game.code, state, issues } };
+    return {
+      kind: "spectate",
+      view: { code: state.game.code, state, issues, wire: publicWire(state) },
+    };
   }
 
   const { state } = await resolveIfDue(loaded);
@@ -144,8 +161,36 @@ export async function openTable(code: string): Promise<TableResult> {
   const pending = state.queue
     .filter((q) => q.playerId === settled.id && q.turn <= state.game.currentTurn)
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  const ladder = await ladderFor(session.userId);
 
-  return { kind: "table", view: { state, me: settled, issues, pending } };
+  return {
+    kind: "table",
+    view: {
+      state,
+      me: settled,
+      issues,
+      pending,
+      wire: visibleWire(state, settled.id),
+      ladderRank: ladder.rank,
+      ladderPoints: ladder.points,
+    },
+  };
+}
+
+/**
+ * This house's place on the ladder. The board is small enough to rank in the
+ * page rather than query twice, and a ladder that will not load reads as a
+ * house with no record rather than as a broken table.
+ */
+async function ladderFor(userId: string): Promise<{ rank: number | null; points: number }> {
+  try {
+    const list = rankLadder(await getStore().listLadder());
+    const at = list.findIndex((entry) => entry.userId === userId);
+    if (at < 0) return { rank: null, points: 0 };
+    return { rank: at + 1, points: list[at].points };
+  } catch {
+    return { rank: null, points: 0 };
+  }
 }
 
 export function secondsUntilTick(state: GameState, now = Date.now()): number {

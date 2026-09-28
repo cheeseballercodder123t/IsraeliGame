@@ -19,7 +19,11 @@ import {
   resolveTakeovers,
   resolveTenders,
 } from "./auctions";
+import { runEquity } from "./equity";
 import { runAudit, runDebt, runTaxation } from "./finance";
+import { runMedia } from "./media";
+import { runPacts } from "./pacts";
+import { runReform } from "./reform";
 import {
   advanceInstruments,
   applyExposure,
@@ -47,6 +51,9 @@ export function resolveTurnTick(input: GameState, options: TickOptions = {}): Ti
   // the ledger here means it holds this turn's orders and nothing older, and the
   // phase runner below folds them onto the tape in the order they happened.
   state.events = [];
+  // Planted stories are one window's news. The paper reads whatever landed in
+  // this window, so the slate is cleared here rather than when it is read.
+  state.scandals = [];
   const turn = state.game.currentTurn;
   const scratch: TickScratch = makeScratch(streamRng(state.game.seed, turn, "production"));
   const events = scratch.events;
@@ -283,6 +290,15 @@ export function resolveTurnTick(input: GameState, options: TickOptions = {}): Ti
 
   // 12. Paper settles: forwards, supplies, patents, policies and pacts.
   advanceInstruments(state, scratch, streamRng(state.game.seed, turn, "instruments"));
+
+  // 12b. Paper between houses: pacts and their funds, the share book and the
+  //      boards it changes hands of, the Rag, and the reform movement the
+  //      board's own smoke is feeding. None of it touches a deed, and all of
+  //      it can close an era, so it settles before the books are read.
+  runPacts(state, turn, events);
+  runEquity(state, turn, events);
+  runMedia(state, turn, events);
+  runReform(state, turn, events);
 
   // 13. The crown jewel takes its cut of everything traded on the floor.
   const crown = state.tiles.find((t) => t.x === CENTER && t.y === CENTER);

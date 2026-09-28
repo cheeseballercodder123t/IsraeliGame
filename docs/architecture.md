@@ -12,7 +12,7 @@ would have to change for human players to share a table. Written from the code a
 src/domain/           pure rulebook. No framework, no database, no clock.
   types.ts            GameState, Player, Tile, Order, GameEvent: plain serializable data
   tick.ts             resolveTurnTick(state, { now }) → { state, events }   (the whole game)
-  orders/             64-order catalog + six phase handlers
+  orders/             75-order catalog + six phase handlers
   content/            commodities, recipes, charters, board bands, sprites, event kinds
 src/server/           orchestration. Sessions, actions, bots, the paper, the stores.
   game.ts             startMatch / joinMatch / queueOrder / cancelOrder / advanceTurn / resolveIfDue
@@ -51,6 +51,12 @@ orders that arrived from more than one human.
 | `events[]` | last ~400 typed events of the current window |
 | `queue[]` | `QueuedOrder[]`: **the interaction channel**: every order any player has sealed for this window |
 | `scandals[]` | lines the paper may print this tick |
+| `messages[]` | the wire: the open room and the private channel each pair of houses shares, capped |
+| `reads[]` | one read high water mark per house, which is what "seen by" is read off |
+| `shares[]` | the share book: who holds what paper in whom |
+| `pacts[]` | standing pacts and the joint fund each one holds |
+| `media[]` | points of the Rag held, out of ten |
+| `reform` | the clean air movement: smog, pressure, ballots and the window the ordinance carried |
 
 Everything, including every other player's cash, plots and queued orders, is in the
 document, and the whole document is shipped to every seated client on every render. There is
@@ -112,7 +118,7 @@ everyone at the table, including offshore reserves. Sunlight is part of the puni
 
 The interaction model is **async, queue-based, turn-batched**, not live commands:
 
-1. During a window, each player seals any number of orders (64 types across six phases).
+1. During a window, each player seals any number of orders (75 types across six phases).
    Orders carry `playerId`, `turn`, `createdAt`. They are *validated* immediately (zod,
    affordability hints client-side) but *not applied*: money does not move yet.
 2. When the window closes, `resolveTurnTick` runs the queued orders through phase handlers
@@ -161,11 +167,15 @@ client subscribes to any of it yet.
 | Polling the table summary | yes | `useTableSync` every 5s while visible and on focus; `router.refresh()` only when the revision actually moved |
 | Server-rendered full snapshot | yes | every navigation and every refresh re-ships the entire `GameState` |
 | Presence | yes, best effort | an in-process roster (src/server/presence.ts) stamped by the page render and the heartbeat, 15s TTL, per instance |
-| SSE / WebSocket / Realtime | **no** | polling covers the file store and Supabase alike |
-| Chat / notifications | **no** | presence and the paper are the whole channel |
+| SSE | yes | `GET /api/table/[code]/stream` serves the same heartbeat the poll does, one frame per revision change with a keepalive comment; a real time table rides it and falls back to the poll on error or silence |
+| WebSocket / Realtime | **no** | the stream covers one deployment; Supabase Realtime is still the multi-instance upgrade |
+| Chat | yes | the wire, with side lines per pair of houses, read receipts, and a tap that opens a rival's side lines for the window it was bought in |
+| Notifications | yes, opt in | a house may leave an address on its seat; the window that closes without it at the table, and the end of an era, are posted through Resend (`src/server/mail.ts`, `src/server/notices.ts`). Without a key the desk holds the letters |
+| Table games | yes | the share book and control, pacts and their fund, the Rag, the clean air movement, and the ladder that outlives the table (`src/domain/equity.ts`, `pacts.ts`, `media.ts`, `reform.ts`, `ladder.ts`) |
 
-In practice a second player only learns anything happened by reloading. Server Actions
-return values to their caller only; other clients are never notified.
+A second player learns that something happened from the heartbeat rather than from a reload.
+Server Actions still return values to their caller only, so the beat is what tells everybody
+else, and the notices are what tell somebody who is not looking at all.
 
 ## 7. Multiplayer readiness assessment
 
@@ -249,6 +259,20 @@ return values to their caller only; other clients are never notified.
 - Supabase Realtime remains the upgrade: the publication already carries `game_states`, and the
   same hook could subscribe instead of polling when `NEXT_PUBLIC_SUPABASE_*` is set.
 
+**Phase 5: paper between houses. Shipped.**
+- Four markets played on the table rather than the board: the share book and the control it buys
+  with a tribute out of the till, pacts with a joint fund either side may take, the Rag cut into
+  ten points whose holder plants a story every window, and the clean air movement the board's own
+  smoke feeds until it forces a ballot. All four settle in step 12b of the tick, before the books
+  are read, and two of them can close an era.
+- The ladder is the first thing in the store that is not scoped to a game: `listLadder` /
+  `saveLadder` on the same `GameStore` interface, written when an era closes and read by the front
+  page and the desk.
+- The wire grew side lines, read receipts, and the `/deal` grammar that turns a named price into a
+  one-press contract. The bench talks on the same channel.
+- The notices ride behind the window-closing write and are never awaited, so a table with no mail
+  key behaves exactly as it did before the post existed.
+
 **Phase 4: identity and views.**
 - Swap `session.ts` to Supabase Auth (its docstring names the seam); `players.userId`
   becomes a real auth uuid and RLS starts doing its job.
@@ -269,9 +293,10 @@ return values to their caller only; other clients are never notified.
 
 `TICK_SECRET`, `TICK_INTERVAL_HOURS`, `TICK_DEV_MODE` · `SUPABASE_URL`,
 `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` ·
-`OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `RAG_PROVIDER` · `CONGLOMERATE_STORE`,
-`CONGLOMERATE_DATA_DIR`. None are required; the game runs on the file store with the
-deterministic writer out of the box.
+`OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `RAG_PROVIDER` · `RESEND_API_KEY`,
+`RESEND_EMAIL_FROM`, `MAIL_PROVIDER` · `CONGLOMERATE_STORE`, `CONGLOMERATE_DATA_DIR`. None are
+required; the game runs on the file store with the deterministic writer and the desk's letters left
+in the drawer out of the box.
 
 ---
 

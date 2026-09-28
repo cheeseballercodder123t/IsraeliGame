@@ -80,6 +80,19 @@ export type Order =
     }
   | { type: "SIGN_CONTRACT"; offerId: string }
   | { type: "DECLINE_CONTRACT"; offerId: string }
+  /**
+   * A deal named on the wire, taken in one click. The house that said it is
+   * the seller and the house that clicks is the buyer, so a line in the room
+   * becomes a contract without a second round of paperwork.
+   */
+  | {
+      type: "SEAL_DEAL";
+      sellerId: string;
+      resource: Resource;
+      quantity: number;
+      price: number;
+      turns: number;
+    }
   | { type: "FILE_PATENT"; recipeId: RecipeId }
   | { type: "LICENSE_PATENT"; playerId: string; recipeId: RecipeId; price: number }
   | { type: "CHALLENGE_PATENT"; playerId: string; recipeId: RecipeId }
@@ -90,6 +103,7 @@ export type Order =
   | { type: "REPAY_DEBT"; amount: number }
   | { type: "ISSUE_CONVERTIBLE"; amount: number }
   | { type: "SELL_EQUITY"; fraction: number }
+  | { type: "BUY_SHARES"; playerId: string; amount: number }
   | { type: "BUY_SHELL_LICENSE" }
   | { type: "TAX_DECLARATION"; offshorePercent: number }
   | { type: "SETTLE_AUDIT"; amount: number }
@@ -115,6 +129,12 @@ export type Order =
   | { type: "CARTEL_PACT"; playerId: string; resource: Resource; price: number; turns: number }
   | { type: "ANTITRUST_SUIT"; playerId: string }
   | { type: "PUBLICITY_CAMPAIGN"; amount: number }
+  | { type: "FORM_PACT"; playerId: string }
+  | { type: "FUND_PACT"; playerId: string; amount: number }
+  | { type: "BETRAY_PACT"; playerId: string }
+  | { type: "BUY_MEDIA"; amount: number }
+  | { type: "BIAS_PAPER"; playerId: string; amount: number }
+  | { type: "CLEAN_AIR_VOTE"; support: boolean }
   // Covert.
   | { type: "SLUDGE_DUMP"; tileId: string }
   | { type: "CYBERATTACK"; playerId: string }
@@ -150,6 +170,12 @@ export interface ChatMessage {
   /** The window it was said in, so the wire reads in the order it was said. */
   turn: number;
   createdAt: string;
+  /**
+   * The room the line was said in. Absent or null is the open wire every house
+   * reads; a channel key is a sealed conversation between exactly two houses
+   * and reaches nobody else until somebody buys the private papers.
+   */
+  channel?: string | null;
 }
 
 /**
@@ -158,7 +184,72 @@ export interface ChatMessage {
  */
 export type WinCondition =
   | { kind: "TURNS"; turns: number }
-  | { kind: "NET_WORTH"; target: number };
+  | { kind: "NET_WORTH"; target: number }
+  /** Control of this many rival boards closes the era. */
+  | { kind: "BOARDS"; boards: number }
+  /** The clean air ordinance carried and the air came back. */
+  | { kind: "CLEAN" };
+
+/**
+ * A slice of a rival house on the open book. Shares are fractions of the whole
+ * house, so a holding of one half is control of its board whatever the net
+ * worth behind it happens to be.
+ */
+export interface ShareHolding {
+  id: string;
+  /** The house that bought in. */
+  holderId: string;
+  /** The house whose paper was bought. */
+  targetId: string;
+  shares: number;
+  boughtTurn: number;
+}
+
+/**
+ * A joint fund between two houses. Both may pay in and either may walk off
+ * with the whole balance, which is what makes the signature worth something.
+ */
+export interface PactFund {
+  id: string;
+  aId: string;
+  bId: string;
+  escrow: number;
+  formedTurn: number;
+  expiresTurn: number;
+  /** Set on the window a house broke it, for the paper. */
+  betrayedTurn: number | null;
+}
+
+/** A house's slice of the Rag, the paper that prints the scandals. */
+export interface MediaStake {
+  playerId: string;
+  stake: number;
+  boughtTurn: number;
+}
+
+/**
+ * The reform arc. Smoke builds a movement, the movement forces a vote, and a
+ * vote that carries puts the whole board under an ordinance it did not ask for.
+ */
+export interface ReformLedger {
+  /** Total particulate standing on the board at the last close. */
+  smog: number;
+  /** How far the movement has come, from zero to a vote. */
+  pressure: number;
+  /** The window a vote was last opened, so a table votes once a window. */
+  openedTurn: number;
+  /** Votes filed this window, cleared when the tick reads them. */
+  votes: { playerId: string; support: boolean; turn: number }[];
+  /** The window the ordinance carried, or null while the air is still free. */
+  ordinanceTurn: number | null;
+}
+
+/** How far a house has read the wire, for the receipts under a line. */
+export interface ReadMark {
+  playerId: string;
+  messageId: string;
+  at: string;
+}
 
 export interface OrderCategoryMeta {
   id: OrderCategory;
@@ -268,6 +359,17 @@ export interface Player {
   lockout: boolean;
   /** Net worth thresholds this house has already been printed for. */
   milestonesPassed: number[];
+  /**
+   * The rival house that holds a majority of this board, or null while the
+   * house is still its own master. A controlled board pays its controller a
+   * tribute out of the till every window.
+   */
+  controlledBy: string | null;
+  /**
+   * An address for the desk notices, or null when this director would rather
+   * be left alone. It is opt in, and it is only ever written by its own desk.
+   */
+  noticeEmail: string | null;
 }
 
 export interface Tile {
@@ -547,6 +649,16 @@ export interface GameState {
   messages: ChatMessage[];
   /** Scandal lines the paper may print, cleared each tick. */
   scandals: string[];
+  /** Who has read the wire up to which line, for the receipts. */
+  reads: ReadMark[];
+  /** Slices of rival houses bought on the open book. */
+  shares: ShareHolding[];
+  /** Joint funds, one per pair of houses that has signed a pact. */
+  pacts: PactFund[];
+  /** Slices of the Rag itself, which is what leans the paper. */
+  media: MediaStake[];
+  /** Smoke, the movement it feeds, and the ordinance when it carries. */
+  reform: ReformLedger;
 }
 
 export interface TickResult {

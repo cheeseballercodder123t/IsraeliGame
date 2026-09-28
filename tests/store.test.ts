@@ -97,6 +97,35 @@ describe("choosing a store", () => {
     expect(getStore().kind).toBe("memory");
   });
 
+  it("keeps the ladder on the disk, across a fresh store", async () => {
+    process.env.CONGLOMERATE_DATA_DIR = await scratch();
+    const first = getStore();
+    expect(await first.listLadder()).toEqual([]);
+    await first.saveLadder([
+      {
+        userId: "ladder-house",
+        name: "Cornelius Hale",
+        games: 1,
+        wins: 1,
+        points: 3,
+        best: 12_000_000,
+        updatedAt: "2026-09-24T00:00:00.000Z",
+      },
+    ]);
+
+    // A restart is a new store over the same directory, which is what the
+    // ladder has to survive: it is the one thing here not scoped to a table.
+    resetStore();
+    const reopened = await getStore().listLadder();
+    expect(reopened).toHaveLength(1);
+    expect(reopened[0].userId).toBe("ladder-house");
+    expect(reopened[0].points).toBe(3);
+
+    await getStore().saveLadder([]);
+    resetStore();
+    expect(await getStore().listLadder()).toEqual([]);
+  });
+
   it("prefers Supabase when credentials are present, whatever the disk says", async () => {
     process.env.CONGLOMERATE_DATA_DIR = await blocked();
     process.env.SUPABASE_URL = "https://example.supabase.co";

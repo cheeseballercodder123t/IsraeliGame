@@ -1,4 +1,5 @@
 import { normalizeWinCondition } from "@/domain/endgame";
+import type { LadderEntry } from "@/domain/ladder";
 import type { Archetype, GameState, QueuedOrder, WinCondition } from "@/domain/types";
 import type { Scandal } from "@/server/rag/template";
 
@@ -20,6 +21,28 @@ export function withRevision(state: GameState): GameState {
   }
   // Tables written before the wire existed have never had a message.
   if (!Array.isArray(state.messages)) state.messages = [];
+  // Tables written before the table games existed hold none of their paper.
+  if (!Array.isArray(state.reads)) state.reads = [];
+  if (!Array.isArray(state.shares)) state.shares = [];
+  if (!Array.isArray(state.pacts)) state.pacts = [];
+  if (!Array.isArray(state.media)) state.media = [];
+  if (!state.reform || typeof state.reform !== "object") {
+    state.reform = { smog: 0, pressure: 0, openedTurn: 0, votes: [], ordinanceTurn: null };
+  }
+  if (!Array.isArray(state.reform.votes)) state.reform.votes = [];
+  if (typeof state.reform.smog !== "number") state.reform.smog = 0;
+  if (typeof state.reform.pressure !== "number") state.reform.pressure = 0;
+  if (typeof state.reform.openedTurn !== "number") state.reform.openedTurn = 0;
+  if (state.reform.ordinanceTurn !== null && typeof state.reform.ordinanceTurn !== "number") {
+    state.reform.ordinanceTurn = null;
+  }
+  // A house written before the desk notices existed has left no address, and a
+  // director who did not ask for the post gets none.
+  if (Array.isArray(state.players)) {
+    for (const player of state.players) {
+      if (typeof player.noticeEmail !== "string") player.noticeEmail = null;
+    }
+  }
   return state;
 }
 
@@ -93,4 +116,10 @@ export interface GameStore {
   listIssues(gameId: string): Promise<NewspaperRecord[]>;
   saveIssue(gameId: string, record: NewspaperRecord): Promise<void>;
   seedExists(code: string): Promise<boolean>;
+  /**
+   * The cross-table ladder: one row per house, by user, that outlives the
+   * table it was earned at. It is the only thing here not scoped to a game.
+   */
+  listLadder(): Promise<LadderEntry[]>;
+  saveLadder(entries: LadderEntry[]): Promise<void>;
 }

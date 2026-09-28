@@ -1,4 +1,5 @@
 import {
+  BOARD_CHOICES,
   NET_WORTH_CHOICES,
   TURN_LIMIT_CHOICES,
   defaultWinCondition,
@@ -7,6 +8,8 @@ import {
 } from "@/domain/endgame";
 import { countdown } from "@/domain/format";
 import { foundCompanyAction, joinTableAction } from "@/server/actions";
+import { readLadder } from "@/server/ladder";
+import { mailDescription } from "@/server/mail";
 import { listJoinableTables } from "@/server/game";
 import { CHARTER_TABLE, MAX_SEATS, MIN_SEATS } from "@/server/personas";
 import { storeKind } from "@/server/store";
@@ -15,6 +18,7 @@ import {
   BAND_TIERS,
   BOARD,
   CENTER,
+  CLEAN_AIR_TARGET,
   FAMILY_ORDER,
   PLOT_COUNT,
   RECIPE_LIST,
@@ -47,6 +51,11 @@ const WIN_CHOICES: { code: string; label: string }[] = [
     const condition = { kind: "NET_WORTH" as const, target };
     return { code: winConditionCode(condition), label: winConditionLabel(condition) };
   }),
+  ...BOARD_CHOICES.map((boards) => {
+    const condition = { kind: "BOARDS" as const, boards };
+    return { code: winConditionCode(condition), label: winConditionLabel(condition) };
+  }),
+  { code: winConditionCode({ kind: "CLEAN" }), label: winConditionLabel({ kind: "CLEAN" }) },
 ];
 
 /**
@@ -65,7 +74,9 @@ const BRIEF: string[] = [
   "Only the outer band yields raw material, so a chimney has to sit near the thing it eats and haul the difference over track you own.",
   "A rival sealing an order, a stranger taking a chair and a window closing all land on your desk as they happen.",
   "A turn table closes one long window at a time. A real time table closes a short one every few seconds and never stops moving.",
-  "Cartel pools, supply contracts and licences are agreed on the table wire before anybody seals them.",
+  "Cartel pools, supply contracts and licences are agreed on the table wire before anybody seals them. A deal named in the wire's own grammar can be signed in one press.",
+  "Houses can be bought as well as out-built: a rival that floats part of itself puts half its board on the open market, and half the shares is control.",
+  "Two houses that sign a pact keep a joint fund between them, and either one may walk off with it. The Rag is on the block too, and so is the air.",
   "Every table is opened to a win condition, and a table whose chairs are all taken can still be watched from the rail.",
 ];
 
@@ -112,6 +123,7 @@ const SECTIONS: [string, string][] = [
   ["charters", "The register of charters"],
   ["window", "How a window resolves"],
   ["board", "The board, band by band"],
+  ["games", "The games on paper"],
   ["found", "Found a company"],
 ];
 
@@ -230,6 +242,7 @@ export default async function LobbyPage({
   const store = storeKind();
   const rag = ragProvider();
   const joinable = await listJoinableTables();
+  const ladder = (await readLadder()).slice(0, 8);
   // Outermost first, the way the board's own legend reads it.
   const bands = [...bandCensus()].reverse();
   const census = bands.reduce((sum, band) => sum + band.count, 0);
@@ -246,6 +259,21 @@ export default async function LobbyPage({
     [`${ORDER_SPEC_LIST.length}`, "orders in six phases"],
     [`${CHARTER_TABLE.length}`, "charters on the register"],
     [`${MIN_SEATS} to ${MAX_SEATS}`, "human or automated chairs"],
+  ];
+
+  /**
+   * The table games, named on the front of the house.
+   *
+   * Everything below the board is played on paper between houses rather than
+   * on the ground: a raid through the share book, a pact with a fund behind
+   * it, the press, and the clean air movement. A director ought to know they
+   * exist before they sit down at a table that plays them.
+   */
+  const TABLE_GAMES: [string, string][] = [
+    ["The share book", "A house that floats part of itself puts half its board on the market."],
+    ["Pacts", "Two houses may keep a joint fund between them, and either may take it."],
+    ["The Rag", "The paper that prints the scandals is cut into ten points and sold."],
+    ["Clean air", `Smoke feeds a movement, and a movement that carries ends an era at ${CLEAN_AIR_TARGET} particulate.`],
   ];
 
   return (
@@ -673,6 +701,35 @@ export default async function LobbyPage({
                 the middle expensive.
               </p>
             </Panel>
+
+            <Panel id="games" title="The games on paper" aside="played between houses">
+              <p className="mb-1 border-b border-rule/50 pb-2 text-[11.5px] leading-relaxed text-dim">
+                Not everything worth winning stands on the ground. These four are settled in the
+                share book, in the wire's own grammar and at the ballot, and a house that ignores
+                them can lose an era it was winning on the board.
+              </p>
+              <dl>
+                {TABLE_GAMES.map(([name, note]) => (
+                  <div
+                    key={name}
+                    className="border-b border-rule/40 py-2 last:border-b-0"
+                  >
+                    <dt className="flex items-baseline gap-2.5 text-[12.5px] text-ink">
+                      <span
+                        className="mt-[6px] inline-block h-1.5 w-1.5 shrink-0 bg-brass/80"
+                        aria-hidden
+                      />
+                      {name}
+                    </dt>
+                    <dd className="mt-0.5 pl-4 text-[11.5px] leading-relaxed text-dim">{note}</dd>
+                  </div>
+                ))}
+              </dl>
+              <p className="mt-3 border-t border-rule/50 pt-2 text-[11px] leading-relaxed text-faint">
+                The desk, the wire and the closing edition all carry them, and every move leaves a
+                line in the paper after the window shuts.
+              </p>
+            </Panel>
           </div>
 
           {/* The column rule, as in the head of the sheet and on the same x as
@@ -779,11 +836,52 @@ export default async function LobbyPage({
                 </form>
               </Panel>
             </div>
+
+            {/*
+             * The ladder. Every closed era files a placing against the house that
+             * played it, and the front of the house is where a director reads
+             * whether they are getting better at this. Points are places, so a
+             * house that has never won still has something to show for turning up.
+             */}
+            <Panel id="ladder" title="The ladder" aside={`${ladder.length} houses placed`}>
+              {ladder.length > 0 ? (
+                <ol>
+                  {ladder.map((entry, index) => (
+                    <li
+                      key={entry.userId}
+                      className="flex items-baseline gap-3 border-b border-rule/40 py-2 last:border-b-0"
+                    >
+                      <span className="tabular w-5 shrink-0 text-right text-[11px] text-brass">
+                        {index + 1}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-[12.5px] text-ink">
+                        {entry.name}
+                      </span>
+                      <span className="tabular text-[10.5px] text-dim">
+                        {entry.wins} won of {entry.games}
+                      </span>
+                      <span className="tabular w-10 shrink-0 text-right text-[11px] text-brass">
+                        {entry.points}
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <p className="text-[11.5px] leading-relaxed text-dim">
+                  No era has closed yet. The first table to reach its condition files the first
+                  line here.
+                </p>
+              )}
+              <p className="mt-3 border-t border-rule/50 pt-2 text-[11px] leading-relaxed text-faint">
+                One point for last place, one more for every place above it, and the best era a
+                house has had breaks a tie.
+              </p>
+            </Panel>
           </aside>
         </div>
 
         <footer className="mt-10 border-t-[3px] border-double border-edge pt-4">
-          <dl className="grid gap-x-10 gap-y-3 text-[11px] sm:grid-cols-3">
+          <dl className="grid gap-x-10 gap-y-3 text-[11px] sm:grid-cols-2 lg:grid-cols-4">
             <div>
               <dt className="text-[10px] tracking-[0.2em] text-faint uppercase">Tables are kept</dt>
               <dd className="mt-1 leading-relaxed text-dim">
@@ -810,6 +908,15 @@ export default async function LobbyPage({
               </dt>
               <dd className="mt-1 leading-relaxed text-dim">
                 A guided walk-around offers to ring each panel in turn, and can be left at any step.
+              </dd>
+            </div>
+            <div>
+              <dt className="text-[10px] tracking-[0.2em] text-faint uppercase">
+                Desk notices
+              </dt>
+              <dd className="mt-1 leading-relaxed text-dim">
+                {mailDescription()} A house may leave an address and be written to when a window
+                closes without it.
               </dd>
             </div>
           </dl>

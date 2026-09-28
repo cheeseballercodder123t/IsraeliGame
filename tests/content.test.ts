@@ -136,9 +136,9 @@ describe("the board", () => {
 });
 
 describe("the order card", () => {
-  it("lists sixty seven orders across six categories", () => {
-    expect(Object.keys(ORDER_SPECS).length).toBe(67);
-    expect(ORDER_SPEC_LIST.length).toBe(67);
+  it("lists seventy five orders across six categories", () => {
+    expect(Object.keys(ORDER_SPECS).length).toBe(75);
+    expect(ORDER_SPEC_LIST.length).toBe(75);
     const byCategory: Record<string, number> = {};
     for (const spec of ORDER_SPEC_LIST) {
       byCategory[spec.category] = (byCategory[spec.category] ?? 0) + 1;
@@ -151,10 +151,10 @@ describe("the order card", () => {
     }
     expect(byCategory).toEqual({
       PLANNING: 15,
-      COMMERCE: 14,
-      CAPITAL: 10,
+      COMMERCE: 15,
+      CAPITAL: 11,
       LABOR: 9,
-      POLITICS: 8,
+      POLITICS: 14,
       COVERT: 11,
     });
   });
@@ -189,9 +189,9 @@ describe("the register and the wire", () => {
     }
   });
 
-  it("knows a hundred and seventeen events and files each one under a section", () => {
-    expect(EVENT_KINDS.length).toBe(117);
-    expect(Object.keys(EVENT_SPECS).length).toBe(117);
+  it("knows a hundred and twenty eight events and files each one under a section", () => {
+    expect(EVENT_KINDS.length).toBe(128);
+    expect(Object.keys(EVENT_SPECS).length).toBe(128);
     expect(SECTIONS.length).toBe(14);
     expect(Object.keys(SECTION_TITLE).length).toBe(14);
     for (const kind of EVENT_KINDS) {

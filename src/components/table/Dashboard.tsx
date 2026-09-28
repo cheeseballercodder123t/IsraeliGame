@@ -1,6 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useOptimistic, useState, useTransition } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useOptimistic,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 import {
   BOARD,
   COMMODITIES,
@@ -12,7 +20,8 @@ import {
   TRADEABLE,
 } from "@/domain/constants";
 import { netWorthOf, leader } from "@/domain/valuation";
-import type { GameState, Order, QueuedOrder } from "@/domain/types";
+import { awayDigest, type AwayDigest } from "@/domain/digest";
+import type { ChatMessage, GameState, Order, QueuedOrder } from "@/domain/types";
 import type { NewspaperRecord } from "@/server/store/types";
 import { GridCanvas, ringLegend } from "@/components/grid/GridCanvas";
 import { TileInspector } from "@/components/grid/TileInspector";
@@ -26,17 +35,26 @@ import { NewspaperModal } from "@/components/newspaper/NewspaperModal";
 import { RagShelf } from "@/components/newspaper/RagShelf";
 import { ChatPanel } from "@/components/table/ChatPanel";
 import { ContractsPanel } from "@/components/table/ContractsPanel";
+import { TableGames } from "@/components/table/TableGames";
+import { AwayDigestPanel } from "@/components/table/AwayDigest";
+import { ReplayTheater } from "@/components/table/ReplayTheater";
 import { RecordPane } from "@/components/table/RecordPane";
 import { EraClosing } from "@/components/table/EraClosing";
 import { HelpOverlay } from "@/components/table/HelpOverlay";
 import { HousesRegister } from "@/components/table/HousesRegister";
 import { POLL_MS, REALTIME_POLL_MS, useTableSync } from "@/components/table/useTableSync";
-import { thump, ticker, toggleSound, useSound } from "@/lib/sound";
+import { clang, knell, siren, thump, ticker, toggleSound, useSound } from "@/lib/sound";
 import { setTableTitle, setUnreadWire } from "@/lib/parts";
 import { Tour, startTour } from "@/components/tour/Tour";
 import { TABLE_RECAP, TABLE_TOUR } from "@/components/tour/steps";
 import { Button, KeyValue, Meter, Notice, Panel } from "@/components/ui/primitives";
-import { cancelOrderAction, forceTickAction, queueOrderAction } from "@/server/actions";
+import {
+  cancelOrderAction,
+  forceTickAction,
+  markWireReadAction,
+  queueOrderAction,
+  setNoticeEmailAction,
+} from "@/server/actions";
 import {
   bandTint,
   formatMoney,
@@ -58,9 +76,24 @@ export interface DashboardProps {
   pending: QueuedOrder[];
   issues: NewspaperRecord[];
   devTick: boolean;
+  /** The wire as this desk may read it: the room, its side lines, its taps. */
+  wire: ChatMessage[];
+  /** Where this house sits on the cross-table ladder, or null with no record. */
+  ladderRank: number | null;
+  ladderPoints: number;
 }
 
-export function Dashboard({ code, state, meId, pending, issues, devTick }: DashboardProps) {
+export function Dashboard({
+  code,
+  state,
+  meId,
+  pending,
+  issues,
+  devTick,
+  wire,
+  ladderRank,
+  ladderPoints,
+}: DashboardProps) {
   const [optimistic, applyOptimistic] = useOptimistic(pending, (current, action: OptimisticAction) => {
     if (action.kind === "add") return [...current, action.order];
     if (action.kind === "remove") return current.filter((order) => order.id !== action.id);
@@ -78,6 +111,10 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
   const [errors, setErrors] = useState<string[]>([]);
   const [receipt, setReceipt] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [replayOpen, setReplayOpen] = useState(false);
+  const [digest, setDigest] = useState<AwayDigest | null>(null);
+  /** What the desk had to say about the last notice filed, or nothing yet. */
+  const [noticeNote, setNoticeNote] = useState<string | null>(null);
   const sound = useSound();
 
   const latestIssue = issues[0] ?? null;
@@ -91,12 +128,69 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
   // newcomer in a chair or a resolved window lands without a reload. A real
   // time table closes its window in seconds, so its watchers beat faster.
   const realtime = state.game.mode === "REALTIME";
+  // A real time table moves every few seconds, so its watchers ride the
+  // streamed transport and keep the poll underneath it as the fallback. A turn
+  // table changes on the hour, where a poll is the cheaper answer.
   const { live, present, composers, arrivals, unreadNames, noteComposing } = useTableSync(
     code,
     state.game.revision,
     realtime ? REALTIME_POLL_MS : POLL_MS,
-    { wire: state.messages, meId },
+    {
+      wire,
+      meId,
+      stream: realtime,
+      // The receipt is filed as a high water mark on the server, so the hook
+      // only has to say that the desk has caught up.
+      onRead: () => {
+        void markWireReadAction(code);
+      },
+    },
   );
+
+  // The desk memo. The window, the wire and the ledger as they stood when this
+  // tab last had eyes on them, so a director coming back to a board that has
+  // moved is handed the difference rather than the whole board.
+  const desk = useRef({ since: state.game.currentTurn, seen: new Set(wire.map((line) => line.id)) });
+  useEffect(() => {
+    const settle = () => {
+      if (document.visibilityState !== "visible") return;
+      const missed = awayDigest(state, desk.current.since, desk.current.seen, meId);
+      if (!missed.quiet) setDigest(missed);
+      desk.current = {
+        since: state.game.currentTurn,
+        seen: new Set(wire.map((line) => line.id)),
+      };
+    };
+    document.addEventListener("visibilitychange", settle);
+    window.addEventListener("focus", settle);
+    return () => {
+      document.removeEventListener("visibilitychange", settle);
+      window.removeEventListener("focus", settle);
+    };
+  }, [state, wire, meId]);
+  useEffect(() => {
+    if (document.visibilityState !== "visible") return;
+    desk.current = { since: state.game.currentTurn, seen: new Set(wire.map((line) => line.id)) };
+  }, [state.game.currentTurn, wire, state]);
+
+  // The stingers. A window's ledger is read once, on the render that first
+  // sees it, so a bankruptcy knells one time and a night raid sounds once.
+  const sounded = useRef(state.game.currentTurn);
+  useEffect(() => {
+    if (sounded.current === state.game.currentTurn) return;
+    sounded.current = state.game.currentTurn;
+    const kinds = new Set(state.events.map((event) => event.kind));
+    if (kinds.has("BANKRUPT")) knell();
+    else if (
+      kinds.has("RIOT") ||
+      kinds.has("ARSON") ||
+      kinds.has("BLACK_OP") ||
+      kinds.has("CONTROL_TAKEN")
+    ) {
+      siren();
+    }
+    if (kinds.has("CARTEL_DEFECTED") || kinds.has("PACT_BETRAYED")) clang();
+  }, [state.game.currentTurn, state.events]);
 
   // The tab title carries the room to a director working in another tab. The
   // base is the full metadata title of this route, which React re-applies on
@@ -219,6 +313,9 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
       } else if (key === "r") {
         event.preventDefault();
         setRagOpen(true);
+      } else if (key === "p") {
+        event.preventDefault();
+        setReplayOpen(true);
       } else if (key === "t") {
         event.preventDefault();
         startTour();
@@ -309,6 +406,12 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
         </div>
       ) : null}
 
+      {digest ? (
+        <div className="mt-3 max-w-3xl">
+          <AwayDigestPanel digest={digest} onDismiss={() => setDigest(null)} />
+        </div>
+      ) : null}
+
       {/*
        * The console rail. Wordmark on the left, the two rooms in the middle as
        * one control with a brass underline on the room in front of you, and the
@@ -378,6 +481,14 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
           </button>
           <button
             type="button"
+            onClick={() => setReplayOpen(true)}
+            className="flex-1 border-r border-rule px-3 py-2 text-[10px] tracking-[0.18em] whitespace-nowrap text-dim uppercase transition-colors duration-150 hover:bg-steel hover:text-ink sm:flex-none"
+            title="Walk the era back window by window"
+          >
+            Replay
+          </button>
+          <button
+            type="button"
             onClick={() => startTour("full")}
             className="flex-1 px-3 py-2 text-[10px] tracking-[0.18em] whitespace-nowrap text-dim uppercase transition-colors duration-150 hover:bg-steel hover:text-ink sm:flex-none"
           >
@@ -387,7 +498,13 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
       </div>
 
       {finished ? (
-        <EraClosing code={code} state={state} meId={meId} onOpenRag={() => setRagOpen(true)} />
+        <EraClosing
+          code={code}
+          state={state}
+          meId={meId}
+          onOpenRag={() => setRagOpen(true)}
+          wire={wire}
+        />
       ) : view === "DESK" ? (
         /*
          * Three columns only where there is room for three. A laptop gets two:
@@ -529,11 +646,17 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
                 meId={meId}
                 composers={composers}
                 onComposing={noteComposing}
+                wire={wire}
+                onOrder={handleOrder}
               />
             </div>
 
             <div data-tour="contracts" className="min-w-0">
               <ContractsPanel state={state} meId={meId} onOrder={handleOrder} />
+            </div>
+
+            <div data-tour="table-games" className="min-w-0">
+              <TableGames state={state} meId={meId} onOrder={handleOrder} />
             </div>
 
             <div data-tour="record" className="min-w-0">
@@ -598,6 +721,63 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
                   value={leaderRow ? leaderRow.name : "no clear leader"}
                   tone="dim"
                 />
+                <KeyValue
+                  label="Ladder"
+                  value={
+                    ladderRank === null
+                      ? "no era finished yet"
+                      : `rank ${ladderRank} · ${ladderPoints} points`
+                  }
+                  tone={ladderRank === null ? "dim" : "brass"}
+                />
+                {/*
+                 * The post. A turn table closes its window on the hour, and a
+                 * director working in another tab has no way to notice. An
+                 * address here is an instruction to write when a window closes
+                 * without this house at the table, and it is theirs to clear.
+                 */}
+                <form
+                  className="pt-2"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    const data = new FormData(event.currentTarget);
+                    const email = String(data.get("noticeEmail") ?? "");
+                    startTransition(async () => {
+                      const result = await setNoticeEmailAction(code, email);
+                      setNoticeNote(
+                        result.ok
+                          ? result.saved
+                            ? "The desk will write to that address."
+                            : "The notices are off."
+                          : (result.error ?? "The desk could not file that."),
+                      );
+                    });
+                  }}
+                >
+                  <label
+                    htmlFor="notice-email"
+                    className="block text-[9px] tracking-[0.18em] text-faint uppercase"
+                  >
+                    Desk notices
+                  </label>
+                  <div className="mt-1 flex gap-1">
+                    <input
+                      id="notice-email"
+                      name="noticeEmail"
+                      type="email"
+                      defaultValue={me.noticeEmail ?? ""}
+                      placeholder="An address, or nothing"
+                      className="sheet min-w-0 flex-1 px-2 py-1 text-[11px] text-ink placeholder:text-faint"
+                    />
+                    <Button tone="quiet" type="submit">
+                      File
+                    </Button>
+                  </div>
+                  <p className="pt-1 text-[10px] leading-relaxed text-faint">
+                    {noticeNote ??
+                      "A letter when a window closes without this house at the table, and again when the era ends."}
+                  </p>
+                </form>
               </Panel>
             </div>
 
@@ -646,9 +826,13 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
               meId={meId}
               composers={composers}
               onComposing={noteComposing}
+              wire={wire}
+              onOrder={handleOrder}
             />
 
             <ContractsPanel state={state} meId={meId} onOrder={handleOrder} />
+
+            <TableGames state={state} meId={meId} onOrder={handleOrder} />
 
             <RecordPane state={state} meId={meId} />
 
@@ -756,6 +940,12 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
         shelf={issues}
         onSelect={openIssue}
       />
+      <ReplayTheater
+        state={state}
+        issues={issues}
+        open={replayOpen}
+        onOpenChange={setReplayOpen}
+      />
       <HelpOverlay open={helpOpen} onOpenChange={setHelpOpen} />
 
       {/* The colophon: how the window runs, what the tick buys, and every key. */}
@@ -786,8 +976,8 @@ export function Dashboard({ code, state, meId, pending, issues, devTick }: Dashb
             </dt>
             <dd className="mt-1.5 text-[10px] leading-relaxed text-dim">
               Keys: d desk, f floor, m market, b board, o orders, k book, l the Record, r the
-              Rag, t the walk-around, / to jump to an order by name, ? for the whole card, and the
-              arrow keys walk the board one plot at a time.
+              Rag, p the replay, t the walk-around, / to jump to an order by name, ? for the whole
+              card, and the arrow keys walk the board one plot at a time.
             </dd>
           </div>
           <div>
