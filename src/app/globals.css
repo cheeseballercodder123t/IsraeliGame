@@ -79,25 +79,32 @@ p {
 /*
  * The ground every room stands on.
  *
- * One quiet field of warm steel. The building sits on this, so nothing in it
- * is allowed to repeat at a scale the eye can catch, and nothing in it is a
- * line. Two fields of fractal noise are enough to read as the surface of a
- * rolled sheet: a wide mottle underneath, and a fine grain over it that keeps
- * a wide screen from looking flat. There is no rule work down here at all.
- * Rules belong to the panels that have something to say, which is why a long
- * page reads as plate after plate rather than as stripes.
+ * The building is lit, not textured. Two things are laid down here and no
+ * more: one fall of light from the head of the page, which is the ink colour
+ * itself thinned to almost nothing, and one grain fine enough to read as the
+ * tooth of the metal rather than as a mark on it.
  *
- * Both tiles are stitched, and that is the whole point of them. Noise does not
- * normally close on itself, so a plain tile leaves a hard edge wherever it
- * lands; stitched turbulence makes the pattern meet its own edge, which is the
- * difference between a texture and a rule drawn the width of the page every
- * five hundred pixels.
+ * Anything broader than that has to go. A mottle wide enough to see is a stain
+ * on the wall, not a wall, and a field of tone that repeats at a scale the eye
+ * can catch is a stripe however softly it is drawn. So the light is one smooth
+ * fall over the top of the page, and the grain under it closes on itself.
+ *
+ * The grain is stitched, and that is the point of it. Noise does not normally
+ * meet its own edge, so a plain tile draws a hard seam everywhere it lands,
+ * which is a line the width of the page. Stitched turbulence makes the pattern
+ * close on itself, so there is no seam and nothing to catch. It also dithers
+ * the fall of light, which is what keeps a wash this dark from banding.
  */
 .ground {
   background-color: var(--color-void);
   background-image:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E"),
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='520' height='520'%3E%3Cfilter id='m'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.011' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='520' height='520' filter='url(%23m)' opacity='0.075'/%3E%3C/svg%3E");
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='110' height='110'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='110' height='110' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E"),
+    linear-gradient(
+      to bottom,
+      rgba(222, 212, 195, 0.05) 0px,
+      rgba(222, 212, 195, 0.014) 340px,
+      rgba(222, 212, 195, 0) 900px
+    );
 }
 
 /*

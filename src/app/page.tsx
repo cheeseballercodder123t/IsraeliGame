@@ -94,6 +94,15 @@ const RESOLUTION: string[] = [
   "Waste spills, smog drifts, the floor prints new prices, the paper goes out.",
 ];
 
+/** The index rule: the sections of this sheet, in the order they are set. */
+const SECTIONS: [string, string][] = [
+  ["brief", "The brief"],
+  ["charters", "The register of charters"],
+  ["window", "How a window resolves"],
+  ["board", "The board, band by band"],
+  ["found", "Found a company"],
+];
+
 /** Filed under the charter register: a charter reads better as XII than as 12. */
 function roman(value: number): string {
   const table: [number, string][] = [
@@ -204,7 +213,16 @@ export default async function LobbyPage({
 
   return (
     <main className="ground relative min-h-screen">
-      <div className="relative mx-auto max-w-7xl px-3 pb-14 sm:px-5">
+      {/*
+       * The sheet. A prospectus is a printed page lying on a dark table, so the
+       * front of the house is drawn as one: a hairline frame down both sides and
+       * across the foot, the gilt rule along the crown, and the wall left showing
+       * around it. The masthead bleeds to the frame and everything else stands
+       * inside it, which is what gives the page a head and a margin instead of an
+       * edge. On a narrow screen the frame goes away and the sheet fills the
+       * glass, because a margin nobody can afford to lose is not a margin.
+       */}
+      <div className="relative mx-auto max-w-7xl px-3 pb-14 sm:my-8 sm:border-x sm:border-b sm:border-edge/45 sm:px-5">
         {/*
          * The nameplate. Brass trim along the top edge, the one flourish the
          * building allows itself, then the rule work: a standing head over a
@@ -219,9 +237,26 @@ export default async function LobbyPage({
           <div className="border-t-[3px] border-double border-edge" aria-hidden />
           <div className="border-b border-rule/70 pt-[3px]" aria-hidden />
 
-          <div className="mt-7 grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_306px] xl:gap-12">
+          {/* The index rule. A broadsheet lists its sections under the
+              masthead, and a sheet this long needs the list more than most. */}
+          <nav
+            aria-label="Sections of this sheet"
+            className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1.5 border-b border-rule/40 pb-3"
+          >
+            {SECTIONS.map(([anchor, label]) => (
+              <a
+                key={anchor}
+                href={`#${anchor}`}
+                className="text-[9.5px] tracking-[0.2em] text-faint uppercase transition-colors duration-150 hover:text-brass"
+              >
+                {label}
+              </a>
+            ))}
+          </nav>
+
+          <div className="mt-6 grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_306px] xl:gap-12">
             <div className="min-w-0">
-              <h1 className="font-slab text-[46px] leading-[0.88] font-extrabold tracking-[-0.025em] text-ink sm:text-[68px] lg:text-[84px]">
+              <h1 className="font-slab text-[46px] leading-[0.86] font-extrabold tracking-[-0.03em] text-ink sm:text-[68px] lg:text-[88px]">
                 Conglomerate
               </h1>
               <p className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -264,16 +299,16 @@ export default async function LobbyPage({
 
               {/* The figures read as a register of the house, so the number
                   comes first and the thing it counts stands under it. */}
-              <dl className="mt-7 grid grid-cols-2 border-t border-l border-edge/70 bg-pit sm:grid-cols-3 lg:grid-cols-6">
+              <dl className="mt-8 grid grid-cols-2 border-t border-l border-edge bg-pit sm:grid-cols-3 lg:grid-cols-6">
                 {PROSPECTUS.map(([figure, note]) => (
                   <div
                     key={note}
-                    className="flex flex-col-reverse border-r border-b border-rule/60 px-3 py-2.5"
+                    className="flex flex-col-reverse border-r border-b border-rule/50 px-3 py-3"
                   >
-                    <dt className="mt-1.5 text-[9px] leading-snug tracking-[0.14em] text-faint uppercase">
+                    <dt className="mt-2 text-[9px] leading-snug tracking-[0.14em] text-faint uppercase">
                       {note}
                     </dt>
-                    <dd className="tabular font-slab text-[18px] leading-none text-brass">
+                    <dd className="tabular font-slab text-[19px] leading-none text-brass">
                       {figure}
                     </dd>
                   </div>
@@ -282,9 +317,9 @@ export default async function LobbyPage({
             </div>
 
             <div className="space-y-4">
-              <figure className="letterpress border border-edge bg-pit p-2">
+              <figure className="letterpress border border-edge bg-pit p-2.5">
                 <BoardPlate />
-                <figcaption className="mt-2 flex items-baseline justify-between gap-2 border-t border-rule pt-2 text-[10px] leading-relaxed text-faint">
+                <figcaption className="mt-2.5 flex items-baseline justify-between gap-2 border-t border-rule pt-2.5 text-[10px] leading-relaxed text-faint">
                   <span>
                     The rim yields. The crown at the middle takes the tallest works on the board.
                   </span>
@@ -356,11 +391,20 @@ export default async function LobbyPage({
                     href={`/table/${table.code}`}
                     className="group flex flex-wrap items-center gap-x-5 gap-y-2 px-3 py-3 transition-colors duration-150 hover:bg-plate/60"
                   >
-                    <span className="flex w-[86px] shrink-0 flex-col">
-                      <span className="tabular font-slab text-[23px] leading-none tracking-[0.14em] text-brass">
+                    {/* The code is the invitation, so it is cut as a ticket and
+                        not as a line of text, and a lamp says whether the table
+                        is still gathering or already playing. */}
+                    <span className="flex w-[106px] shrink-0 flex-col">
+                      <span className="tabular border border-edge bg-void px-2 py-1 font-slab text-[19px] leading-none tracking-[0.18em] text-brass transition-colors duration-150 group-hover:border-brass">
                         {table.code}
                       </span>
-                      <span className="mt-1 text-[9px] tracking-[0.18em] text-faint uppercase">
+                      <span className="mt-1.5 flex items-center gap-1.5 text-[9px] tracking-[0.18em] text-faint uppercase">
+                        <span
+                          className={`inline-block h-1.5 w-1.5 shrink-0 ${
+                            table.status === "LOBBY" ? "lamp bg-brass" : "bg-verdigris"
+                          }`}
+                          aria-hidden
+                        />
                         {table.status === "LOBBY" ? "gathering" : "in play"}
                       </span>
                     </span>
@@ -426,7 +470,11 @@ export default async function LobbyPage({
               </p>
             </Panel>
 
-            <Panel title="The charters on the register" aside="pick one before you sit">
+            <Panel
+              id="charters"
+              title="The charters on the register"
+              aside="pick one before you sit"
+            >
               <div className="grid gap-x-8 xl:grid-cols-2">
                 {charterColumns.map((column, columnIndex) => (
                   <table key={columnIndex} className="w-full border-collapse">
@@ -472,7 +520,7 @@ export default async function LobbyPage({
               </div>
             </Panel>
 
-            <Panel title="How a window resolves" aside="in this order, every window">
+            <Panel id="window" title="How a window resolves" aside="in this order, every window">
               <ol className="grid gap-x-8 md:grid-cols-2">
                 {RESOLUTION.map((step, index) => (
                   <li
@@ -488,7 +536,7 @@ export default async function LobbyPage({
               </ol>
             </Panel>
 
-            <Panel title="The board, band by band" aside={`${census} plots, outermost first`}>
+            <Panel id="board" title="The board, band by band" aside={`${census} plots, outermost first`}>
               <ul>
                 {bands.map((band) => {
                   const share = band.count / census;
@@ -678,6 +726,10 @@ export default async function LobbyPage({
               Open a table
             </a>
           </div>
+          <p className="mt-4 border-t border-rule/50 pt-3 text-[10px] leading-relaxed text-faint">
+            Set in IBM Plex Mono and Bitter. Every figure on this sheet is read off the game's own
+            catalogs, so the front of the envelope cannot drift from what is inside it.
+          </p>
         </footer>
       </div>
     </main>
