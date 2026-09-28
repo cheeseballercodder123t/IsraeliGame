@@ -7,6 +7,7 @@ import { hashSeed } from "@/domain/rng";
 import { parseOrder } from "@/server/orders";
 import { MAX_SEATS, MIN_SEATS, clampSeats, seatOpponents } from "@/server/personas";
 import { composeClosingIssue, composeIssue, type NewspaperIssue } from "@/server/rag";
+import { clearComposing, present } from "@/server/presence";
 import { getStore, type GameStore } from "@/server/store";
 import type { NewspaperRecord } from "@/server/store/types";
 import { planBotTurn } from "@/server/bot";
@@ -391,6 +392,8 @@ export interface OpenTableSummary {
   open: number;
   /** The seed the country was drawn from, printed on the lobby card. */
   seed: number;
+  /** Houses with a browser open on the table right now, from the presence roster. */
+  atTable: number;
 }
 
 /** Tables a newcomer can still sit at: gathering lobbies first. */
@@ -412,6 +415,7 @@ export async function listJoinableTables(): Promise<OpenTableSummary[]> {
       players: state.players.length,
       open,
       seed: state.game.seed,
+      atTable: present(state.game.id).length,
     });
   }
   return tables.sort((a, b) =>
@@ -638,6 +642,9 @@ export async function say(
     return { ok: true as const, value: true };
   });
 
+  // A line that landed means the hand that wrote it is no longer news, so the
+  // composing stamp goes before the next poll can report the house as writing.
+  if (outcome.ok) clearComposing(gameId, playerId);
   return outcome.ok ? { ok: true } : { ok: false, error: outcome.error };
 }
 

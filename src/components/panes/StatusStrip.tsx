@@ -15,7 +15,8 @@ import {
 import type { WindowPressure } from "@/domain/window";
 import type { GameState } from "@/domain/types";
 import type { TablePresence } from "@/components/table/useTableSync";
-import { bell } from "@/lib/sound";
+import { bell, ticker } from "@/lib/sound";
+import { setNothingSealed, setWindowPressure } from "@/lib/parts";
 import { clock } from "@/domain/format";
 import { formatMoney, formatPercent, countdown, ownerColor, windLabel } from "@/lib/labels";
 
@@ -153,6 +154,8 @@ export function StatusStrip({
   const sealedTotal = state.queue.filter((order) => order.turn <= state.game.currentTurn).length;
   const atDesk = (playerId: string) => present.some((who) => who.playerId === playerId);
   const mineSealed = me ? sealedBy(me.id) : 0;
+  /** Rivals with orders in the window that this desk has not matched. */
+  const rivalSeals = sealedTotal - mineSealed;
   const worth = new Map(state.players.map((player) => [player.id, netWorthOf(state, player.id)]));
   const best = Math.max(...state.players.map((player) => worth.get(player.id) ?? 0));
 
@@ -196,6 +199,28 @@ export function StatusStrip({
   const profile = me ? charterOf(me.archetype) : null;
   const spent = windowFraction(remaining, windowSeconds);
   const pressure = finished ? "calm" : windowPressure(remaining, windowSeconds);
+  /** The title's pressure flag rides the strip's own clock, not a new one. */
+  const titlePressure = !finished && pressure !== "calm";
+
+  // The tab title carries the room while the desk works elsewhere: the window
+  // pressure, whether this desk has sealed anything into the window that is
+  // closing, and the names that have come onto the wire unread.
+  useEffect(() => {
+    setWindowPressure(titlePressure);
+  }, [titlePressure]);
+  useEffect(() => {
+    setNothingSealed(me !== null && mineSealed === 0);
+  }, [me, mineSealed]);
+
+  // A rival putting orders into the window before this desk has matched is
+  // the whole game's pressure in one fact, so it gets its own tick when the
+  // count moves.
+  const rivals = useRef(rivalSeals);
+  useEffect(() => {
+    if (rivalSeals > rivals.current) ticker();
+    rivals.current = rivalSeals;
+  }, [rivalSeals]);
+
   const windowTone = finished
     ? "text-dim"
     : pressure === "imminent"
@@ -319,6 +344,11 @@ export function StatusStrip({
             <p className="text-[9px] tracking-[0.18em] text-faint uppercase">
               {finished ? "The era has closed" : "Next window in"}
             </p>
+            {rivalSeals > 0 ? (
+              <p className="text-[9px] text-hazard" title="Rivals have sealed into this window before you">
+                {rivalSeals} rival order{rivalSeals === 1 ? "" : "s"} on the desk
+              </p>
+            ) : null}
             <p
               className={`tabular text-[15px] leading-tight ${windowTone}`}
               title={`Window of ${countdown(windowSeconds)} · era closes at ${winConditionLabel(state.game.winCondition)}`}

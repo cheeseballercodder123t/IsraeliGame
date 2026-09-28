@@ -9,11 +9,13 @@ import {
   claimSeatByCode,
   fillWithBots,
   joinMatch,
+  listJoinableTables,
   openSeats,
   startMatch,
   startTable,
   targetSeats,
 } from "@/server/game";
+import { beat } from "@/server/presence";
 import { getStore } from "@/server/store";
 import { MIN_SEATS } from "@/domain/constants";
 import type { Archetype } from "@/domain/types";
@@ -203,5 +205,28 @@ describe("lobby tables", () => {
     expect(row!.humans).toBe(2);
     expect(row!.players).toBe(2);
     expect(row!.status).toBe("LOBBY");
+  });
+
+  it("counts the browsers actually on a lobby, not only the seats held", async () => {
+    const { state } = await startMatch(host, "ROBBER_BARON", 4);
+    await claimSeatByCode(state.game.code, guest, "PE_VULTURE");
+
+    // One browser on the table: a friend reading the lobby before claiming.
+    // The stamp is taken from the real clock, because presence is compared
+    // against it, and two beats inside the TTL still count once.
+    beat(state.game.id, "friend-1", "A Friend");
+    beat(state.game.id, "friend-1", "A Friend");
+
+    const tables = await listJoinableTables();
+    const row = tables.find((table) => table.code === state.game.code)!;
+    expect(row.humans).toBe(2);
+    expect(row.atTable).toBe(1);
+  });
+
+  it("says nobody is at a lobby whose page nobody has open", async () => {
+    const { state } = await startMatch(host, "ROBBER_BARON", 4);
+    const tables = await listJoinableTables();
+    const row = tables.find((table) => table.code === state.game.code)!;
+    expect(row.atTable).toBe(0);
   });
 });
