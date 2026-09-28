@@ -27,13 +27,13 @@ export default function NotFound() {
         <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-3">
           <Link
             href="/"
-            className="letterpress-sm border-2 border-brass bg-brass px-3.5 py-2 text-[11px] tracking-[0.16em] text-void uppercase transition-transform duration-150 hover:-translate-y-[2px] active:translate-y-0"
+            className="letterpress-sm border-2 border-brass bg-brass px-3.5 py-2 text-[11px] tracking-[0.16em] text-void uppercase transition-colors duration-150 hover:border-hazard hover:bg-hazard"
           >
             Back to the lobby
           </Link>
           <Link
             href="/#found"
-            className="border border-edge bg-plate px-3.5 py-2 text-[11px] tracking-[0.14em] text-ink uppercase transition-transform duration-150 hover:-translate-y-[2px] hover:border-dim active:translate-y-0"
+            className="border border-edge bg-plate px-3.5 py-2 text-[11px] tracking-[0.14em] text-ink uppercase transition-colors duration-150 hover:border-dim hover:bg-steel"
           >
             Open a table of your own
           </Link>

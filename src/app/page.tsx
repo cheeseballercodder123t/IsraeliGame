@@ -82,6 +82,18 @@ const BAND_NOTE: Record<Terrain, string> = {
 /** How heavily each band is laid down on the plate, from the crown outward. */
 const RING_INK = [1, 0.58, 0.46, 0.52, 0.66, 0.86];
 
+/**
+ * Registration marks, one to each corner of the plate. A printer sets them so
+ * the sheet can be squared, and they are the cheapest way to make a drawing
+ * read as something that was cut and inked rather than placed.
+ */
+const CORNERS = [
+  "top-0 left-0 border-t border-l",
+  "top-0 right-0 border-t border-r",
+  "bottom-0 left-0 border-b border-l",
+  "bottom-0 right-0 border-b border-r",
+];
+
 const RESOLUTION: string[] = [
   "The wind turns, and the smoke follows it across the board.",
   "Planning lands: plant, retrofit, demolish, track, tolls, escrow, tenders.",
@@ -142,45 +154,70 @@ function BoardPlate() {
     return { key: `${x}-${y}`, x, y, tint: bandTint(terrainForRing(ring)), ink: RING_INK[ring] };
   });
 
+  // The plate is surveyed, so it is numbered like a survey: the same eleven
+  // divisions across the head and down the side. A plot is named by its
+  // coordinates at a table, and the plate should be able to say them.
+  const rules = Array.from({ length: BOARD }, (_, index) => index);
+
   return (
-    <svg
-      viewBox={`-0.5 -0.5 ${BOARD + 1} ${BOARD + 1}`}
-      shapeRendering="crispEdges"
-      className="block w-full"
-      role="img"
-      aria-label={`The board: ${BOARD} rows by ${BOARD} columns in six bands, the crown jewel at the centre`}
-    >
-      {cells.map((cell) => (
-        <rect
-          key={cell.key}
-          x={cell.x + 0.06}
-          y={cell.y + 0.06}
-          width={0.88}
-          height={0.88}
-          fill={cell.tint}
-          opacity={cell.ink}
-        />
-      ))}
-      {/* The crown jewel wears the same outline the board gives it. */}
-      <rect
-        x={CENTER + 0.06}
-        y={CENTER + 0.06}
-        width={0.88}
-        height={0.88}
-        fill="none"
-        stroke="#ded4c3"
-        strokeWidth={0.07}
-      />
-      <rect
-        x={-0.45}
-        y={-0.45}
-        width={BOARD + 0.9}
-        height={BOARD + 0.9}
-        fill="none"
-        stroke="#4d4237"
-        strokeWidth={0.12}
-      />
-    </svg>
+    <div className="grid grid-cols-[15px_minmax(0,1fr)] gap-x-1.5">
+      <div aria-hidden />
+      <div className="flex px-[1px] pb-1" aria-hidden>
+        {rules.map((rule) => (
+          <span key={rule} className="tabular flex-1 text-center text-[8px] leading-none text-faint">
+            {rule}
+          </span>
+        ))}
+      </div>
+      <div className="flex flex-col py-[1px] pr-0.5" aria-hidden>
+        {rules.map((rule) => (
+          <span
+            key={rule}
+            className="tabular flex flex-1 items-center justify-end text-[8px] leading-none text-faint"
+          >
+            {rule}
+          </span>
+        ))}
+      </div>
+      <div className="relative border border-rule">
+        {CORNERS.map((corner) => (
+          <span
+            key={corner}
+            className={`pointer-events-none absolute -m-[1px] h-2 w-2 border-brass/70 ${corner}`}
+            aria-hidden
+          />
+        ))}
+        <svg
+          viewBox={`0 0 ${BOARD} ${BOARD}`}
+          shapeRendering="crispEdges"
+          className="block w-full"
+          role="img"
+          aria-label={`The board: ${BOARD} rows by ${BOARD} columns in six bands, the crown jewel at the centre`}
+        >
+          {cells.map((cell) => (
+            <rect
+              key={cell.key}
+              x={cell.x + 0.06}
+              y={cell.y + 0.06}
+              width={0.88}
+              height={0.88}
+              fill={cell.tint}
+              opacity={cell.ink}
+            />
+          ))}
+          {/* The crown jewel wears the same outline the board gives it. */}
+          <rect
+            x={CENTER + 0.06}
+            y={CENTER + 0.06}
+            width={0.88}
+            height={0.88}
+            fill="none"
+            stroke="#ded4c3"
+            strokeWidth={0.07}
+          />
+        </svg>
+      </div>
+    </div>
   );
 }
 
@@ -212,7 +249,15 @@ export default async function LobbyPage({
   ];
 
   return (
-    <main className="ground relative min-h-screen">
+    <main className="ground relative min-h-screen sm:px-5">
+      {/*
+       * The wall. The sheet is a page lying on a table, so it wants room around
+       * it at every width, not only when the screen happens to be wider than the
+       * sheet. The gutter on main is what guarantees that: below the sheet's own
+       * measure it holds the frame off the glass, and above it the frame centres
+       * inside the same gutter. Narrow screens drop it, because the frame is not
+       * drawn there in the first place.
+       */}
       {/*
        * The sheet. A prospectus is a printed page lying on a dark table, so the
        * front of the house is drawn as one: a hairline frame down both sides and
@@ -229,10 +274,14 @@ export default async function LobbyPage({
          * heavy line, a hairline under that, and the nameplate below. It is
          * set once, at the head of the sheet, and never repeated down the page.
          */}
-        <header className="gilt-t front-wash -mx-3 px-3 pt-7 pb-7 sm:-mx-5 sm:px-5 sm:pt-10">
-          <div className="flex flex-wrap items-baseline justify-between gap-x-8 gap-y-2 pb-2 text-[10px] tracking-[0.22em] text-faint uppercase">
-            <p>A live table for industrial empire and corporate warfare</p>
-            <p className="tabular">Edition of {dateline}</p>
+        <header className="gilt-t front-wash -mx-3 px-3 pt-7 sm:-mx-5 sm:px-5 sm:pt-10">
+          {/* The ears. A paper prints its standing head and its dateline in a
+              box at either end of the top rule, and so does this sheet. */}
+          <div className="flex flex-wrap items-stretch justify-between gap-x-6 gap-y-2 pb-2.5 text-[9.5px] tracking-[0.22em] text-faint uppercase">
+            <p className="border border-rule/60 px-2 py-1">
+              A live table for industrial empire and corporate warfare
+            </p>
+            <p className="tabular border border-rule/60 px-2 py-1">Edition of {dateline}</p>
           </div>
           <div className="border-t-[3px] border-double border-edge" aria-hidden />
           <div className="border-b border-rule/70 pt-[3px]" aria-hidden />
@@ -254,9 +303,19 @@ export default async function LobbyPage({
             ))}
           </nav>
 
-          <div className="mt-6 grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_306px] xl:gap-12">
-            <div className="min-w-0">
-              <h1 className="font-slab text-[46px] leading-[0.86] font-extrabold tracking-[-0.03em] text-ink sm:text-[68px] lg:text-[88px]">
+          {/* The measure of the two columns is fixed here and matched by the body
+              of the sheet below, so the two column rules stand on one x. The head
+              of the sheet carries no foot of its own either: it ends where this
+              grid ends, so the rule drawn here and the rule drawn below are one
+              line with a display band cut into it, not two rules with a ragged
+              gap between them. */}
+          <div className="mt-6 grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_1px_356px] lg:gap-x-0">
+            <div className="min-w-0 pb-6 lg:pr-8">
+              {/* The head steps down once more than it used to between lg and
+                  xl, because the column rule takes its own measure out of the
+                  lead column and a wordmark that overflows its column is worse
+                  than a wordmark set a size smaller. */}
+              <h1 className="font-slab text-[46px] leading-[0.86] font-extrabold tracking-[-0.03em] text-ink sm:text-[68px] lg:text-[76px] xl:text-[88px]">
                 Conglomerate
               </h1>
               <p className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -277,9 +336,11 @@ export default async function LobbyPage({
               </p>
 
               <div className="mt-6 flex flex-wrap items-center gap-x-3 gap-y-3">
+                {/* The lever answers in colour only. Nothing in this building
+                    moves when it is pointed at. */}
                 <a
                   href="#found"
-                  className="letterpress-sm border-2 border-brass bg-brass px-4 py-2.5 text-[12px] tracking-[0.18em] text-void uppercase transition-transform duration-150 hover:-translate-y-[2px] active:translate-y-0"
+                  className="letterpress-sm border-2 border-brass bg-brass px-4 py-2.5 text-[12px] tracking-[0.18em] text-void uppercase transition-colors duration-150 hover:border-hazard hover:bg-hazard"
                 >
                   Found a company
                 </a>
@@ -314,16 +375,37 @@ export default async function LobbyPage({
                   </div>
                 ))}
               </dl>
+
+              {/* The ornament that closes the head of the sheet. It used to stand
+                  between the two columned grids, where all it did was hold the
+                  rule apart at the fold. */}
+              <Plate name="rule" scale={3} className="mx-auto mt-6 hidden max-w-full sm:block" />
             </div>
 
-            <div className="space-y-4">
+            {/* The column rule. A sheet this wide is set in columns, and the rule
+                is what says so, so it is drawn at the weight of a rule rather
+                than of a hint. */}
+            <div className="hidden self-stretch bg-rule lg:block" aria-hidden />
+
+            <div className="space-y-4 lg:pl-8">
+              {/*
+               * The plate. An engraving in a printed sheet is framed, numbered
+               * and squared, so the board is: a plate mark around the drawing,
+               * registration marks to each corner, and a scale down the head and
+               * the side, because a plot is named by its coordinates.
+               */}
               <figure className="letterpress border border-edge bg-pit p-2.5">
-                <BoardPlate />
-                <figcaption className="mt-2.5 flex items-baseline justify-between gap-2 border-t border-rule pt-2.5 text-[10px] leading-relaxed text-faint">
-                  <span>
-                    The rim yields. The crown at the middle takes the tallest works on the board.
+                <div className="flex items-baseline justify-between gap-2 border-b border-rule/60 pb-2 text-[9px] tracking-[0.18em] text-faint uppercase">
+                  <span>Fig. 1, the board</span>
+                  <span className="tabular">
+                    {BOARD} x {BOARD}
                   </span>
-                  <span className="tabular shrink-0">11 x 11</span>
+                </div>
+                <div className="py-2.5">
+                  <BoardPlate />
+                </div>
+                <figcaption className="border-t border-rule/60 pt-2.5 text-[10px] leading-relaxed text-faint">
+                  The rim yields. The crown at the middle takes the tallest works on the board.
                 </figcaption>
               </figure>
 
@@ -352,8 +434,6 @@ export default async function LobbyPage({
               </div>
             </div>
           </div>
-
-          <Plate name="rule" scale={3} className="mx-auto mt-7 hidden max-w-full sm:block" />
         </header>
 
         {missing ? (
@@ -369,7 +449,7 @@ export default async function LobbyPage({
            * label at the end of it, because the code is the invitation and the
            * rest of the row is only the terms it comes with.
            */
-          <section className="mt-5 border border-edge/70 bg-steel">
+          <section className="border border-edge/70 bg-steel">
             <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 bg-plate px-3 py-2">
               <h2 className="flex items-baseline gap-2 text-[10px] tracking-[0.24em] text-dim uppercase">
                 <span className="inline-block h-[10px] w-[2px] bg-brass" aria-hidden />
@@ -393,8 +473,11 @@ export default async function LobbyPage({
                   >
                     {/* The code is the invitation, so it is cut as a ticket and
                         not as a line of text, and a lamp says whether the table
-                        is still gathering or already playing. */}
-                    <span className="flex w-[106px] shrink-0 flex-col">
+                        is still gathering or already playing. The plate is cut
+                        to the code rather than to a fixed width, because the
+                        ticket is set in the slab face and a code with wide
+                        letters in it is wider than one without. */}
+                    <span className="flex min-w-[106px] shrink-0 flex-col">
                       <span className="tabular border border-edge bg-void px-2 py-1 font-slab text-[19px] leading-none tracking-[0.18em] text-brass transition-colors duration-150 group-hover:border-brass">
                         {table.code}
                       </span>
@@ -437,14 +520,16 @@ export default async function LobbyPage({
             </ul>
           </section>
         ) : (
-          <p className="mt-5 border border-edge/70 bg-steel px-3 py-2.5 text-[11.5px] text-dim">
+          <p className="border border-edge/70 bg-steel px-3 py-2.5 text-[11.5px] text-dim">
             No table is gathering a lobby right now. Found one below and the code is yours to send.
           </p>
         )}
 
-        {/* Everything below reads as plate after plate: one panel, one subject. */}
-        <div className="mt-6 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_356px] lg:gap-8">
-          <div className="space-y-5">
+        {/* Everything below reads as plate after plate: one panel, one subject.
+            It begins flush against the band above it and takes its air from
+            inside the row, so the rule beside it joins the one above. */}
+        <div className="grid items-start gap-y-6 lg:grid-cols-[minmax(0,1fr)_1px_356px] lg:gap-x-0">
+          <div className="mt-6 space-y-5 lg:mt-0 lg:pt-6 lg:pr-8">
             <Panel
               id="brief"
               title="The brief"
@@ -482,7 +567,7 @@ export default async function LobbyPage({
                       <tr className="border-b border-rule">
                         <th
                           scope="col"
-                          className="w-9 py-1 text-left text-[9px] tracking-[0.16em] text-faint uppercase"
+                          className="w-11 py-1 text-left text-[9px] tracking-[0.16em] text-faint uppercase"
                         >
                           Filed
                         </th>
@@ -500,8 +585,13 @@ export default async function LobbyPage({
                           key={charter.id}
                           className="border-b border-rule/50 align-top transition-colors duration-150 hover:bg-plate/50"
                         >
-                          <td className="tabular py-2.5 pr-3 text-[10px] text-faint">
-                            {roman(columnIndex * charterHalf + index + 1)}
+                          {/* A charter is filed under its number, so the
+                              number is set as a mark rather than as a digit
+                              in a column. */}
+                          <td className="py-2.5 pr-3 align-top">
+                            <span className="tabular inline-block border border-rule/60 px-1.5 py-0.5 text-[9px] text-brass">
+                              {roman(columnIndex * charterHalf + index + 1)}
+                            </span>
                           </td>
                           <td className="py-2.5">
                             <span className="font-slab text-[15px] text-ink">{charter.name}</span>
@@ -580,7 +670,11 @@ export default async function LobbyPage({
             </Panel>
           </div>
 
-          <aside className="space-y-5 lg:sticky lg:top-3 lg:max-h-[calc(100vh-1.5rem)] lg:overflow-y-auto lg:pb-2">
+          {/* The column rule, as in the head of the sheet and on the same x as
+              it, continuing where the display band above cut it. */}
+          <div className="hidden self-stretch bg-rule lg:block" aria-hidden />
+
+          <aside className="space-y-5 lg:sticky lg:top-3 lg:max-h-[calc(100vh-1.5rem)] lg:pt-6 lg:pl-8 lg:overflow-y-auto lg:pb-2">
             <div id="found">
               <Panel title="Found a company" aside="you hold the first chair">
                 <p className="mb-3 border-b border-rule/50 pb-2 text-[11.5px] leading-relaxed text-dim">
@@ -631,7 +725,7 @@ export default async function LobbyPage({
                   <div className="pt-2">
                     <button
                       type="submit"
-                      className="letterpress-sm w-full border-2 border-brass bg-brass px-3 py-2.5 text-[12px] tracking-[0.18em] text-void uppercase transition-transform duration-150 hover:-translate-y-[2px] active:translate-y-0"
+                      className="letterpress-sm w-full border-2 border-brass bg-brass px-3 py-2.5 text-[12px] tracking-[0.18em] text-void uppercase transition-colors duration-150 hover:border-hazard hover:bg-hazard"
                     >
                       Open the table
                     </button>
