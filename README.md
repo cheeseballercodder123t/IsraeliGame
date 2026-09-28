@@ -79,13 +79,59 @@ honours the hold the way a page load does. A window nobody was sealing still clo
 
 **The wire.** Cartel pools, supply contracts, licences and tender truces are agreed rather than
 executed, so every table carries a message channel in `GameState.messages`: a composer with a
-handful of period barbs at the desk, and a read-only copy on the rail.
+handful of period barbs at the desk, and a read-only copy on the rail. The bench talks too: every
+automated house puts one line of its charter's own vocabulary on the wire each window, and answers
+by name when the last window named it.
 
-**The end.** A table is opened to a turn limit or a net worth figure, chosen at founding and printed
-in the lobby, on the strip and on the open tables list. The window that meets it sets
-`GameStatus.FINISHED`, closes the order book, and the Rag prints a closing edition that ranks the
-houses instead of filing the wire. The closing desk offers a rematch on the same code, with the same
-houses and the same condition, from turn one.
+**Side lines and receipts.** Beside the open room, each pair of houses has a private one, named for
+the pair and sorted so both desks compute the same key. A house that buys a rival's private papers
+with night work reads that rival's side lines for the window it bought them in, and nobody else reads
+them at all. Every line carries the names of the houses that have read it, kept as a high water mark
+per house rather than a row per line.
+
+**Deals in the wire's grammar.** A line shaped like `/deal COAL 5 12.50 3` is read as an offer by the
+wire panel, which prints its own button: the house that said the line is the seller, the house that
+presses it is the buyer, and one press signs the contract that would otherwise be re-entered in
+another panel.
+
+**Paper between houses.** Four markets are played on the table rather than on the ground, and they
+share one panel. A house that sells part of itself puts that slice on the open book and a rival can
+buy it: past the float the raider has to go to the family at half again the book, and half of the
+paper is control, which pays its holder twelve percent of the target's till every window. Two houses
+may sign a pact and keep a joint fund between them, earning two percent a window, and either side may
+walk off with the balance at the cost of standing. The Rag is cut into ten points; five of them run
+the paper and plant a story every window against the strongest rival, and two are enough to place one
+of your own. And the smoke the board makes feeds a clean air movement that builds until it forces a
+vote, which is carried by weight rather than head count and doubles every pollution fine on the
+board.
+
+**Desk notices.** A turn table closes its window on the hour, and a director in another tab has no
+way to notice. A house may leave an address on its seat, and a window that closes without it at the
+table is written to: the headline, the houses that filed, the few lines the window is remembered by,
+and where the book stands. A closed era is written to as well. It is opt in, it is only ever written
+by that house's own desk, and it is posted through Resend with `RESEND_API_KEY`; without a key the
+desk holds the letters and the game plays on unchanged.
+
+**The ladder.** A closed era files a placing against every house that played it, keyed by user rather
+than by seat, so a reputation follows a director into the next table. Points are places, not money:
+one for last and one more for every place above it, with the best era breaking a tie. The front of
+the house prints the top of the ranking and the desk prints your own line.
+
+**The end.** A table is opened to a turn limit, a net worth figure, control of a number of rival
+boards or a clean era, chosen at founding and printed in the lobby, on the strip and on the open
+tables list. The window that meets it sets `GameStatus.FINISHED`, closes the order book, and the Rag
+prints a closing edition that ranks the houses instead of filing the wire. The closing desk offers a
+rematch on the same code, with the same houses and the same condition, from turn one.
+
+**Coming back to it.** A parked tab counts what it missed: the wire it has not read becomes a message
+light in the tab title, and the window it sat out is answered by a desk memo on the way back in. Any
+window can be walked back one frame at a time in the replay, off the same ledger the paper reads.
+
+**Watching a table.** Every watching browser beats the same heartbeat, which carries the revision,
+the presence roster and the hands down on the wire. A real time table rides a server sent stream of
+that same payload instead of polling it, and falls back to the poll the moment a frame is late or the
+stream errors. Presence and composing stamps live in the process and expire on their own, so nothing
+they do can reach the stored game.
 
 **The rail.** Once every chair is taken the code still opens the table: board, register, wire and
 paper, read only, riding the same heartbeat the players do. The rail cannot seal, bid or speak.
@@ -151,10 +197,10 @@ lands. Delivery runs every window at the agreed price, a missed delivery is paid
 gap, and an unsigned offer comes off the wire after three windows. Houses can also seal a supply
 contract directly, which is what the desk's own order does.
 
-**The card.** Sixty seven orders stand on the desk in six categories: fifteen planning, fourteen
-commerce, ten capital, nine labor, eight city hall and eleven covert. Every one of them is a data
-entry in the order catalog, so the desk builds its own controls, the schema validator accepts it, and
-the tick runs it without any of those three knowing what a derrick is.
+**The card.** Seventy five orders stand on the desk in six categories: fifteen planning, fifteen
+commerce, eleven capital, nine labor, fourteen city hall and eleven covert. Every one of them is a
+data entry in the order catalog, so the desk builds its own controls, the schema validator accepts it,
+and the tick runs it without any of those three knowing what a derrick is.
 
 ## Architecture
 
@@ -263,13 +309,16 @@ them without touching the rest of the server layer.
 
 ### The tests
 
-Twenty eight files, two hundred and forty five tests. Geometry and the catalogs are checked against
+Thirty files, two hundred and eighty seven tests. Geometry and the catalogs are checked against
 their own contents, so a catalog edit that breaks an assumption fails a test rather than a screen:
-seventy five commodities, seventy five plants, twenty six charters, sixty seven orders, a hundred and
-seventeen event kinds, and every sprite placement inside its sheet. The table's own rules are pinned
-the same way: the late seal hold, the wire's length and its refusals, the countdown ring's
+seventy five commodities, seventy five plants, twenty six charters, seventy five orders, a hundred and
+twenty eight event kinds, and every sprite placement inside its sheet. The table's own rules are
+pinned the same way: the late seal hold, the wire's length and its refusals, the countdown ring's
 arithmetic, the open tables list's clock, and the ending from the limit window through the closing
-edition to the rematch. The engine tests cover the exchange, freight, production, waste,
+edition to the rematch. `tests/table-games.test.ts` covers the paper played between houses, which is
+the share book and the control it buys, the pacts and their joint fund, the Rag, the clean air
+movement, the wire's deal grammar, side lines and taps, the bench's chatter, read receipts, the
+ladder and the desk notices. The engine tests cover the exchange, freight, production, waste,
 tenders, forced sales, the contract wire, the Record, raids, bonds, audits, arson, chapter 11 and a
 full turn replay. `tests/tick.test.ts` runs the
 same input twice and asserts a byte identical event log, and `tests/rag.test.ts` asserts the paper
@@ -282,7 +331,11 @@ fails a check instead of reaching a screen.
 
 ## Deferred
 
-Realtime subscriptions, the pg_cron schedule, and generated newspaper prose are all wired but
-inactive here, because they need credentials this machine does not have. The migration that
+Realtime subscriptions, the pg_cron schedule, the desk notices and generated newspaper prose are all
+wired but inactive here, because they need credentials this machine does not have. The migration that
 schedules the sweep is in `supabase/migrations/0003_cron.sql`; point `app.tick_url` at a deployed
-instance and run the three migrations in order.
+instance and run the migrations in order. The ladder is `supabase/migrations/0005_ladder.sql`, and it
+is the one table that is not scoped to a game: it is world readable and written only by the service
+role. Notices need `RESEND_API_KEY` and `RESEND_EMAIL_FROM` (the provider's test sender works as the
+from address until a domain is verified); without them the desk holds the letters rather than failing
+a window over them.

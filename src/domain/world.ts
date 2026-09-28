@@ -147,6 +147,8 @@ export function newPlayer(
     lastWageTurn: 0,
     lockout: false,
     milestonesPassed: [],
+    controlledBy: null,
+    noticeEmail: null,
   };
 }
 
@@ -279,5 +281,10 @@ export function createGameState(spec: NewGameSpec): GameState {
     seals: [],
     messages: [],
     scandals: [],
+    reads: [],
+    shares: [],
+    pacts: [],
+    media: [],
+    reform: { smog: 0, pressure: 0, openedTurn: 0, votes: [], ordinanceTurn: null },
   };
 }

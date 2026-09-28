@@ -20,6 +20,8 @@ export interface TablePresence {
 export interface TableSync {
   /** False once a heartbeat has failed, so the room can admit it is stale. */
   live: boolean;
+  /** True while the live transport is a stream rather than a poll. */
+  streamed: boolean;
   /** Houses with a browser on the table right now. */
   present: TablePresence[];
   /** Houses with a hand down on the wire right now, never this browser. */
@@ -39,10 +41,11 @@ export interface TableSync {
   noteComposing: (writing: boolean) => void;
 }
 
-interface Summary {
+interface Beat {
   revision?: number;
   present?: TablePresence[];
   composers?: { name: string }[];
+  newestMessageId?: string | null;
 }
 
 /**
@@ -53,17 +56,23 @@ interface Summary {
  * router refreshes, which re-runs the read path and hands down a new snapshot,
  * so a rival's sealed order, a newcomer in a chair or a resolved window
  * arrives without anybody reloading. The same round trip carries the presence
- * roster back, which is why one poll does both jobs, and the composing roster
+ * roster back, which is why one beat does both jobs, and the composing roster
  * as well: a house with a hand down on the wire shows up at every other desk
  * before it has said anything at all.
  *
+ * A table can also be watched over a stream. When the caller asks for one the
+ * server pushes the same payload every time the revision moves, and the poll
+ * becomes the fallback: a stream that errors, or that goes silent for longer
+ * than a few beats, is closed and the poll takes over without the desk
+ * noticing anything except that it kept up.
+ *
  * The beat does not stop when the tab is hidden. A parked tab is read through
- * its title alone, so it polls at half speed rather than falling silent, and
- * a desk that still has a hand down keeps its full beat so the composing stamp
- * never lapses. The wire rides the same beat: the poll diffs the wire against
- * what this desk has read, and a line that lands while the tab is hidden
- * latches its author's name as unread until the tab is looked at again, which
- * is what turns the title into a message light.
+ * its title alone, so it keeps the room at half speed rather than falling
+ * silent, and a desk that still has a hand down keeps its full beat so the
+ * composing stamp never lapses. The wire rides the same beat: the beat diffs
+ * the wire against what this desk has read, and a line that lands while the
+ * tab is hidden latches its author's name as unread until the tab is looked at
+ * again, which is what turns the title into a message light.
  */
 export function useTableSync(
   code: string,
@@ -76,10 +85,15 @@ export function useTableSync(
     meId?: string | null;
     /** Told when the composing roster changes, for title pressure. */
     onComposers?: (names: string[]) => void;
+    /** Told once per new line when the desk is looking at the room. */
+    onRead?: (messageId: string) => void;
+    /** Watch the table over a stream and keep the poll as a fallback. */
+    stream?: boolean;
   } = {},
 ): TableSync {
   const router = useRouter();
   const [live, setLive] = useState(true);
+  const [streamed, setStreamed] = useState(false);
   const [present, setPresent] = useState<TablePresence[]>([]);
   const [composers, setComposers] = useState<string[]>([]);
   const [arrivals, setArrivals] = useState<ChatMessage[]>([]);
@@ -87,19 +101,23 @@ export function useTableSync(
   const seen = useRef(revision);
   /** Every wire line this desk has already read. */
   const readIds = useRef<Set<string>>(new Set());
-  /** Kept across renders so the wire prop is not a dependency of the poll. */
+  /** Kept across renders so the wire prop is not a dependency of the beat. */
   const wire = useRef<ChatMessage[]>(options.wire ?? []);
   const meId = useRef<string | null>(options.meId ?? null);
   const onComposers = useRef(options.onComposers);
+  const onRead = useRef(options.onRead);
+  /** The newest line this desk has already filed a receipt for. */
+  const filed = useRef<string | null>(null);
   /** Whether a hand is down on the composer right now. */
   const composing = useRef(false);
-  /** The poll, reachable from outside the effect, for an unscheduled beat. */
+  /** The beat, reachable from outside the effect, for an unscheduled one. */
   const runPoll = useRef<(() => void) | null>(null);
   const stopped = useRef(false);
 
   wire.current = options.wire ?? wire.current;
   meId.current = options.meId ?? meId.current;
   onComposers.current = options.onComposers;
+  onRead.current = options.onRead;
 
   useEffect(() => {
     seen.current = revision;
@@ -114,7 +132,47 @@ export function useTableSync(
   useEffect(() => {
     stopped.current = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let source: EventSource | null = null;
+    let watchdog: ReturnType<typeof setInterval> | undefined;
+    /** True once the poll is the live transport, whether by choice or fallback. */
+    let polling = !options.stream;
 
+    const apply = (beat: Beat, newest: string | null) => {
+      setLive(true);
+      setPresent(Array.isArray(beat.present) ? beat.present : []);
+      const names = Array.isArray(beat.composers) ? beat.composers.map((who) => who.name) : [];
+      setComposers(names);
+      onComposers.current?.(names);
+
+      const fresh = wireArrivals(wire.current, readIds.current, meId.current);
+      if (fresh.length > 0) {
+        for (const line of fresh) readIds.current.add(line.id);
+        setArrivals(fresh);
+        // A line that lands while the desk is away is news that has to stay
+        // news: its author's name is latched until the tab comes back, rather
+        // than being cleared with the next beat.
+        if (document.visibilityState !== "visible" || document.hidden) {
+          setUnreadNames((current) => latchNames(current, fresh));
+        }
+      } else {
+        setArrivals((current) => (current.length === 0 ? current : []));
+      }
+
+      // The desk has the room in front of it, so the newest line has been read
+      // as surely as if it had scrolled to the bottom of the log.
+      const awake = document.visibilityState === "visible" && !document.hidden;
+      if (newest && awake && filed.current !== newest) {
+        filed.current = newest;
+        onRead.current?.(newest);
+      }
+
+      if (typeof beat.revision === "number" && beat.revision !== seen.current) {
+        seen.current = beat.revision;
+        router.refresh();
+      }
+    };
+
+    /** One polled beat, which reschedules itself while the poll is running. */
     const poll = async () => {
       if (stopped.current) return;
       try {
@@ -124,47 +182,79 @@ export function useTableSync(
         );
         if (stopped.current) return;
         if (response.ok) {
-          const summary = (await response.json()) as Summary;
-          setLive(true);
-          setPresent(Array.isArray(summary.present) ? summary.present : []);
-          const names = Array.isArray(summary.composers)
-            ? summary.composers.map((who) => who.name)
-            : [];
-          setComposers(names);
-          onComposers.current?.(names);
-          const fresh = wireArrivals(wire.current, readIds.current, meId.current);
-          if (fresh.length > 0) {
-            for (const line of fresh) readIds.current.add(line.id);
-            setArrivals(fresh);
-            // A line that lands while the desk is away is news that has to
-            // stay news: its author's name is latched until the tab comes
-            // back, rather than being cleared with the next beat.
-            if (document.visibilityState !== "visible" || document.hidden) {
-              setUnreadNames((current) => latchNames(current, fresh));
-            }
-          } else {
-            setArrivals((current) => (current.length === 0 ? current : []));
-          }
-          if (typeof summary.revision === "number" && summary.revision !== seen.current) {
-            seen.current = summary.revision;
-            router.refresh();
-          }
+          const beat = (await response.json()) as Beat;
+          apply(beat, beat.newestMessageId ?? null);
         } else {
           setLive(false);
         }
       } catch {
         if (!stopped.current) setLive(false);
       }
-      // A hidden tab keeps the room at half speed rather than dropping it,
-      // but a desk with a hand down keeps its full beat wherever it is.
-      if (!stopped.current) {
+      // A hidden tab keeps the room at half speed rather than dropping it, but
+      // a desk with a hand down keeps its full beat wherever it is.
+      if (!stopped.current && polling) {
         const awake = document.visibilityState === "visible" && !document.hidden;
         timer = setTimeout(poll, awake || composing.current ? pollMs : pollMs * 2);
       }
     };
 
-    runPoll.current = poll;
-    timer = setTimeout(poll, pollMs);
+    /** Hands the room over to the poll, once, from either transport. */
+    const startPolling = () => {
+      if (polling || stopped.current) return;
+      polling = true;
+      setStreamed(false);
+      source?.close();
+      source = null;
+      if (watchdog) clearInterval(watchdog);
+      watchdog = undefined;
+      void poll();
+    };
+
+    /** Opens the stream, and treats silence as a reason to fall back. */
+    const startStream = () => {
+      if (typeof window === "undefined" || typeof EventSource === "undefined") {
+        startPolling();
+        return;
+      }
+      let last = Date.now();
+      try {
+        source = new EventSource(`/api/table/${encodeURIComponent(code)}/stream`);
+      } catch {
+        startPolling();
+        return;
+      }
+      setStreamed(true);
+      source.onmessage = (event) => {
+        last = Date.now();
+        try {
+          const beat = JSON.parse(event.data) as Beat;
+          apply(beat, beat.newestMessageId ?? null);
+        } catch {
+          // A malformed frame is not worth dropping the stream for.
+        }
+      };
+      source.onerror = () => startPolling();
+      watchdog = setInterval(() => {
+        if (Date.now() - last > pollMs * 4) startPolling();
+      }, pollMs * 2);
+    };
+
+    // The beat outside the schedule, for a hand going down on the wire.
+    runPoll.current = () => {
+      if (polling) {
+        if (timer) clearTimeout(timer);
+        void poll();
+        return;
+      }
+      // Over a stream, a composing beat is one small request of its own.
+      void fetch(
+        `/api/table/${encodeURIComponent(code)}/summary${composing.current ? "?composing=1" : ""}`,
+        { cache: "no-store" },
+      ).catch(() => undefined);
+    };
+
+    if (options.stream) startStream();
+    else void poll();
 
     // A tab that was in the background is the one most likely to be stale, so
     // coming back to it checks straight away rather than waiting out the beat.
@@ -173,8 +263,7 @@ export function useTableSync(
       // The desk is looking again: whatever landed while it was away has now
       // been read as surely as if it had scrolled the log itself.
       setUnreadNames((current) => (current.length === 0 ? current : []));
-      if (timer) clearTimeout(timer);
-      void poll();
+      runPoll.current?.();
     };
     document.addEventListener("visibilitychange", onWake);
     window.addEventListener("focus", onWake);
@@ -183,15 +272,17 @@ export function useTableSync(
       stopped.current = true;
       runPoll.current = null;
       if (timer) clearTimeout(timer);
+      if (watchdog) clearInterval(watchdog);
+      source?.close();
       document.removeEventListener("visibilitychange", onWake);
       window.removeEventListener("focus", onWake);
     };
-  }, [code, pollMs, router]);
+  }, [code, pollMs, router, options.stream]);
 
   /**
    * Marks a hand down or up on the wire. Going down is the news, so the next
    * beat goes out at once rather than waiting out the poll; the stamp is then
-   * refreshed by every ordinary poll while the hand stays down, and dies on
+   * refreshed by every ordinary beat while the hand stays down, and dies on
    * the server a few seconds after the hand lifts.
    */
   const noteComposing = (writing: boolean) => {
@@ -202,6 +293,7 @@ export function useTableSync(
 
   return {
     live,
+    streamed,
     present,
     composers,
     arrivals,

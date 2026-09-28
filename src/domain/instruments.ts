@@ -8,6 +8,7 @@ import {
 } from "./constants";
 import { getQty, takeQty } from "./inventory";
 import { priceOf, type TickScratch } from "./production";
+import { fineMultiplier } from "./reform";
 import type { Rng } from "./rng";
 import type { GameState, Resource } from "./types";
 import { netWorthTable } from "./valuation";
@@ -255,9 +256,14 @@ export function applyExposure(state: GameState, scratch: TickScratch, rng: Rng):
   }
 }
 
-/** Dirty air draws a fine, unless the charter says nobody is counting. */
+/**
+ * Dirty air draws a fine, unless the charter says nobody is counting. Once the
+ * clean air ordinance has carried, the same stack costs twice as much, which
+ * is the whole point of the ballot.
+ */
 export function runRegulation(state: GameState, scratch: TickScratch): void {
   const turn = state.game.currentTurn;
+  const ordinance = fineMultiplier(state);
   for (const tile of state.tiles) {
     if (tile.pollution < 40) continue;
     if (!tile.ownerId) continue;
@@ -265,7 +271,7 @@ export function runRegulation(state: GameState, scratch: TickScratch): void {
     if (!owner) continue;
     const multiplier = modifiersOf(owner.archetype).pollutionFineMultiplier;
     if (multiplier <= 0) continue;
-    const fine = (tile.pollution - 40) * POLLUTION_FINE_PER_UNIT * multiplier;
+    const fine = (tile.pollution - 40) * POLLUTION_FINE_PER_UNIT * multiplier * ordinance;
     owner.cash -= fine;
     owner.pr = Math.max(0, owner.pr - 2);
     scratch.events.push({

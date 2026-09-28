@@ -1,3 +1,4 @@
+import type { LadderEntry } from "@/domain/ladder";
 import { createGameState } from "@/domain/world";
 import type { GameState, QueuedOrder } from "@/domain/types";
 import type {
@@ -11,6 +12,7 @@ import { withRevision } from "./types";
 interface Registry {
   games: Map<string, GameState>;
   issues: Map<string, NewspaperRecord[]>;
+  ladder: LadderEntry[];
 }
 
 const GLOBAL_KEY = "__conglomerate_memory_store__";
@@ -18,7 +20,7 @@ const GLOBAL_KEY = "__conglomerate_memory_store__";
 function registry(): Registry {
   const holder = globalThis as unknown as Record<string, Registry | undefined>;
   if (!holder[GLOBAL_KEY]) {
-    holder[GLOBAL_KEY] = { games: new Map(), issues: new Map() };
+    holder[GLOBAL_KEY] = { games: new Map(), issues: new Map(), ladder: [] };
   }
   return holder[GLOBAL_KEY]!;
 }
@@ -123,5 +125,13 @@ export class MemoryStore implements GameStore {
 
   async seedExists(code: string): Promise<boolean> {
     return (await this.getGameByCode(code)) !== null;
+  }
+
+  async listLadder(): Promise<LadderEntry[]> {
+    return registry().ladder.map((entry) => ({ ...entry }));
+  }
+
+  async saveLadder(entries: LadderEntry[]): Promise<void> {
+    registry().ladder = entries.map((entry) => ({ ...entry }));
   }
 }

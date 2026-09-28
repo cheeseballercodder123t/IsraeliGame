@@ -1,5 +1,6 @@
 import { mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
+import type { LadderEntry } from "@/domain/ladder";
 import { createGameState } from "@/domain/world";
 import type { GameState, QueuedOrder } from "@/domain/types";
 import type {
@@ -68,6 +69,10 @@ export class FileStore implements GameStore {
 
   private get indexPath(): string {
     return path.join(this.root, "index.json");
+  }
+
+  private get ladderPath(): string {
+    return path.join(this.root, "ladder.json");
   }
 
   private gameFile(id: string): string {
@@ -242,5 +247,21 @@ export class FileStore implements GameStore {
   async seedExists(code: string): Promise<boolean> {
     const index = await this.readIndex();
     return index.games.some((game) => game.code === code.toUpperCase());
+  }
+
+  /**
+   * The ladder is one small document beside the tables rather than a row per
+   * house, because it is read whole and written whole: it is a reputation
+   * list, not a ledger, and the write is guarded by the same per-key lock an
+   * order append uses so two closings cannot lose each other.
+   */
+  async listLadder(): Promise<LadderEntry[]> {
+    return (await this.readJson<LadderEntry[]>(this.ladderPath)) ?? [];
+  }
+
+  async saveLadder(entries: LadderEntry[]): Promise<void> {
+    await withLock(this.ladderPath, async () => {
+      await this.writeJson(this.ladderPath, entries);
+    });
   }
 }

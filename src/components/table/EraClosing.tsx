@@ -2,7 +2,9 @@
 
 import { useState, useTransition } from "react";
 import { eraWinner, winConditionLabel } from "@/domain/endgame";
-import type { GameState } from "@/domain/types";
+import { closingGloat } from "@/domain/chatter";
+import { eraResults } from "@/domain/ladder";
+import type { ChatMessage, GameState } from "@/domain/types";
 import { rematchAction } from "@/server/actions";
 import { ChatPanel } from "@/components/table/ChatPanel";
 import { HousesRegister } from "@/components/table/HousesRegister";
@@ -24,11 +26,14 @@ export function EraClosing({
   state,
   meId,
   onOpenRag,
+  wire,
 }: {
   code: string;
   state: GameState;
   meId: string;
   onOpenRag: () => void;
+  /** The wire as this desk may read it, so the room stays open at the close. */
+  wire: ChatMessage[];
 }) {
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
@@ -36,6 +41,8 @@ export function EraClosing({
 
   const winner = eraWinner(state);
   const me = state.players.find((player) => player.id === meId) ?? null;
+  const placings = eraResults(state);
+  const lastWord = winner ? closingGloat(state, winner.playerId) : null;
   const windows = Math.max(0, state.game.currentTurn - 1);
   const inCourt = state.players.filter((player) => player.isBankrupt).length;
   const people = state.players.filter((player) => !player.isBot).length;
@@ -151,7 +158,43 @@ export function EraClosing({
           </p>
         </Panel>
 
-        <ChatPanel code={code} state={state} meId={meId} />
+        <div className="min-w-0 space-y-3">
+          <Panel title="How the era was placed" aside="one point for last, one more for every place above it">
+            <ul>
+              {placings.map((result) => (
+                <li
+                  key={result.userId}
+                  className="flex items-baseline justify-between gap-3 border-b border-rule/50 py-1.5 last:border-b-0"
+                >
+                  <span className="flex items-baseline gap-2 text-[11px] text-dim">
+                    <span className="tabular w-5 text-right text-faint">{result.placing}</span>
+                    {result.name}
+                    {result.placing === 1 ? (
+                      <span className="text-[9px] tracking-[0.16em] text-brass uppercase">
+                        first
+                      </span>
+                    ) : null}
+                  </span>
+                  <span className="tabular text-[10px] text-faint">
+                    {formatMoney(result.value)} · {Math.max(1, result.houses - result.placing + 1)}{" "}
+                    points
+                  </span>
+                </li>
+              ))}
+            </ul>
+            {lastWord ? (
+              <p className="mt-2 border-t border-rule/50 pt-2 text-[11px] italic leading-relaxed text-dim">
+                &ldquo;{lastWord}&rdquo;
+              </p>
+            ) : null}
+            <p className="pt-2 text-[10px] leading-relaxed text-faint">
+              The ladder carries every placing out of this table and into the next one it is played
+              at, so an era is not the only thing a reputation is built from.
+            </p>
+          </Panel>
+
+          <ChatPanel code={code} state={state} meId={meId} wire={wire} />
+        </div>
       </div>
     </div>
   );

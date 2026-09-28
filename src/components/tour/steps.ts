@@ -21,7 +21,7 @@ export const TABLE_TOUR: TourStep[] = [
   {
     anchor: "first-moves",
     title: "What the desk wants next",
-    body: "Sixty seven orders and an empty ledger is the hardest moment in the game, so this panel names one thing at a time and takes you to the plot that can do it. It reads your own books, so it disappears the moment there is nothing left to nag about. If you never see it, you are already ahead of it.",
+    body: "Seventy five orders and an empty ledger is the hardest moment in the game, so this panel names one thing at a time and takes you to the plot that can do it. It reads your own books, so it disappears the moment there is nothing left to nag about. If you never see it, you are already ahead of it.",
   },
   {
     anchor: "desk",
@@ -37,6 +37,11 @@ export const TABLE_TOUR: TourStep[] = [
     anchor: "contracts",
     title: "Contracts on the wire",
     body: "A supply contract is bilateral: one house writes the terms and the other signs them, so nothing is owed until both desks have touched the paper. Offers addressed to you are signed or refused from here, and the contracts already in force list what you owe, to whom, and how much you have fallen short so far.",
+  },
+  {
+    anchor: "table-games",
+    title: "Paper between houses",
+    body: "Four markets that are not the floor and not the board. The share book, where a house that floated part of itself puts that slice up for sale and half of it is control of its board. Pacts, where two houses keep a joint fund between them and either may walk off with it. The Rag itself, cut into ten points, where five run the paper and two are enough to place a story. And the clean air movement, which your own stacks feed until the city puts the question to a vote. None of the four touch a deed, and two of them can close the era.",
   },
   {
     anchor: "board",

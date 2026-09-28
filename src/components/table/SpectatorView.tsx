@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { eraWinner, winConditionLabel } from "@/domain/endgame";
 import { RECIPES } from "@/domain/constants";
-import type { GameState } from "@/domain/types";
+import type { ChatMessage, GameState } from "@/domain/types";
 import type { NewspaperRecord } from "@/server/store/types";
 import { GridCanvas } from "@/components/grid/GridCanvas";
 import { NewspaperModal } from "@/components/newspaper/NewspaperModal";
@@ -32,17 +32,24 @@ export function SpectatorView({
   code,
   state,
   issues,
+  wire,
 }: {
   code: string;
   state: GameState;
   issues: NewspaperRecord[];
+  /** The open wire. Side lines are not for the gallery. */
+  wire: ChatMessage[];
 }) {
   const [ragOpen, setRagOpen] = useState(false);
   /** The edition on the rail, so the shelf can open any issue and not just the latest. */
   const [ragTurn, setRagTurn] = useState<number | null>(null);
   const [selectedTileId, setSelectedTileId] = useState<string | null>(null);
-  const realtime = state.game.mode === "REALTIME";
-  const { live, present, composers } = useTableSync(code, state.game.revision, realtime ? REALTIME_POLL_MS : POLL_MS);
+  const realtime = state.game.mode === "REALTIME";  const { live, present, composers } = useTableSync(
+    code,
+    state.game.revision,
+    realtime ? REALTIME_POLL_MS : POLL_MS,
+    { wire, stream: realtime },
+  );
 
   // The tab title names the room on the rail too.
   useEffect(() => {
@@ -148,7 +155,7 @@ export function SpectatorView({
         </div>
 
         <div className="min-w-0 space-y-3">
-          <ChatPanel code={code} state={state} readOnly composers={composers} />
+          <ChatPanel code={code} state={state} readOnly composers={composers} wire={wire} />
 
           <Panel title="The Rag" aside={`${issues.length} editions kept`}>
             <RagShelf issues={issues} current={issue ? issue.turn : null} onOpen={openIssue} />

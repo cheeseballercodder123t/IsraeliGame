@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { parseWinCondition } from "@/domain/endgame";
+import { cleanNoticeEmail } from "@/domain/notices";
 import { ARCHETYPE_IDS } from "@/domain/content/ids";
 import type { Archetype, GameMode } from "@/domain/types";
 import { ensureSession, readSession, signOut } from "@/server/session";
@@ -14,10 +15,12 @@ import {
   fillWithBots,
   joinMatch,
   loadGameByCode,
+  markWireRead,
   playerOf,
   queueOrder,
   rematch,
   say,
+  setNoticeEmail,
   startMatch,
   startTable,
 } from "@/server/game";
@@ -185,6 +188,7 @@ export async function forceTickAction(code: string): Promise<{ ok: boolean; erro
 export async function postMessageAction(
   code: string,
   body: string,
+  channel: string | null = null,
 ): Promise<{ ok: boolean; error?: string }> {
   const session = await readSession();
   if (!session) return { ok: false, error: "No session." };
@@ -195,9 +199,56 @@ export async function postMessageAction(
   const me = playerOf(state, session.userId);
   if (!me) return { ok: false, error: "Only a seated house speaks on the wire." };
 
-  const result = await say(state.game.id, me.id, me.name, body);
+  const result = await say(state.game.id, me.id, me.name, body, channel);
   if (result.ok) revalidatePath(`/table/${code.toUpperCase()}`);
   return result;
+}
+
+/**
+ * Leaves an address for the desk notices, or clears it with an empty field.
+ * The desk writes to a house that was not watching when a window closed, and
+ * only to a house that asked for it.
+ */
+export async function setNoticeEmailAction(
+  code: string,
+  email: string,
+): Promise<{ ok: boolean; error?: string; saved?: string | null }> {
+  const session = await readSession();
+  if (!session) return { ok: false, error: "No session." };
+
+  const state = await loadGameByCode(code.toUpperCase());
+  if (!state) return { ok: false, error: "No such table." };
+
+  const me = playerOf(state, session.userId);
+  if (!me) return { ok: false, error: "You are not seated at this table." };
+
+  const wanted = email.trim();
+  const clean = cleanNoticeEmail(wanted);
+  if (wanted.length > 0 && !clean) {
+    return { ok: false, error: "That does not read as an address. A name, an at sign and a domain." };
+  }
+
+  const stored = await setNoticeEmail(state.game.id, me.id, clean);
+  if (!stored) return { ok: false, error: "The table moved while the desk was writing. Try again." };
+  revalidatePath(`/table/${code.toUpperCase()}`);
+  return { ok: true, saved: clean };
+}
+
+/**
+ * Files a read receipt on the wire. The desk calls this when it has the room
+ * in front of it, which is what puts the names under a line.
+ */
+export async function markWireReadAction(code: string): Promise<{ ok: boolean }> {
+  const session = await readSession();
+  if (!session) return { ok: false };
+
+  const state = await loadGameByCode(code.toUpperCase());
+  if (!state) return { ok: false };
+
+  const me = playerOf(state, session.userId);
+  if (!me) return { ok: false };
+
+  return markWireRead(state.game.id, me.id);
 }
 
 /**

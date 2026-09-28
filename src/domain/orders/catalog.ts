@@ -1,5 +1,6 @@
 import {
   APPRENTICESHIP_COST,
+  BIAS_PAPER_COST,
   BRIBE_COST,
   CYBERATTACK_COST,
   ESPIONAGE_COST,
@@ -7,6 +8,7 @@ import {
   INJUNCTION_COST,
   INSURANCE_MAX_TURNS,
   MCKINSEY_COST,
+  MEDIA_POINT_COST,
   PATENT_CHALLENGE_COST,
   PATENT_FILING_COST,
   PIZZA_PARTY_COST,
@@ -29,6 +31,7 @@ import type { GameState, Order, OrderCategory, OrderType, Player } from "../type
 import { DEAL_HANDLERS } from "./deal";
 import { PEOPLE_HANDLERS } from "./people";
 import { PLANNING_HANDLERS } from "./planning";
+import { TABLE_HANDLERS } from "./table";
 import type { OrderHandler, OrderPhase } from "./context";
 
 export type FieldKind =
@@ -128,7 +131,10 @@ function spec(
   lastResort = false,
 ): OrderSpec {
   const handler =
-    PLANNING_HANDLERS[type] ?? DEAL_HANDLERS[type] ?? PEOPLE_HANDLERS[type];
+    PLANNING_HANDLERS[type] ??
+    DEAL_HANDLERS[type] ??
+    PEOPLE_HANDLERS[type] ??
+    TABLE_HANDLERS[type];
   if (!handler) {
     throw new Error(`No handler registered for order ${type}`);
   }
@@ -373,6 +379,20 @@ export const ORDER_SPECS: Record<OrderType, OrderSpec> = {
     "Send the paper back unsigned so the seller can quote somebody else. Nothing is owed either way.",
     [fOffer],
   ),
+  SEAL_DEAL: spec(
+    "SEAL_DEAL",
+    "COMMERCE",
+    "COMMERCE",
+    "Seal a deal named on the wire",
+    "Take a price a rival named on the wire in one press. The house that said the line delivers and your desk buys, and the contract is in force from this window.",
+    [
+      { name: "sellerId", label: "House that offered", kind: "PLAYER", required: true },
+      fResource,
+      fUnits("quantity", "Units a turn"),
+      { name: "price", label: "Price a unit", kind: "MONEY", required: true, min: 0.01, step: 0.01 },
+      fCount("turns", "Turns", 1, SUPPLY_CONTRACT_MAX_TURNS),
+    ],
+  ),
   FILE_PATENT: spec(
     "FILE_PATENT",
     "COMMERCE",
@@ -446,6 +466,14 @@ export const ORDER_SPECS: Record<OrderType, OrderSpec> = {
     "Sell equity",
     "Raise cash against the market value of the house. The slice you sell never comes back.",
     [fPercent("fraction", "Slice sold", 1, 50, "Given as a percentage of the house.")],
+  ),
+  BUY_SHARES: spec(
+    "BUY_SHARES",
+    "CAPITAL",
+    "CAPITAL",
+    "Buy into a rival house",
+    "Buy the paper a rival has placed with the public, and past that the family's own stock at a raider's premium. Half the book is control of the board.",
+    [fPlayer, fMoney("amount", "To spend", 10_000, undefined, "The book price buys the float; the family sells dearer.")],
   ),
   BUY_SHELL_LICENSE: spec(
     "BUY_SHELL_LICENSE",
@@ -635,6 +663,54 @@ export const ORDER_SPECS: Record<OrderType, OrderSpec> = {
     "Twelve points of standing per two hundred and fifty thousand spent.",
     [fMoney("amount", "Spend")],
   ),
+  FORM_PACT: spec(
+    "FORM_PACT",
+    "POLITICS",
+    "POLITICS",
+    "Sign a pact",
+    "A standing alliance with a joint fund behind it. Either side may pay in, the fund earns while it holds, and either side may walk off with it.",
+    [fPlayer],
+  ),
+  FUND_PACT: spec(
+    "FUND_PACT",
+    "POLITICS",
+    "POLITICS",
+    "Pay into the joint fund",
+    "Move cash into the fund shared with a partner. The money is nobody's until somebody draws on it.",
+    [fPlayer, fMoney("amount", "Paid in")],
+  ),
+  BETRAY_PACT: spec(
+    "BETRAY_PACT",
+    "POLITICS",
+    "POLITICS",
+    "Break the pact and take the fund",
+    "Empty the joint fund into your own till and end the alliance. Whoever is named will read about it in the morning.",
+    [fPlayer],
+  ),
+  BUY_MEDIA: spec(
+    "BUY_MEDIA",
+    "POLITICS",
+    "POLITICS",
+    "Buy a slice of the Rag",
+    "The paper that prints the scandals is cut into ten points. Half of it runs the paper, and a couple of points are enough to place a story.",
+    [fMoney("amount", "To spend", MEDIA_POINT_COST, undefined, "One point costs four hundred thousand.")],
+  ),
+  BIAS_PAPER: spec(
+    "BIAS_PAPER",
+    "POLITICS",
+    "POLITICS",
+    "Place a story against a rival",
+    "Put a story about a rival on the front page. It takes ink of your own and it prints in the index of the accused.",
+    [fPlayer, fMoney("amount", "Spend", BIAS_PAPER_COST)],
+  ),
+  CLEAN_AIR_VOTE: spec(
+    "CLEAN_AIR_VOTE",
+    "POLITICS",
+    "POLITICS",
+    "Vote on the clean air ordinance",
+    "Once the movement forces the question, every house files a vote. The side holding half the table's worth carries it, and a carried ordinance doubles what dirty air costs.",
+    [{ name: "support", label: "Vote for the ordinance", kind: "BOOLEAN", required: true }],
+  ),
 
   // ------------------------------------------------------------- covert
   SLUDGE_DUMP: spec(
@@ -792,6 +868,8 @@ export function orderLabel(order: Order): string {
       return "sign the offer on the wire";
     case "DECLINE_CONTRACT":
       return "decline the offer";
+    case "SEAL_DEAL":
+      return `seal ${formatUnits(order.quantity)} a turn at $${order.price.toFixed(2)} off the wire`;
     case "FILE_PATENT":
       return `file on the ${RECIPES[order.recipeId].name.toLowerCase()}`;
     case "LICENSE_PATENT":
@@ -810,6 +888,8 @@ export function orderLabel(order: Order): string {
       return `issue a convertible for ${money(order.amount)}`;
     case "SELL_EQUITY":
       return `sell ${order.fraction}% of the house`;
+    case "BUY_SHARES":
+      return `buy ${money(order.amount)} of a rival's shares`;
     case "BUY_SHELL_LICENSE":
       return "buy a shell license";
     case "TAX_DECLARATION":
@@ -856,6 +936,18 @@ export function orderLabel(order: Order): string {
       return "bring a trust suit";
     case "PUBLICITY_CAMPAIGN":
       return `buy the front pages for ${money(order.amount)}`;
+    case "FORM_PACT":
+      return "sign a pact and open a joint fund";
+    case "FUND_PACT":
+      return `pay ${money(order.amount)} into the joint fund`;
+    case "BETRAY_PACT":
+      return "break the pact and take the fund";
+    case "BUY_MEDIA":
+      return `buy ${money(order.amount)} of the Rag`;
+    case "BIAS_PAPER":
+      return `place a story for ${money(order.amount)}`;
+    case "CLEAN_AIR_VOTE":
+      return order.support ? "vote for the clean air ordinance" : "vote against the ordinance";
     case "SLUDGE_DUMP":
       return "dump sludge on a rival plot";
     case "CYBERATTACK":
@@ -941,7 +1033,17 @@ export function orderCost(state: GameState, player: Player, order: Order): numbe
     case "PROPOSE_CONTRACT":
     case "SIGN_CONTRACT":
     case "DECLINE_CONTRACT":
+    case "SEAL_DEAL":
       return 0;
+    case "BUY_SHARES":
+    case "BUY_MEDIA":
+    case "BIAS_PAPER":
+      return order.amount;
+    case "FORM_PACT":
+    case "FUND_PACT":
+    case "BETRAY_PACT":
+    case "CLEAN_AIR_VOTE":
+      return order.type === "FUND_PACT" ? order.amount : 0;
     case "TAX_DECLARATION":
     case "SET_WAGE":
     case "UNION_CONTRACT":

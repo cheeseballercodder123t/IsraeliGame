@@ -167,7 +167,9 @@ describe("a table whose era closes", () => {
     expect(after.game.currentTurn).toBe(1);
     expect(after.queue).toEqual([]);
     expect(after.game.winCondition).toEqual({ kind: "TURNS", turns: 1 });
-    expect(after.messages.map((line) => line.body)).toEqual(["Same again?"]);
+    // The wire is kept across the era, and the bench talks on it like anyone
+    // else, so the house's own line comes back with the table.
+    expect(after.messages.map((line) => line.body)).toContain("Same again?");
     // The same houses and the same code carry over; their books do not.
     expect(after.players.map((player) => player.id).sort()).toEqual(seats);
     expect(after.players.map((player) => player.name).sort()).toEqual(

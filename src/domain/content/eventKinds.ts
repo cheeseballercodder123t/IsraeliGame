@@ -56,6 +56,7 @@ export const EVENT_KINDS = [
   "CONTRACT_PROPOSED",
   "CONTRACT_SIGNED",
   "CONTRACT_DECLINED",
+  "DEAL_SEALED",
   "PATENT_FILED",
   "PATENT_CHALLENGED",
   "PATENT_ROYALTY",
@@ -68,6 +69,13 @@ export const EVENT_KINDS = [
   "CARTEL_LAPSED",
   "TARIFF_PASSED",
   "TARIFF_LAPSED",
+  "PACT_FORMED",
+  "PACT_FUNDED",
+  "PACT_BETRAYED",
+  "MEDIA_STAKE",
+  "PAPER_BIASED",
+  "REFORM_VOTE",
+  "CLEAN_AIR_ACT",
   // The floor and the men on it.
   "STRIKE",
   "STRIKE_THREAT",
@@ -91,6 +99,8 @@ export const EVENT_KINDS = [
   "CONVERTIBLE_ISSUED",
   "CONVERTIBLE_CONVERTED",
   "EQUITY_SOLD",
+  "SHARES_BOUGHT",
+  "CONTROL_TAKEN",
   "SHELL_PURCHASED",
   "CHAPTER_11",
   "DEBT_SEIZURE",
@@ -128,6 +138,7 @@ export const EVENT_KINDS = [
   "SCORCHED_LAND",
   "POLLUTION_FINE",
   "POWER_SHORT",
+  "REFORM_PRESSURE",
   // The back page.
   "TURN_END",
   "LEAD_CHANGE",
@@ -244,6 +255,17 @@ export const SECTION_OVERRIDES: Partial<Record<EventKind, EventSection>> = {
   CONTRACT_PROPOSED: "FLOOR",
   CONTRACT_SIGNED: "FLOOR",
   CONTRACT_DECLINED: "FLOOR",
+  DEAL_SEALED: "FLOOR",
+  SHARES_BOUGHT: "CAPITAL",
+  CONTROL_TAKEN: "CAPITAL",
+  PACT_FORMED: "POLITICS",
+  PACT_FUNDED: "POLITICS",
+  PACT_BETRAYED: "POLITICS",
+  MEDIA_STAKE: "POLITICS",
+  PAPER_BIASED: "POLITICS",
+  REFORM_VOTE: "POLITICS",
+  CLEAN_AIR_ACT: "POLITICS",
+  REFORM_PRESSURE: "AIR",
   SHORTAGE: "FLOOR",
   BANKRUPT: "NOTICES",
   CHAPTER_11: "NOTICES",
@@ -454,6 +476,9 @@ export const EVENT_SPECS: Record<EventKind, EventSpec> = {
   CONTRACT_DECLINED: spec("CONTRACT_DECLINED", "FLOOR", "Contracts", (e, ctx) =>
     `${ctx.name(e.targetId)} declines ${ctx.name(e.playerId)}'s offer on ${ctx.resource(e.resource)} and the paper comes back unsigned.`,
   ),
+  DEAL_SEALED: spec("DEAL_SEALED", "FLOOR", "Contracts", (e, ctx) =>
+    `${ctx.name(e.playerId)} seals ${ctx.name(e.targetId)} to ${units(e.quantity)} of ${ctx.resource(e.resource)} a turn at ${money(e.amount)} for ${e.count ?? 0} turns, straight off the wire.`,
+  ),
   PATENT_FILED: spec("PATENT_FILED", "FLOOR", "Patents", (e, ctx) =>
     `${ctx.name(e.playerId)} files on the ${ctx.recipe(e.recipeId)} process.`,
   ),
@@ -489,6 +514,27 @@ export const EVENT_SPECS: Record<EventKind, EventSpec> = {
   ),
   TARIFF_LAPSED: spec("TARIFF_LAPSED", "POLITICS", "Tariffs", (e, ctx) =>
     `The tariff on ${ctx.resource(e.resource)} expires.`,
+  ),
+  PACT_FORMED: spec("PACT_FORMED", "POLITICS", "Pacts", (e, ctx) =>
+    `${ctx.name(e.playerId)} and ${ctx.name(e.targetId)} sign a pact and open a joint fund between them.`,
+  ),
+  PACT_FUNDED: spec("PACT_FUNDED", "POLITICS", "Pacts", (e, ctx) =>
+    `${ctx.name(e.playerId)} puts ${money(e.amount)} into the fund shared with ${ctx.name(e.targetId)}.`,
+  ),
+  PACT_BETRAYED: spec("PACT_BETRAYED", "POLITICS", "Pacts", (e, ctx) =>
+    `${ctx.name(e.playerId)} breaks the pact with ${ctx.name(e.targetId)} and walks off with ${money(e.amount)} of the joint fund.`,
+  ),
+  MEDIA_STAKE: spec("MEDIA_STAKE", "POLITICS", "The press", (e, ctx) =>
+    `${ctx.name(e.playerId)} buys ${pct(e.rate)} of the Rag for ${money(e.amount)}.`,
+  ),
+  PAPER_BIASED: spec("PAPER_BIASED", "POLITICS", "The press", (e, ctx) =>
+    `${ctx.name(e.playerId)} puts ${money(e.amount)} behind a story about ${ctx.name(e.targetId)}, and the ink is already set.`,
+  ),
+  REFORM_VOTE: spec("REFORM_VOTE", "POLITICS", "Clean air", (e, ctx) =>
+    `${ctx.name(e.playerId)} ${e.success ? "votes for" : "votes against"} the clean air ordinance, with ${pct(e.rate)} of the table's worth behind it.`,
+  ),
+  CLEAN_AIR_ACT: spec("CLEAN_AIR_ACT", "POLITICS", "Clean air", (e) =>
+    `The clean air ordinance carries and every stack on the board is answerable for the air from turn ${e.turn}.`,
   ),
 
   STRIKE: spec("STRIKE", "LABOR", "Walkout", (e, ctx) =>
@@ -536,6 +582,12 @@ export const EVENT_SPECS: Record<EventKind, EventSpec> = {
     `A convertible note held by ${ctx.name(e.playerId)} turns into debt of ${money(e.amount)}.`),
   EQUITY_SOLD: spec("EQUITY_SOLD", "CAPITAL", "Shares", (e, ctx) =>
     `${ctx.name(e.playerId)} sells ${pct(e.rate)} of the house to the public for ${money(e.amount)}.`),
+  SHARES_BOUGHT: spec("SHARES_BOUGHT", "CAPITAL", "Shares", (e, ctx) =>
+    `${ctx.name(e.playerId)} buys ${pct(e.rate)} of ${ctx.name(e.targetId)} on the open book for ${money(e.amount)}.`,
+  ),
+  CONTROL_TAKEN: spec("CONTROL_TAKEN", "CAPITAL", "Shares", (e, ctx) =>
+    `${ctx.name(e.playerId)} takes control of ${ctx.name(e.targetId)} with ${pct(e.rate)} of its shares and renames its board.`,
+  ),
   SHELL_PURCHASED: spec("SHELL_PURCHASED", "CAPITAL", "Offshore", (e, ctx) =>
     `${ctx.name(e.playerId)} buys a shell license for ${money(e.amount)} and a mailing address.`),
   CHAPTER_11: spec("CHAPTER_11", "CAPITAL", "Courts", (e, ctx) =>
@@ -607,6 +659,8 @@ export const EVENT_SPECS: Record<EventKind, EventSpec> = {
     `${ctx.name(e.playerId)} is fined ${money(e.amount)} for the state of the air.`),
   POWER_SHORT: spec("POWER_SHORT", "INDUSTRY", "Power", (e, ctx) =>
     `${ctx.name(e.playerId)} cannot meet the power bill and ${e.count ?? 0} lines stop.`),
+  REFORM_PRESSURE: spec("REFORM_PRESSURE", "INDUSTRY", "Clean air", (e) =>
+    `Smoke stands at ${pct(e.rate)} of the way to a clean air vote, and the movement has ${money(e.amount)} behind it.`),
 
   TURN_END: spec("TURN_END", "STANDINGS", "Standings", (e) =>
     `The board closes at the end of turn ${e.turn} with ${e.count ?? 0} houses on the register.`),

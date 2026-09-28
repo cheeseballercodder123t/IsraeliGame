@@ -7,3 +7,4 @@ export * from "./board";
 export * from "./sprites";
 export * from "./economy";
 export * from "./eventKinds";
+export * from "./table";

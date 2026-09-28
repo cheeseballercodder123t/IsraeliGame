@@ -21,6 +21,7 @@ export const TABLE_KEYBINDS: Keybind[] = [
   { keys: "k", label: "Your book, cash, debt and paper" },
   { keys: "l", label: "The Record, the window that just closed" },
   { keys: "r", label: "The Rag, the latest paper" },
+  { keys: "p", label: "The replay, the era walked back a window at a time" },
   { keys: "t", label: "The walk-around, from wherever you are" },
   { keys: "arrow keys", label: "Walk the board one plot at a time once the grid has focus" },
   { keys: "/", label: "Jump to an order by name, from the desk" },

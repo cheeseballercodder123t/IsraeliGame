@@ -1,4 +1,8 @@
 import { MAX_WIRE_LINES, tidyLine } from "@/domain/chat";
+import { botChatter } from "@/domain/chatter";
+import { channelKey, inChannel } from "@/domain/channels";
+import { markRead, newestMessageId } from "@/domain/receipts";
+import { recordEra } from "@/server/ladder";
 import { defaultWinCondition, reachedWinCondition, winConditionLabel } from "@/domain/endgame";
 import { lateSealHold, type HoldRules } from "@/domain/fairness";
 import { resolveTurnTick } from "@/domain/tick";
@@ -8,6 +12,7 @@ import { parseOrder } from "@/server/orders";
 import { MAX_SEATS, MIN_SEATS, clampSeats, seatOpponents } from "@/server/personas";
 import { composeClosingIssue, composeIssue, type NewspaperIssue } from "@/server/rag";
 import { clearComposing, present } from "@/server/presence";
+import { sendEraNotices, sendWindowNotices } from "@/server/notices";
 import { getStore, type GameStore } from "@/server/store";
 import type { NewspaperRecord } from "@/server/store/types";
 import { planBotTurn } from "@/server/bot";
@@ -296,6 +301,7 @@ export async function claimSeat(
         state.game.currentTurn,
       );
       replacement.cash = vacantBot.cash;
+      replacement.controlledBy = vacantBot.controlledBy;
       replacement.offshoreCash = vacantBot.offshoreCash;
       replacement.debt = vacantBot.debt;
       replacement.debtAge = vacantBot.debtAge;
@@ -489,6 +495,16 @@ export async function cancelOrder(
   return store.removeOrder(gameId, orderId);
 }
 
+/** The bench's line for the window, appended to the wire before the tick. */
+function enqueueBotChatter(state: GameState, turn: number): void {
+  for (const line of botChatter(state, turn)) {
+    if (!state.messages.some((said) => said.id === line.id)) state.messages.push(line);
+  }
+  if (state.messages.length > MAX_WIRE_LINES) {
+    state.messages = state.messages.slice(-MAX_WIRE_LINES);
+  }
+}
+
 function enqueueBotOrders(state: GameState): void {
   for (const player of state.players) {
     if (!player.isBot || player.isBankrupt) continue;
@@ -544,6 +560,9 @@ export async function advanceTurn(state: GameState): Promise<TurnOutcome> {
 
     const seen = current.game.revision;
     enqueueBotOrders(current);
+    // The bench gets a word in before the window plays, so a house that is
+    // about to be named has already been arguing about it.
+    enqueueBotChatter(current, turn);
     const result = resolveTurnTick(current, { now: new Date() });
     // The window just played can meet the table's condition. When it does the
     // era closes here, and the paper prints the ranking instead of the wire.
@@ -563,6 +582,25 @@ export async function advanceTurn(state: GameState): Promise<TurnOutcome> {
         createdAt: new Date().toISOString(),
       };
       await store.saveIssue(gameId, record);
+      // A closed era files a placing for every house at the table. The ladder
+      // is the one thing here that outlives the table it was earned at, and a
+      // ladder that cannot be written must not lose the closing edition.
+      if (closing) {
+        try {
+          await recordEra(result.state);
+        } catch {
+          // An unwritable ladder is a missing reputation, not a lost era.
+        }
+      }
+      // The desk notices. They ride behind the write that closed the window and
+      // are never awaited, so a table with no post key set plays exactly as it
+      // did before, and a slow provider cannot hold a window open.
+      const news = { turn, headline: issue.headline };
+      if (closing) {
+        void sendEraNotices(result.state, news).catch(() => 0);
+      } else {
+        void sendWindowNotices(result.state, news).catch(() => 0);
+      }
       return { state: result.state, issue, turn, alreadyResolved: false };
     }
   }
@@ -615,6 +653,7 @@ export async function say(
   playerId: string,
   name: string,
   body: string,
+  channel: string | null = null,
 ): Promise<{ ok: boolean; error?: string }> {
   const text = tidyLine(body);
   if (text.length === 0) return { ok: false, error: "Nothing was said." };
@@ -628,13 +667,22 @@ export async function say(
     body: text,
     turn: 0,
     createdAt: new Date().toISOString(),
+    channel,
   };
 
   const outcome = await commit(gameId, (state) => {
     const player = state.players.find((p) => p.id === playerId);
     if (!player) return { ok: false as const, error: "You are not seated at this table." };
+    // A side line is only for the two houses in it. Anybody else asking to
+    // speak in a channel is told the room does not exist.
+    if (message.channel && !inChannel(message.channel, playerId)) {
+      return { ok: false as const, error: "That is not your conversation." };
+    }
     if (!state.messages.some((said) => said.id === message.id)) {
       state.messages.push({ ...message, turn: state.game.currentTurn });
+      // Saying something is the strongest possible proof of having read the
+      // room, so the speaker's receipt moves with their own line.
+      state.reads = markRead(state.reads, playerId, message.id, message.createdAt);
     }
     if (state.messages.length > MAX_WIRE_LINES) {
       state.messages = state.messages.slice(-MAX_WIRE_LINES);
@@ -646,6 +694,54 @@ export async function say(
   // composing stamp goes before the next poll can report the house as writing.
   if (outcome.ok) clearComposing(gameId, playerId);
   return outcome.ok ? { ok: true } : { ok: false, error: outcome.error };
+}
+
+/**
+ * Files a read receipt: the house has read the wire up to the newest line.
+ *
+ * The mark is a high water mark rather than a row per line, and it never moves
+ * backward, so a desk that reads the room twice writes once and a stale tab
+ * cannot un-read anything a returning one has already seen.
+ */
+export async function markWireRead(
+  gameId: string,
+  playerId: string,
+): Promise<{ ok: boolean; messageId: string | null }> {
+  const outcome = await commit(gameId, (state) => {
+    const player = state.players.find((p) => p.id === playerId);
+    if (!player) return { ok: false as const, error: "You are not seated at this table." };
+    const newest = newestMessageId(state);
+    if (!newest) return { ok: true as const, value: null };
+    const current = state.reads.find((mark) => mark.playerId === playerId)?.messageId ?? null;
+    if (current === newest) return { ok: true as const, value: newest };
+    const seenAt = state.messages.findIndex((line) => line.id === current);
+    const newestAt = state.messages.length - 1;
+    if (seenAt >= newestAt) return { ok: true as const, value: newest };
+    state.reads = markRead(state.reads, playerId, newest, new Date().toISOString());
+    return { ok: true as const, value: newest };
+  });
+  return outcome.ok
+    ? { ok: true, messageId: outcome.value }
+    : { ok: false, messageId: null };
+}
+
+/**
+ * Leaves an address for the desk notices, or clears it. It is written on the
+ * seat rather than in a list elsewhere, so a house and its post are never out
+ * of step, and a director who wants to be left alone simply clears the field.
+ */
+export async function setNoticeEmail(
+  gameId: string,
+  playerId: string,
+  email: string | null,
+): Promise<boolean> {
+  const outcome = await commit(gameId, (state) => {
+    const player = state.players.find((p) => p.id === playerId);
+    if (!player) return { ok: false as const, error: "You are not seated at this table." };
+    player.noticeEmail = email;
+    return { ok: true as const, value: true };
+  });
+  return outcome.ok;
 }
 
 /**
@@ -703,4 +799,9 @@ export async function listIssues(gameId: string): Promise<NewspaperRecord[]> {
 
 export function playerOf(state: GameState, userId: string) {
   return state.players.find((p) => p.userId === userId);
+}
+
+/** The channel key two houses share, for the wire panel's side lines. */
+export function channelFor(aId: string, bId: string): string {
+  return channelKey(aId, bId);
 }

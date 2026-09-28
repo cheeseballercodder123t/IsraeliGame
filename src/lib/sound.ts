@@ -178,6 +178,112 @@ export function thump(): void {
   scrape.stop(at + 0.2);
 }
 
+/**
+ * The knell: a house has been carried out by the court.
+ *
+ * Two strikes on the same low bell, the second a little behind the first, so
+ * it reads as a tolling rather than as the close of a window. Nothing else at
+ * this table sounds like it, because nothing else is this final.
+ */
+export function knell(): void {
+  if (!on) return;
+  const ctx = audio();
+  if (!ctx) return;
+  const at = ctx.currentTime;
+  for (const [offset, level] of [
+    [0, 0.4],
+    [0.85, 0.3],
+  ] as [number, number][]) {
+    const body = ctx.createOscillator();
+    const gain = ctx.createGain();
+    body.type = "sine";
+    body.frequency.setValueAtTime(98, at + offset);
+    body.frequency.exponentialRampToValueAtTime(74, at + offset + 1.4);
+    gain.gain.setValueAtTime(0.0001, at + offset);
+    gain.gain.exponentialRampToValueAtTime(level, at + offset + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, at + offset + 1.5);
+    body.connect(gain);
+    gain.connect(ctx.destination);
+    body.start(at + offset);
+    body.stop(at + offset + 1.6);
+  }
+}
+
+/**
+ * The siren: night work has landed somewhere on the board.
+ *
+ * A wail that rises and falls twice over noise, which is what a works whistle
+ * sounds like from three streets away. Deliberately short: it is a warning,
+ * not a piece of music.
+ */
+export function siren(): void {
+  if (!on) return;
+  const ctx = audio();
+  if (!ctx) return;
+  const at = ctx.currentTime;
+
+  const wail = ctx.createOscillator();
+  const gain = ctx.createGain();
+  wail.type = "sawtooth";
+  wail.frequency.setValueAtTime(510, at);
+  wail.frequency.linearRampToValueAtTime(760, at + 0.42);
+  wail.frequency.linearRampToValueAtTime(510, at + 0.86);
+  gain.gain.setValueAtTime(0.0001, at);
+  gain.gain.exponentialRampToValueAtTime(0.16, at + 0.05);
+  gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.95);
+
+  const filter = ctx.createBiquadFilter();
+  filter.type = "lowpass";
+  filter.frequency.setValueAtTime(1900, at);
+  wail.connect(filter);
+  filter.connect(gain);
+  gain.connect(ctx.destination);
+  wail.start(at);
+  wail.stop(at + 1.0);
+
+  const air = ctx.createBufferSource();
+  air.buffer = noiseBuffer(ctx, 0.9);
+  const airGain = ctx.createGain();
+  airGain.gain.setValueAtTime(0.0001, at);
+  airGain.gain.exponentialRampToValueAtTime(0.05, at + 0.06);
+  airGain.gain.exponentialRampToValueAtTime(0.0001, at + 0.9);
+  air.connect(airGain);
+  airGain.connect(ctx.destination);
+  air.start(at);
+  air.stop(at + 0.95);
+}
+
+/**
+ * The clang: a pool has broken, or a pact has.
+ *
+ * Two struck tones a semitone apart that beat against each other and die
+ * quickly. That interval is the sound of something being agreed and then not
+ * agreed, which is the only thing that needs its own noise here.
+ */
+export function clang(): void {
+  if (!on) return;
+  const ctx = audio();
+  if (!ctx) return;
+  const at = ctx.currentTime;
+  for (const [frequency, offset] of [
+    [392, 0],
+    [415.3, 0.016],
+    [587.33, 0.03],
+  ] as [number, number][]) {
+    const body = ctx.createOscillator();
+    const gain = ctx.createGain();
+    body.type = "triangle";
+    body.frequency.setValueAtTime(frequency, at + offset);
+    gain.gain.setValueAtTime(0.0001, at + offset);
+    gain.gain.exponentialRampToValueAtTime(0.2, at + offset + 0.006);
+    gain.gain.exponentialRampToValueAtTime(0.0001, at + offset + 0.72);
+    body.connect(gain);
+    gain.connect(ctx.destination);
+    body.start(at + offset);
+    body.stop(at + offset + 0.8);
+  }
+}
+
 function noiseBuffer(ctx: AudioContext, seconds: number): AudioBuffer {
   const frames = Math.max(1, Math.floor(ctx.sampleRate * seconds));
   const buffer = ctx.createBuffer(1, frames, ctx.sampleRate);

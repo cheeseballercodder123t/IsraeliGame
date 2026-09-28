@@ -46,6 +46,7 @@ export default async function TablePage({ params }: { params: Promise<{ code: st
         code={result.view.code}
         state={result.view.state}
         issues={result.view.issues}
+        wire={result.view.wire}
       />
     );
   }
@@ -58,6 +59,9 @@ export default async function TablePage({ params }: { params: Promise<{ code: st
       pending={result.view.pending}
       issues={result.view.issues}
       devTick={DEV_TICK}
+      wire={result.view.wire}
+      ladderRank={result.view.ladderRank}
+      ladderPoints={result.view.ladderPoints}
     />
   );
 }
