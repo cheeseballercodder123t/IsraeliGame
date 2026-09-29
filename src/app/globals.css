@@ -347,6 +347,43 @@ input[type="radio"] {
 }
 
 /*
+ * A broadsheet sets its copy in columns with a hairline standing between them,
+ * and so does the Rag. A block never splits across that rule: a head, a table
+ * or a notice stays whole and moves down to the next column, so a break only
+ * ever lands inside a run of type.
+ *
+ * The second column arrives with the tablet and nowhere before it. A broadsheet
+ * folded to a narrow measure is one column, and two squeezed out of a phone is
+ * how a paper stops reading like one.
+ */
+.press-columns {
+  column-gap: 26px;
+  column-rule: 1px solid rgba(29, 26, 20, 0.32);
+}
+
+.press-columns > * {
+  break-inside: avoid;
+}
+
+@media (min-width: 768px) {
+  .press-columns {
+    columns: 2;
+  }
+}
+
+/*
+ * The leader again, drawn on the paper rather than on the metal. Same device,
+ * newsprint ink instead of a rule, so the index of the accused can run a name
+ * to its charge without a ladder of spaces.
+ */
+.leader-ink {
+  flex: 1 1 auto;
+  align-self: flex-end;
+  margin-bottom: 4px;
+  border-bottom: 1px dotted rgba(29, 26, 20, 0.45);
+}
+
+/*
  * The liberties of the front page. The landing is allowed two things the rest
  * of the building is not: one soft tonal wash behind the masthead, and a hard
  * offset shadow on the pieces worth pressing. Both stay flat and square: the
