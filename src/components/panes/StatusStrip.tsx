@@ -134,6 +134,7 @@ export function StatusStrip({
   onOpenRag,
   live = true,
   present = [],
+  sealedAway = 0,
 }: {
   state: GameState;
   /** The house looking, or null for somebody watching from the rail. */
@@ -145,6 +146,12 @@ export function StatusStrip({
   live?: boolean;
   /** Houses with a browser on the table, as of the last heartbeat. */
   present?: TablePresence[];
+  /**
+   * Seals the strip is counting but this desk may not read. More than zero
+   * means a rival has filed night work this window; the count is all the desk
+   * gets, by design.
+   */
+  sealedAway?: number;
 }) {
   const me = state.players.find((p) => p.id === meId) ?? null;
   /** Orders a house has sealed into the window being played. */
@@ -347,6 +354,11 @@ export function StatusStrip({
             {rivalSeals > 0 ? (
               <p className="text-[9px] text-hazard" title="Rivals have sealed into this window before you">
                 {rivalSeals} rival order{rivalSeals === 1 ? "" : "s"} on the desk
+              </p>
+            ) : null}
+            {sealedAway > 0 ? (
+              <p className="text-[9px] text-faint" title="Night work counts, but no desk may read it">
+                {sealedAway} sealed in the dark
               </p>
             ) : null}
             <p

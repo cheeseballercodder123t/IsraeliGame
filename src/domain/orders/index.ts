@@ -1,5 +1,6 @@
 import { actorOf, type OrderContext, type OrderPhase } from "./context";
 import { ORDER_SPECS } from "./catalog";
+import type { OrderType } from "../types";
 
 export * from "./context";
 export * from "./catalog";
@@ -13,7 +14,9 @@ export { PEOPLE_HANDLERS } from "./people";
  */
 export function runPhase(ctx: OrderContext, phase: OrderPhase): void {
   for (const item of ctx.queued) {
-    const spec = ORDER_SPECS[item.order.type];
+    // A masked stub never reaches the tick, so the cast only says out loud
+    // what the guard below already handles: an unknown type has no spec.
+    const spec = ORDER_SPECS[item.order.type as OrderType];
     if (!spec || spec.phase !== phase) continue;
     const actor = actorOf(ctx, item);
     if (!actor || actor.isBankrupt) continue;
@@ -25,7 +28,7 @@ export function runPhase(ctx: OrderContext, phase: OrderPhase): void {
 
 export function countOrders(ctx: OrderContext, phase: OrderPhase, playerId?: string): number {
   return ctx.queued.filter((item) => {
-    const spec = ORDER_SPECS[item.order.type];
+    const spec = ORDER_SPECS[item.order.type as OrderType];
     if (!spec || spec.phase !== phase) return false;
     if (playerId && item.playerId !== playerId) return false;
     return true;

@@ -13,6 +13,7 @@ import { MAX_SEATS, MIN_SEATS, clampSeats, seatOpponents } from "@/server/person
 import { composeClosingIssue, composeIssue, type NewspaperIssue } from "@/server/rag";
 import { clearComposing, present } from "@/server/presence";
 import { sendEraNotices, sendWindowNotices } from "@/server/notices";
+import { publishRevision } from "@/server/realtime";
 import { getStore, type GameStore } from "@/server/store";
 import type { NewspaperRecord } from "@/server/store/types";
 import { planBotTurn } from "@/server/bot";
@@ -102,6 +103,11 @@ async function commit<T>(
     const decision = mutate(state);
     if (!decision.ok) return { ok: false, error: decision.error };
     if (await store.saveGame(state, seen)) {
+      // The winning write announces itself, so a browser subscribed to the
+      // publication hears the table move before its next poll would. The
+      // losing attempts never reach this line, so a write that had to retry
+      // publishes once, from the attempt that won.
+      publishRevision(gameId, state.game.currentTurn, state.game.revision);
       return { ok: true, state, value: decision.value };
     }
   }
@@ -573,6 +579,10 @@ export async function advanceTurn(state: GameState): Promise<TurnOutcome> {
       : await composeIssue(current, result.events, turn);
 
     if (await store.saveGame(result.state, seen)) {
+      // The winning resolver announces the turn, the same way a sealing write
+      // announces itself: one publication row, and a watching browser with the
+      // public keys learns the books have closed before its poll wakes up.
+      publishRevision(gameId, turn, result.state.game.revision);
       const record: NewspaperRecord = {
         turn,
         headline: issue.headline,

@@ -146,7 +146,14 @@ export type Order =
   | { type: "BLOCKADE"; tileId: string }
   | { type: "WHISTLEBLOWER"; playerId: string }
   | { type: "WILDCAT_FUND"; playerId: string }
-  | { type: "MARKET_DUMP"; resource: Resource; quantity: number };
+  | { type: "MARKET_DUMP"; resource: Resource; quantity: number }
+  /**
+   * Not an order anybody seals. A redacted view carries it in place of a
+   * rival's hidden work: enough to keep every sealed count and presence stamp
+   * honest, never enough to read what the rival filed. The engine never sees
+   * one, because it runs on the canonical state; only a read path mints them.
+   */
+  | { type: "SEALED" };
 
 export interface QueuedOrder {
   id: string;

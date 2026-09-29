@@ -256,8 +256,8 @@ else, and the notices are what tell somebody who is not looking at all.
   tab is visible and on focus, and refreshes the router only when the revision moved. The
   running table and the gathering lobby both use it. `StatusStrip` shows the live/stale state,
   a per-house sealed count and who is at the desk.
-- Supabase Realtime remains the upgrade: the publication already carries `game_states`, and the
-  same hook could subscribe instead of polling when `NEXT_PUBLIC_SUPABASE_*` is set.
+- Supabase Realtime is the fourth transport on the same hook, gated on `NEXT_PUBLIC_SUPABASE_*`;
+  see Phase 4 for how it is published, and why it is not the snapshot table.
 
 **Phase 5: paper between houses. Shipped.**
 - Four markets played on the table rather than the board: the share book and the control it buys
@@ -273,12 +273,29 @@ else, and the notices are what tell somebody who is not looking at all.
 - The notices ride behind the window-closing write and are never awaited, so a table with no mail
   key behaves exactly as it did before the post existed.
 
-**Phase 4: identity and views.**
-- Swap `session.ts` to Supabase Auth (its docstring names the seam); `players.userId`
-  becomes a real auth uuid and RLS starts doing its job.
-- If hidden information is ever wanted: keep the canonical state server-side and introduce a
-  `TableViewModel` that redacts rivals' covert queue entries before serialization. Nothing
-  in the engine needs to change; it's a read-path filter in `openTable`.
+**Phase 4: identity and views. Shipped.**
+- `session.ts` keeps its seam and now uses it. With `SUPABASE_URL` (or `NEXT_PUBLIC_SUPABASE_URL`)
+  and `NEXT_PUBLIC_SUPABASE_ANON_KEY` set, the access token the sign-in panel mirrors into
+  `conglomerate_auth_token` is verified against the project and the auth uuid becomes
+  `Session.userId`, which is what `players.userId` and RLS want: one director, one identity, from
+  every browser they sign in on. Without the keys, or signed out, every browser keeps the locally
+  minted identity it always had and the table stays playable. Nothing on the write path changed.
+- Per-player view redaction. `src/domain/redacted.ts` holds the mask: `tableViewFor(state, viewerId)`
+  copies the state and replaces each rival order that runs in the COVERT phase with a
+  `{ type: "SEALED" }` stub carrying the id, the seat, the window and the timestamp and nothing
+  else. `openTable` applies it, so neither a seated browser nor the rail is ever handed a rival's
+  night work, and `tests/covert.test.ts` pins that at the server boundary. Counts stay honest:
+  `sealedAway` counts the stubs and `StatusStrip` prints them as "N sealed in the dark", while the
+  per-house sealed tally keeps counting them. The engine is untouched: a stub is a read-path value,
+  the tick still resolves against the canonical queue, and `SEALED` is not a catalogue order.
+- Supabase Realtime as a fourth transport. `publishRevision` writes one small `game_events` row per
+  accepted save and `useTableSync` subscribes to it when the public keys are set, feeding the same
+  `apply` the poll feeds, so a watcher hears the table move before its next beat. The canonical
+  snapshot is deliberately not published: a realtime row arrives as Postgres stores it, covert
+  orders and all, which would undo the mask above. `supabase/migrations/0006_views_realtime.sql`
+  sets `replica identity full` on the feed so the `game_id` filter works, drops the seat-wide
+  `game_states` select policy that was the one path around the mask, and offers `game_states_view`,
+  the same rule expressed in SQL, in its place.
 
 ### Touchpoint map (files that change per phase)
 
@@ -287,7 +304,7 @@ else, and the notices are what tell somebody who is not looking at all.
 | 1 | `src/server/game.ts`, `src/domain/world.ts`, `src/server/dashboard.ts`, `src/app/page.tsx`, `src/app/table/[code]/page.tsx` |
 | 2 | `src/server/game.ts`, `src/server/store/*`, `src/domain/types.ts` (revision on `Game`), `supabase/migrations/0004_sync.sql` |
 | 3 | `src/app/api/table/[code]/summary/route.ts` (new), `src/components/table/useTableSync.ts` (new), `src/server/presence.ts` (new), `src/server/dashboard.ts`, `src/components/table/Dashboard.tsx`, `src/components/table/LobbyViewPanel.tsx`, `src/components/panes/StatusStrip.tsx`, `src/app/api/tick/route.ts` |
-| 4 | `src/server/session.ts`, `supabase/migrations/*` (auth linkage), `src/server/dashboard.ts` (redaction) |
+| 4 | `src/server/session.ts`, `src/server/realtime.ts` (new), `src/domain/redacted.ts` (new), `src/domain/orders/catalog.ts` (`isCovert` / `isPublic`), `supabase/migrations/0006_views_realtime.sql`, `src/components/table/useTableSync.ts` |
 
 ## 8. Environment surface (for reference)
 
@@ -301,5 +318,5 @@ in the drawer out of the box.
 ---
 
 *Documented from a full read of the server layer, both API routes, the store adapters, the
-client components, the domain types and tick engine, and the three Supabase migrations, on
-the current working tree.*
+client components, the domain types and tick engine, and the Supabase migrations through
+`0006_views_realtime.sql`, on the current working tree.*

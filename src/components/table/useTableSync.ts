@@ -5,6 +5,17 @@ import { useRouter } from "next/navigation";
 import { arrivalNames, latchNames, wireArrivals } from "@/domain/wire";
 import type { ChatMessage } from "@/domain/types";
 
+/**
+ * Whether this deployment carries the public side of a Supabase project.
+ * Both keys are inlined into the client bundle at build time, so the check is
+ * a constant by the time the page runs. Without them the realtime upgrade is
+ * compiled out of the running code entirely and the hook behaves exactly as
+ * it did before it existed.
+ */
+const REALTIME_CONFIGURED = Boolean(
+  process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+);
+
 /** How often a watching browser asks whether the table has moved. */
 export const POLL_MS = 5000;
 /** A real time table moves on a short clock, so its watchers beat faster. */
@@ -22,6 +33,8 @@ export interface TableSync {
   live: boolean;
   /** True while the live transport is a stream rather than a poll. */
   streamed: boolean;
+  /** True while revision moves also arrive over Supabase Realtime. */
+  subscribed: boolean;
   /** Houses with a browser on the table right now. */
   present: TablePresence[];
   /** Houses with a hand down on the wire right now, never this browser. */
@@ -89,11 +102,18 @@ export function useTableSync(
     onRead?: (messageId: string) => void;
     /** Watch the table over a stream and keep the poll as a fallback. */
     stream?: boolean;
+    /**
+     * The table's row id, which is what a Supabase subscription filters on.
+     * Absent on deployments with no project behind them, where the hook never
+     * subscribes and behaves as it always has.
+     */
+    gameId?: string;
   } = {},
 ): TableSync {
   const router = useRouter();
   const [live, setLive] = useState(true);
   const [streamed, setStreamed] = useState(false);
+  const [subscribed, setSubscribed] = useState(false);
   const [present, setPresent] = useState<TablePresence[]>([]);
   const [composers, setComposers] = useState<string[]>([]);
   const [arrivals, setArrivals] = useState<ChatMessage[]>([]);
@@ -104,6 +124,8 @@ export function useTableSync(
   /** Kept across renders so the wire prop is not a dependency of the beat. */
   const wire = useRef<ChatMessage[]>(options.wire ?? []);
   const meId = useRef<string | null>(options.meId ?? null);
+  /** The table's row id, read once per render for the subscription effect. */
+  const gameId = options.gameId;
   const onComposers = useRef(options.onComposers);
   const onRead = useRef(options.onRead);
   /** The newest line this desk has already filed a receipt for. */
@@ -113,6 +135,10 @@ export function useTableSync(
   /** The beat, reachable from outside the effect, for an unscheduled one. */
   const runPoll = useRef<(() => void) | null>(null);
   const stopped = useRef(false);
+  /** The beat again, for the realtime frames, which land outside the effect. */
+  const applyRef = useRef<((beat: Beat, newest: string | null) => void) | null>(null);
+  /** When the last realtime frame landed, for the quiet tear-down. */
+  const lastFrame = useRef(0);
 
   wire.current = options.wire ?? wire.current;
   meId.current = options.meId ?? meId.current;
@@ -139,10 +165,15 @@ export function useTableSync(
 
     const apply = (beat: Beat, newest: string | null) => {
       setLive(true);
-      setPresent(Array.isArray(beat.present) ? beat.present : []);
-      const names = Array.isArray(beat.composers) ? beat.composers.map((who) => who.name) : [];
-      setComposers(names);
-      onComposers.current?.(names);
+      // A beat that carries no roster leaves the one on hand alone: a realtime
+      // revision frame is only ever the revision, and it must not wipe the
+      // presence the poll just delivered.
+      if (Array.isArray(beat.present)) setPresent(beat.present);
+      if (Array.isArray(beat.composers)) {
+        const names = beat.composers.map((who) => who.name);
+        setComposers(names);
+        onComposers.current?.(names);
+      }
 
       const fresh = wireArrivals(wire.current, readIds.current, meId.current);
       if (fresh.length > 0) {
@@ -253,6 +284,8 @@ export function useTableSync(
       ).catch(() => undefined);
     };
 
+    applyRef.current = apply;
+
     if (options.stream) startStream();
     else void poll();
 
@@ -271,6 +304,7 @@ export function useTableSync(
     return () => {
       stopped.current = true;
       runPoll.current = null;
+      applyRef.current = null;
       if (timer) clearTimeout(timer);
       if (watchdog) clearInterval(watchdog);
       source?.close();
@@ -278,6 +312,101 @@ export function useTableSync(
       window.removeEventListener("focus", onWake);
     };
   }, [code, pollMs, router, options.stream]);
+
+  /**
+   * The multi-instance upgrade, and the last transport in the room.
+   *
+   * When the deployment carries the public Supabase keys, the store is the
+   * Supabase one and the revision guard publishes every accepted write there,
+   * so a browser can hear the table move straight from the database rather
+   * than through whichever instance happens to be serving it. What arrives is
+   * a revision notice, one small row on the table's event feed: the table's
+   * id, the turn, and the revision that landed. The canonical snapshot is not
+   * on the feed and never will be, because a row delivered here arrives as
+   * Postgres stores it and the stored queue holds every desk's night work.
+   * The rest of the beat, presence and composing and the wire diff, still
+   * rides the poll or the stream, which is why neither is replaced.
+   *
+   * The subscription lowers latency, it does not carry the room: the poll
+   * keeps its schedule underneath, and a subscription that errors or goes
+   * quiet is torn down and the poll carries on alone, as if the upgrade had
+   * never been there. Everything is initialized with no more state and no
+   * new render path: a frame that lands calls the same `apply` the other
+   * transports feed, through the ref the beat keeps for exactly this.
+   */
+  useEffect(() => {
+    if (!REALTIME_CONFIGURED || stopped.current) return;
+    let channel: { unsubscribe: () => void } | null = null;
+    let cancelled = false;
+
+    const connect = async () => {
+      try {
+        const supabase = await import("@supabase/supabase-js");
+        if (cancelled) return;
+        // The client keeps whatever session the sign-in panel stored, so the
+        // socket is authenticated as the desk and the feed's row level policy
+        // has an identity to match. A project with nobody signed in delivers
+        // nothing, which is the same table the poll was already serving.
+        const client = supabase.createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        );
+        const topic = client
+          .channel(`table:${code}`)
+          .on(
+            "postgres_changes",
+            {
+              event: "INSERT",
+              schema: "public",
+              table: "game_events",
+              filter: `game_id=eq.${gameId}`,
+            } as never,
+            (payload: { new?: { kind?: string; payload?: { revision?: number } } | null }) => {
+              lastFrame.current = Date.now();
+              // The notice carries the revision the store stamped on the save,
+              // which is the same counter the poll reads, so a stale frame that
+              // replays an older revision is dropped the same way an out of
+              // order poll frame is. A row of any other kind is another
+              // consumer's business and is ignored.
+              if (payload.new?.kind !== "REVISION") return;
+              const revision = payload.new?.payload?.revision;
+              if (typeof revision === "number") {
+                applyRef.current?.({ revision }, null);
+              }
+            },
+          )
+          .subscribe((status: string) => {
+            if (cancelled) return;
+            if (status === "SUBSCRIBED") {
+              setSubscribed(true);
+              setLive(true);
+            } else if (
+              status === "CHANNEL_ERROR" ||
+              status === "TIMED_OUT" ||
+              status === "CLOSED"
+            ) {
+              setSubscribed(false);
+            }
+          });
+        channel = topic;
+      } catch {
+        // A project that will not answer is a deployment without its upgrade,
+        // not a broken table. The poll was running the whole time.
+        setSubscribed(false);
+      }
+    };
+
+    void connect();
+
+    return () => {
+      cancelled = true;
+      try {
+        channel?.unsubscribe();
+      } catch {
+        // Tearing down a half open channel is not worth reporting.
+      }
+    };
+  }, [code, gameId]);
 
   /**
    * Marks a hand down or up on the wire. Going down is the news, so the next
@@ -294,6 +423,7 @@ export function useTableSync(
   return {
     live,
     streamed,
+    subscribed,
     present,
     composers,
     arrivals,

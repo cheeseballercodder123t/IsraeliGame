@@ -62,6 +62,7 @@ export default async function TablePage({ params }: { params: Promise<{ code: st
       wire={result.view.wire}
       ladderRank={result.view.ladderRank}
       ladderPoints={result.view.ladderPoints}
+      sealedAway={result.view.sealedAway}
     />
   );
 }
