@@ -64,9 +64,13 @@ export function TableGames({
     >
       {/* ---------------------------------------------------------- the book */}
       <section>
-        <h3 className="flex items-baseline justify-between gap-3 text-[9px] tracking-[0.18em] text-faint uppercase">
+        {/* Every sub-head in this panel is set the way the panel's own
+            faceplate is: the standing head, a leader, then the stamp that
+            carries it. One idiom, from the header down. */}
+        <h3 className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[9px] tracking-[0.18em] text-faint uppercase sm:flex-nowrap">
           The share book
-          <span className="tabular normal-case">
+          <span className="leader max-sm:hidden" aria-hidden />
+          <span className="tabular w-full text-right tracking-[0.06em] sm:w-auto sm:min-w-0 sm:truncate">
             {controller ? `your board answers to ${nameOf(controller)}` : "your board is your own"}
           </span>
         </h3>
@@ -234,9 +238,10 @@ export function TableGames({
 
       {/* ------------------------------------------------------------ the Rag */}
       <section className="mt-3 border-t border-rule pt-2">
-        <h3 className="flex items-baseline justify-between gap-3 text-[9px] tracking-[0.18em] text-faint uppercase">
+        <h3 className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[9px] tracking-[0.18em] text-faint uppercase sm:flex-nowrap">
           The Rag
-          <span className="tabular normal-case">
+          <span className="leader max-sm:hidden" aria-hidden />
+          <span className="tabular w-full text-right tracking-[0.06em] sm:w-auto sm:min-w-0 sm:truncate">
             {owner ? `${nameOf(owner)} runs the paper` : "the paper is independent"}
           </span>
         </h3>
@@ -294,9 +299,10 @@ export function TableGames({
 
       {/* ---------------------------------------------------------- the vote */}
       <section className="mt-3 border-t border-rule pt-2">
-        <h3 className="flex items-baseline justify-between gap-3 text-[9px] tracking-[0.18em] text-faint uppercase">
+        <h3 className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[9px] tracking-[0.18em] text-faint uppercase sm:flex-nowrap">
           The clean air movement
-          <span className="tabular normal-case">
+          <span className="leader max-sm:hidden" aria-hidden />
+          <span className="tabular w-full text-right tracking-[0.06em] sm:w-auto sm:min-w-0 sm:truncate">
             {enacted ? "the ordinance stands" : `${formatPercent(progress, 0)} to a vote`}
           </span>
         </h3>

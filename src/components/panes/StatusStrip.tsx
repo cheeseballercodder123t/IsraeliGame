@@ -164,7 +164,14 @@ export function StatusStrip({
   /** Rivals with orders in the window that this desk has not matched. */
   const rivalSeals = sealedTotal - mineSealed;
   const worth = new Map(state.players.map((player) => [player.id, netWorthOf(state, player.id)]));
-  const best = Math.max(...state.players.map((player) => worth.get(player.id) ?? 0));
+  // The register rail is read as a standing order, not as a list of chairs, so
+  // the houses are ranked by what they are worth and the place is printed. A
+  // tie keeps the order the table seated them in, which never moves.
+  const places = new Map(
+    [...state.players]
+      .sort((a, b) => (worth.get(b.id) ?? 0) - (worth.get(a.id) ?? 0))
+      .map((player, index) => [player.id, index + 1]),
+  );
 
   const windowSeconds = windowSecondsOf(state.game.tickIntervalHours);
   const [remaining, setRemaining] = useState(() =>
@@ -258,7 +265,8 @@ export function StatusStrip({
         <div className="flex min-w-[218px] flex-1 flex-col justify-center px-3 py-2 sm:flex-none">
           <p className="flex items-baseline gap-2 text-[9px] tracking-[0.24em] text-faint uppercase">
             Table
-            <span className="tabular text-[11px] tracking-[0.16em] text-brass">
+            {/* The code, stamped on its own plate rather than set in the line. */}
+            <span className="tabular border border-rule bg-void px-1.5 text-[11px] tracking-[0.2em] text-brass">
               {state.game.code}
             </span>
             <span
@@ -406,11 +414,12 @@ export function StatusStrip({
       <div className="seam flex flex-nowrap items-stretch overflow-x-auto bg-pit sm:flex-wrap sm:overflow-visible">
         {state.players.map((player) => {
           const sealed = sealedBy(player.id);
-          const leads = (worth.get(player.id) ?? 0) >= best && best > 0;
+          const place = places.get(player.id) ?? 0;
+          const leads = place === 1;
           return (
             <div
               key={player.id}
-              className="flex min-w-[172px] flex-1 flex-col border-r border-rule/50 last:border-r-0"
+              className="flex min-w-[190px] flex-1 flex-col border-r border-rule/50 last:border-r-0"
             >
               <span
                 className="block h-[3px] w-full"
@@ -421,18 +430,33 @@ export function StatusStrip({
                 aria-hidden
               />
               <div className="px-3 py-1.5">
-                <p className="flex items-baseline justify-between gap-2">
+                {/*
+                 * A register line: the place a house holds, its name, then
+                 * what it is worth on the far side of a leader. The place is
+                 * printed rather than described, so the rail is read in one
+                 * sweep instead of being added up from the figures.
+                 */}
+                <p
+                  className="flex items-baseline gap-2"
+                  title={`${place} of ${state.players.length} by net worth`}
+                >
                   <span
-                    className={`truncate text-[11px] ${player.id === meId ? "text-ink" : "text-dim"}`}
+                    className={`tabular shrink-0 text-[9px] ${leads ? "text-brass" : "text-faint"}`}
+                  >
+                    {String(place).padStart(2, "0")}
+                  </span>
+                  <span
+                    className={`min-w-0 truncate text-[11px] ${player.id === meId ? "text-ink" : "text-dim"}`}
                   >
                     {player.name}
                     {player.isBot ? <span className="ml-1 text-[9px] text-faint">auto</span> : null}
                   </span>
+                  <span className="leader" aria-hidden />
                   <span className="tabular shrink-0 text-[10px] text-brass">
                     {formatMoney(worth.get(player.id) ?? 0)}
                   </span>
                 </p>
-                <p className="mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[9px] text-faint">
+                <p className="mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 pl-[19px] text-[9px] text-faint">
                   <span className="flex items-baseline gap-1">
                     <span
                       className={`inline-block h-1.5 w-1.5 ${
