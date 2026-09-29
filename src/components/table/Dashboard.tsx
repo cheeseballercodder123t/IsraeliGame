@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import {
   useCallback,
   useEffect,
@@ -20,6 +21,8 @@ import {
   TRADEABLE,
 } from "@/domain/constants";
 import { netWorthOf, leader } from "@/domain/valuation";
+import { LENSES, LENS_LABEL, lensReading, type LensId } from "@/domain/lenses";
+import { questionOf } from "@/domain/question";
 import { awayDigest, type AwayDigest } from "@/domain/digest";
 import type { ChatMessage, GameState, Order, QueuedOrder } from "@/domain/types";
 import type { NewspaperRecord } from "@/server/store/types";
@@ -39,6 +42,9 @@ import { TableGames } from "@/components/table/TableGames";
 import { AwayDigestPanel } from "@/components/table/AwayDigest";
 import { ReplayTheater } from "@/components/table/ReplayTheater";
 import { RecordPane } from "@/components/table/RecordPane";
+import { PinkertonPane } from "@/components/table/PinkertonPane";
+import { WeatherPane } from "@/components/table/WeatherPane";
+import { CountingPane } from "@/components/table/CountingPane";
 import { EraClosing } from "@/components/table/EraClosing";
 import { HelpOverlay } from "@/components/table/HelpOverlay";
 import { HousesRegister } from "@/components/table/HousesRegister";
@@ -49,6 +55,7 @@ import { Tour, startTour } from "@/components/tour/Tour";
 import { TABLE_RECAP, TABLE_TOUR } from "@/components/tour/steps";
 import { Button, KeyValue, Meter, Notice, Panel } from "@/components/ui/primitives";
 import {
+  callQuestionAction,
   cancelOrderAction,
   forceTickAction,
   markWireReadAction,
@@ -111,6 +118,14 @@ export function Dashboard({
   const [ragTurn, setRagTurn] = useState<number | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
   const [view, setView] = useState<"DESK" | "FLOOR">("DESK");
+  /**
+   * The question the board is drawn as. The plain board is the drawing itself,
+   * and every other lens lays a flat wash over the plots it has something to
+   * say about, so one figure can be followed across the whole grid.
+   */
+  const [lens, setLens] = useState<LensId>("NONE");
+  /** True while a call is in flight, so the lever cannot be pulled twice. */
+  const [calling, setCalling] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   const [receipt, setReceipt] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -134,7 +149,7 @@ export function Dashboard({
   // A real time table moves every few seconds, so its watchers ride the
   // streamed transport and keep the poll underneath it as the fallback. A turn
   // table changes on the hour, where a poll is the cheaper answer.
-  const { live, present, composers, arrivals, unreadNames, noteComposing } = useTableSync(
+  const { live, present, composers, hands, arrivals, unreadNames, noteComposing } = useTableSync(
     code,
     state.game.revision,
     realtime ? REALTIME_POLL_MS : POLL_MS,
@@ -320,6 +335,16 @@ export function Dashboard({
       } else if (key === "p") {
         event.preventDefault();
         setReplayOpen(true);
+      } else if (key >= "1" && key <= "5") {
+        // The lenses are the board's own shortcut: one question at a time, and
+        // zero to put the drawing back.
+        event.preventDefault();
+        setView("DESK");
+        setLens(LENSES[Number(key) - 1].id);
+      } else if (key === "0") {
+        event.preventDefault();
+        setView("DESK");
+        setLens("NONE");
       } else if (key === "t") {
         event.preventDefault();
         startTour();
@@ -353,6 +378,29 @@ export function Dashboard({
     });
   }, [code]);
 
+  /**
+   * Calling the question. A long window does not have to be waited out: when
+   * every hand at the table has called it, the next heartbeat closes the
+   * window there and then, and the strip says how close the room is.
+   */
+  const handleCallQuestion = useCallback(() => {
+    setCalling(true);
+    startTransition(async () => {
+      const result = await callQuestionAction(code);
+      if (!result.ok) {
+        setErrors((current) => [...current, result.error ?? "the call did not land"].slice(-4));
+      } else {
+        setReceipt(
+          result.ready
+            ? "Every desk had called it, so the window closes with the next beat"
+            : "You have called the window. It closes when the rest of the table has too",
+        );
+      }
+      setCalling(false);
+    });
+  }, [code]);
+
+  const asked = questionOf(state);
   const selectedTile = state.tiles.find((tile) => tile.id === selectedTileId) ?? null;
   /** The lots anyone can bid on this window, listed under the board. */
   const onTender = state.tiles.filter((tile) => tile.onTender);
@@ -384,6 +432,10 @@ export function Dashboard({
         live={live}
         present={present}
         sealedAway={sealedAway}
+        question={asked}
+        hands={hands}
+        onCallQuestion={handleCallQuestion}
+        callBusy={calling}
       />
 
       {errors.length > 0 || receipt ? (
@@ -541,28 +593,86 @@ export function Dashboard({
                   state={state}
                   selectedTileId={selectedTileId}
                   highlightPlayerId={meId}
+                  lens={lens}
                   onSelect={setSelectedTileId}
                 />
-                <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-rule pt-2">
-                  {ringLegend().map((entry) => (
-                    <span key={entry.ring} className="flex items-center gap-1.5 text-[10px]">
-                      <span
-                        className="inline-block h-2 w-2 shrink-0"
-                        style={{ background: bandTint(entry.terrain) }}
-                        aria-hidden
-                      />
-                      <span className="text-faint">{entry.name}</span>
-                      <span className="tabular text-dim">{entry.count}</span>
-                      <span className="text-edge">tier {entry.tiers.join("/")}</span>
+                {/*
+                 * The lens control. A board carries too much at once to be
+                 * read in one drawing, so the desk picks the question and the
+                 * legend answers for that question alone.
+                 */}
+                <div className="mt-2 border-t border-rule pt-2">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                    <span className="text-[9px] tracking-[0.18em] text-faint uppercase">
+                      read the board as
                     </span>
-                  ))}
-                  <span className="text-[10px] text-faint">
-                    grid load <span className="text-dim">{Math.round(state.game.gridLoad)}</span> MW
-                  </span>
-                  <span className="text-[10px] text-faint">
-                    standing idle <span className={idle > 0 ? "text-rust" : "text-dim"}>{idle}</span>
-                  </span>
-                  <span className="text-[10px] text-faint">arrows walk the board</span>
+                    <div className="flex flex-wrap items-stretch border border-rule bg-pit">
+                      {(["NONE", ...LENSES.map((entry) => entry.id)] as LensId[]).map((id) => {
+                        const active = lens === id;
+                        return (
+                          <button
+                            key={id}
+                            type="button"
+                            onClick={() => setLens(id)}
+                            aria-pressed={active}
+                            title={id === "NONE" ? "The drawing itself" : LENS_LABEL[id]}
+                            className={`relative border-r border-rule px-2 py-0.5 text-[9.5px] tracking-[0.12em] uppercase last:border-r-0 ${
+                              active ? "bg-steel text-ink" : "text-dim hover:bg-steel hover:text-ink"
+                            }`}
+                          >
+                            {id === "NONE" ? "plain" : LENS_LABEL[id]}
+                            {active ? (
+                              <span
+                                className="absolute inset-x-0 bottom-0 h-[2px] bg-brass"
+                                aria-hidden
+                              />
+                            ) : null}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <span className="text-[10px] text-faint">
+                      1 to 5 sets a lens, 0 puts it away
+                    </span>
+                  </div>
+
+                  {lens === "NONE" ? (
+                    <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
+                      {ringLegend().map((entry) => (
+                        <span key={entry.ring} className="flex items-center gap-1.5 text-[10px]">
+                          <span
+                            className="inline-block h-2 w-2 shrink-0"
+                            style={{ background: bandTint(entry.terrain) }}
+                            aria-hidden
+                          />
+                          <span className="text-faint">{entry.name}</span>
+                          <span className="tabular text-dim">{entry.count}</span>
+                          <span className="text-edge">tier {entry.tiers.join("/")}</span>
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 border-l-2 border-brass pl-2">
+                      <span className="text-[10.5px] text-dim">
+                        {LENSES.find((entry) => entry.id === lens)?.blurb}
+                      </span>
+                      {lensReading(state, lens, meId).map((row) => (
+                        <span key={row.label} className="text-[10px] text-faint">
+                          {row.label} <span className="tabular text-dim">{row.value}</span>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
+                    <span className="text-[10px] text-faint">
+                      grid load <span className="text-dim">{Math.round(state.game.gridLoad)}</span> MW
+                    </span>
+                    <span className="text-[10px] text-faint">
+                      standing idle <span className={idle > 0 ? "text-rust" : "text-dim"}>{idle}</span>
+                    </span>
+                    <span className="text-[10px] text-faint">arrows walk the board</span>
+                  </div>
                 </div>
                 {onTender.length > 0 ? (
                   <div className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1 border-t border-rule pt-2">
@@ -628,6 +738,16 @@ export function Dashboard({
             <div data-tour="register">
               <Panel title="Houses on the register" aside="net worth, plots, output">
                 <HousesRegister state={state} meId={meId} />
+                <p className="mt-2 border-t border-rule pt-2 text-[10px] leading-relaxed text-faint">
+                  The register is this table. The ladder is every table this house has played:{" "}
+                  <Link
+                    href="/ladder"
+                    className="text-dim underline decoration-rule hover:text-brass"
+                  >
+                    the whole ladder
+                  </Link>
+                  .
+                </p>
               </Panel>
             </div>
 
@@ -665,6 +785,18 @@ export function Dashboard({
 
             <div data-tour="table-games" className="min-w-0">
               <TableGames state={state} meId={meId} onOrder={handleOrder} />
+            </div>
+
+            <div data-tour="counting" className="min-w-0">
+              <CountingPane state={state} meId={meId} />
+            </div>
+
+            <div data-tour="weather" className="min-w-0">
+              <WeatherPane state={state} meId={meId} onSelect={setSelectedTileId} />
+            </div>
+
+            <div data-tour="pinkerton" className="min-w-0">
+              <PinkertonPane state={state} meId={meId} onSelect={setSelectedTileId} />
             </div>
 
             <div data-tour="record" className="min-w-0">
@@ -999,8 +1131,9 @@ export function Dashboard({
             </dt>
             <dd className="mt-1.5 text-[10px] leading-relaxed text-dim">
               Keys: d desk, f floor, m market, b board, o orders, k book, l the Record, r the
-              Rag, p the replay, t the walk-around, / to jump to an order by name, ? for the whole
-              card, and the arrow keys walk the board one plot at a time.
+              Rag, p the replay, t the walk-around, 1 to 5 to draw the board as deeds, smoke,
+              wear, yield or reach with 0 for the plain board, / to jump to an order by name, ?
+              for the whole card, and the arrow keys walk the board one plot at a time.
             </dd>
           </div>
           <div className="border-t border-rule pt-2">

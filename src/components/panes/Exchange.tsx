@@ -14,6 +14,7 @@ import { getQty } from "@/domain/inventory";
 import { movers, priceFloor } from "@/domain/market";
 import type { CommodityFamily, GameState, Order, Player, Resource } from "@/domain/types";
 import { Button, Empty, Panel } from "@/components/ui/primitives";
+import { BoardSheetModal } from "@/components/panes/BoardSheet";
 import { cents, formatPrice, formatUnits } from "@/domain/format";
 
 function Sparkline({ points, tone }: { points: number[]; tone: string }) {
@@ -54,6 +55,8 @@ export function Exchange({ state, player, onOrder }: ExchangeProps) {
   const [family, setFamily] = useState<CommodityFamily | "ALL">("ALL");
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<Resource>(TRADEABLE[0]);
+  /** The book whose sheet is open, or null while none is. */
+  const [sheetFor, setSheetFor] = useState<Resource | null>(null);
   const [side, setSide] = useState<"BUY" | "SELL">("BUY");
   const [quantity, setQuantity] = useState(20);
   const [limit, setLimit] = useState(0);
@@ -248,7 +251,25 @@ export function Exchange({ state, player, onOrder }: ExchangeProps) {
                     {formatUnits(getQty(state.inventory, player.id, resource))}
                   </td>
                   <td className="hidden px-2 py-[3px] sm:table-cell">
-                    <Sparkline points={series} tone={delta >= 0 ? "#8a9a4a" : "#a9542a"} />
+                    {/*
+                     * The row selects the book for the ticket; the sheet is a
+                     * second, quieter door onto the same commodity, so the
+                     * click does not have to do both jobs.
+                     */}
+                    <span className="flex items-center gap-1.5">
+                      <Sparkline points={series} tone={delta >= 0 ? "#8a9a4a" : "#a9542a"} />
+                      <button
+                        type="button"
+                        title={`Open the board sheet for ${RESOURCE_LABEL[resource]}`}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setSheetFor(resource);
+                        }}
+                        className="border border-rule px-1 text-[9px] tracking-[0.1em] text-faint uppercase transition-colors duration-150 hover:border-brass hover:text-ink active:translate-y-[1px]"
+                      >
+                        sheet
+                      </button>
+                    </span>
                   </td>
                 </tr>
               );
@@ -335,6 +356,16 @@ export function Exchange({ state, player, onOrder }: ExchangeProps) {
           </p>
         </div>
       </Panel>
+
+      <BoardSheetModal
+        state={state}
+        resource={sheetFor}
+        meId={player.id}
+        open={sheetFor !== null}
+        onOpenChange={(next) => {
+          if (!next) setSheetFor(null);
+        }}
+      />
     </div>
   );
 }

@@ -6,6 +6,7 @@ import {
   winConditionCode,
   winConditionLabel,
 } from "@/domain/endgame";
+import Link from "next/link";
 import { countdown } from "@/domain/format";
 import { foundCompanyAction, joinTableAction } from "@/server/actions";
 import { readLadder } from "@/server/ladder";
@@ -923,6 +924,14 @@ export default async function LobbyPage({
               <p className="mt-3 border-t border-rule/50 pt-2 text-[11px] leading-relaxed text-faint">
                 One point for last place, one more for every place above it, and the best era a
                 house has had breaks a tie.
+              </p>
+              <p className="mt-2">
+                <Link
+                  href="/ladder"
+                  className="inline-block border border-rule bg-pit px-2 py-0.5 text-[10px] tracking-[0.14em] text-dim uppercase transition-colors duration-150 hover:border-brass hover:text-ink active:translate-y-[1px]"
+                >
+                  The whole ladder
+                </Link>
               </p>
             </Panel>
           </aside>

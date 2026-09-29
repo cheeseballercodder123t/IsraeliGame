@@ -24,7 +24,12 @@ export interface TableHeartbeat {
   nextTickAt: string;
   status: string;
   present: { playerId: string | null; name: string; me: boolean }[];
-  composers: { name: string; me: boolean }[];
+  /**
+   * Hands down on the wire right now. The seat is carried as well as the name
+   * so the register can put a lamp beside the house rather than only naming
+   * it, and the bench is filtered out of its own roster elsewhere.
+   */
+  composers: { playerId: string | null; name: string; me: boolean }[];
   /** The newest line on the wire, so a stream can tell a client what is new. */
   newestMessageId: string | null;
 }
@@ -68,7 +73,11 @@ export async function tableHeartbeat(
     })),
     composers: composers(state.game.id)
       .filter((who) => who.userId !== session?.userId)
-      .map((who) => ({ name: who.name, me: false })),
+      .map((who) => ({
+        playerId: state.players.find((player) => player.userId === who.userId)?.id ?? null,
+        name: who.name,
+        me: false,
+      })),
     newestMessageId: newest,
   };
 }

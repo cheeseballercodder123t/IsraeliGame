@@ -64,6 +64,12 @@ export function ChatPanel({
   const [draft, setDraft] = useState("");
   const [failure, setFailure] = useState<string | null>(null);
   const [channel, setChannel] = useState<string | null>(null);
+  /**
+   * The line being answered. A figure named in the room is often the whole
+   * bargain, so the answer quotes it rather than describing it, and a table
+   * that argued over three windows can still read the thread.
+   */
+  const [reply, setReply] = useState<{ id: string; name: string; body: string } | null>(null);
   const [pending, startTransition] = useTransition();
   const [optimistic, addOptimistic] = useOptimistic(
     lines,
@@ -119,6 +125,10 @@ export function ChatPanel({
     const text = tidyLine(body);
     if (text.length === 0 || pending) return;
     setFailure(null);
+    // A line in the room is the only thing worth answering, so a reply carries
+    // the id of that line and nothing else. The server resolves it against the
+    // room as it stands and drops it if the line has already fallen off.
+    const answering = reply ? reply.id : null;
     startTransition(async () => {
       addOptimistic({
         id: `pending-${Math.random().toString(36).slice(2)}`,
@@ -128,17 +138,25 @@ export function ChatPanel({
         turn: state.game.currentTurn,
         createdAt: new Date().toISOString(),
         channel,
+        replyTo: answering,
       });
-      const result = await postMessageAction(code, text, channel);
+      const result = await postMessageAction(code, text, channel, answering);
       if (result.ok) {
         setDraft("");
         setUnread(0);
+        setReply(null);
         router.refresh();
       } else {
         setFailure(result.error ?? "The wire refused it.");
       }
     });
   };
+
+  // A reply belongs to the room it was written in, so moving to a side line
+  // puts the answer down rather than quoting the table into it.
+  useEffect(() => {
+    setReply(null);
+  }, [channel]);
 
   const barbs = barbsForTurn(state.game.currentTurn);
   /** The room, then one side line per rival. */
@@ -215,6 +233,9 @@ export function ChatPanel({
             const deal = parseDealLine(line.body);
             const mine = line.playerId === meId;
             const readers = seenBy(state, line.id).filter((name) => name !== line.name);
+            // The line this one answers, when it is still on the wire.
+            const quoted =
+              line.replyTo ? visible.find((entry) => entry.id === line.replyTo) ?? null : null;
             return (
               <p key={line.id} className="border-b border-rule/40 py-1.5 last:border-b-0">
                 <span className="flex items-baseline gap-2">
@@ -231,7 +252,22 @@ export function ChatPanel({
                     </span>
                   ) : null}
                   <span className="tabular ml-auto shrink-0 text-[9px] text-faint">t{line.turn}</span>
+                  {meId && !readOnly ? (
+                    <button
+                      type="button"
+                      title="Answer this line, quoting it"
+                      onClick={() => setReply({ id: line.id, name: line.name, body: line.body })}
+                      className="shrink-0 text-[9px] tracking-[0.12em] text-faint uppercase transition-colors duration-150 hover:text-brass"
+                    >
+                      reply
+                    </button>
+                  ) : null}
                 </span>
+                {quoted ? (
+                  <span className="mt-1 block border-l border-edge/70 pl-[18px] text-[10.5px] leading-snug text-faint italic">
+                    {quoted.name}: {quoted.body}
+                  </span>
+                ) : null}
                 <span className="mt-1 block pl-[18px] text-[11.5px] leading-snug text-dim">
                   {line.body}
                 </span>
@@ -266,6 +302,20 @@ export function ChatPanel({
       ) : (
         <>
           <div ref={box}>
+            {reply ? (
+              <p className="mt-3 flex items-baseline gap-2 border-l border-brass pl-2 text-[10.5px] leading-snug text-faint italic">
+                <span className="min-w-0 flex-1 truncate">
+                  Answering {reply.name}: {reply.body}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setReply(null)}
+                  className="shrink-0 text-[9px] tracking-[0.12em] text-faint uppercase hover:text-ink"
+                >
+                  put it down
+                </button>
+              </p>
+            ) : null}
             <form
               className="mt-3 flex gap-1 border-t border-rule pt-3"
               onSubmit={(event) => {
@@ -277,7 +327,13 @@ export function ChatPanel({
                 value={draft}
                 maxLength={MAX_WIRE_CHARS}
                 onChange={(event) => setDraft(event.target.value)}
-                placeholder={channel ? "A price for one desk only" : "A figure, a threat, a name"}
+                placeholder={
+                  reply
+                    ? "An answer to that line"
+                    : channel
+                      ? "A price for one desk only"
+                      : "A figure, a threat, a name"
+                }
                 className="sheet min-w-0 flex-1 px-2 py-1 text-[12px] text-ink placeholder:text-faint"
               />
               <Button tone="brass" type="submit" disabled={pending || tidyLine(draft).length === 0}>

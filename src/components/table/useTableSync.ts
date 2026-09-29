@@ -39,6 +39,11 @@ export interface TableSync {
   present: TablePresence[];
   /** Houses with a hand down on the wire right now, never this browser. */
   composers: string[];
+  /**
+   * The same hands, with the seat beside the name, so the register can lamp
+   * the house rather than only naming it. Never includes this browser.
+   */
+  hands: TablePresence[];
   /** Wire lines that landed since the desk last read them, never its own. */
   arrivals: ChatMessage[];
   /** The names behind the arrivals, in the order they arrived, once each. */
@@ -57,7 +62,7 @@ export interface TableSync {
 interface Beat {
   revision?: number;
   present?: TablePresence[];
-  composers?: { name: string }[];
+  composers?: { playerId: string | null; name: string; me: boolean }[];
   newestMessageId?: string | null;
 }
 
@@ -116,6 +121,7 @@ export function useTableSync(
   const [subscribed, setSubscribed] = useState(false);
   const [present, setPresent] = useState<TablePresence[]>([]);
   const [composers, setComposers] = useState<string[]>([]);
+  const [hands, setHands] = useState<TablePresence[]>([]);
   const [arrivals, setArrivals] = useState<ChatMessage[]>([]);
   const [unreadNames, setUnreadNames] = useState<string[]>([]);
   const seen = useRef(revision);
@@ -172,6 +178,9 @@ export function useTableSync(
       if (Array.isArray(beat.composers)) {
         const names = beat.composers.map((who) => who.name);
         setComposers(names);
+        setHands(
+          beat.composers.map((who) => ({ playerId: who.playerId, name: who.name, me: who.me })),
+        );
         onComposers.current?.(names);
       }
 
@@ -426,6 +435,7 @@ export function useTableSync(
     subscribed,
     present,
     composers,
+    hands,
     arrivals,
     arrivalNames: arrivalNames(arrivals),
     unreadNames,
