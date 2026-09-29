@@ -44,11 +44,12 @@ export function SpectatorView({
   /** The edition on the rail, so the shelf can open any issue and not just the latest. */
   const [ragTurn, setRagTurn] = useState<number | null>(null);
   const [selectedTileId, setSelectedTileId] = useState<string | null>(null);
-  const realtime = state.game.mode === "REALTIME";  const { live, present, composers } = useTableSync(
+  const realtime = state.game.mode === "REALTIME";
+  const { live, present, composers } = useTableSync(
     code,
     state.game.revision,
     realtime ? REALTIME_POLL_MS : POLL_MS,
-    { wire, stream: realtime },
+    { wire, stream: realtime, gameId: state.game.id },
   );
 
   // The tab title names the room on the rail too.

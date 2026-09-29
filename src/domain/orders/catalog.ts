@@ -816,6 +816,27 @@ export function ordersOfCategory(category: OrderCategory): OrderSpec[] {
   return ORDER_SPEC_LIST.filter((entry) => entry.category === category);
 }
 
+/** The night phase's own category id, read off the catalog rather than spelled twice. */
+const COVERT_CATEGORY: OrderCategory = "COVERT";
+
+/** Whether an order runs in the covert phase, which is the work a desk keeps dark. */
+export function isCovert(order: Order): boolean {
+  if (order.type === "SEALED") return true;
+  const spec = ORDER_SPECS[order.type as keyof typeof ORDER_SPECS];
+  return spec ? spec.category === COVERT_CATEGORY : false;
+}
+
+/**
+ * Whether an order is open work the whole table may read: the bids, hires and
+ * floor tickets the board watches for. Everything sealed this window that is
+ * neither public nor this desk's own is what a view has to mask.
+ */
+export function isPublic(order: Order): boolean {
+  if (order.type === "SEALED") return true;
+  const spec = ORDER_SPECS[order.type as keyof typeof ORDER_SPECS];
+  return spec ? spec.category !== COVERT_CATEGORY : false;
+}
+
 /** Plain language description of a queued order, shared by server and client. */
 export function orderLabel(order: Order): string {
   const money = (value: number) => formatMoney(value);
@@ -970,6 +991,8 @@ export function orderLabel(order: Order): string {
       return "fund a wildcat strike";
     case "MARKET_DUMP":
       return `dump ${formatUnits(order.quantity)} at a cent`;
+    case "SEALED":
+      return "order";
     default:
       return "order";
   }

@@ -81,6 +81,8 @@ export interface DashboardProps {
   /** Where this house sits on the cross-table ladder, or null with no record. */
   ladderRank: number | null;
   ladderPoints: number;
+  /** Rivals' sealed orders this window, counted but never read. */
+  sealedAway: number;
 }
 
 export function Dashboard({
@@ -93,6 +95,7 @@ export function Dashboard({
   wire,
   ladderRank,
   ladderPoints,
+  sealedAway,
 }: DashboardProps) {
   const [optimistic, applyOptimistic] = useOptimistic(pending, (current, action: OptimisticAction) => {
     if (action.kind === "add") return [...current, action.order];
@@ -139,6 +142,7 @@ export function Dashboard({
       wire,
       meId,
       stream: realtime,
+      gameId: state.game.id,
       // The receipt is filed as a high water mark on the server, so the hook
       // only has to say that the desk has caught up.
       onRead: () => {
@@ -376,6 +380,7 @@ export function Dashboard({
         onOpenRag={() => setRagOpen(true)}
         live={live}
         present={present}
+        sealedAway={sealedAway}
       />
 
       {errors.length > 0 || receipt ? (

@@ -15,6 +15,7 @@ import { winConditionLabel } from "@/domain/endgame";
 import { boardFingerprint, type BoardFingerprint } from "@/domain/world";
 import { publicWire, visibleWire } from "@/domain/channels";
 import { rankLadder } from "@/domain/ladder";
+import { tableViewFor } from "@/domain/redacted";
 import type { Archetype, ChatMessage, GameState, Player, QueuedOrder } from "@/domain/types";
 
 export interface TableView {
@@ -31,6 +32,13 @@ export interface TableView {
   /** Where this house sits on the cross-table ladder, or null with no record. */
   ladderRank: number | null;
   ladderPoints: number;
+  /**
+   * How many of this window's orders the mask replaced with a stub, which is
+   * every rival filing that runs in the dark. The strip keeps counting their
+   * seals either way, so the desk can see that a rival has filed without ever
+   * reading what it filed.
+   */
+  sealedAway: number;
 }
 
 export interface LobbySeatView {
@@ -44,6 +52,8 @@ export interface LobbySeatView {
 /** What a lobby looks like to whoever is looking, seated or not. */
 export interface LobbyView {
   code: string;
+  /** The table's row id, which is what a realtime subscription filters on. */
+  id: string;
   status: GameState["game"]["status"];
   /** Turn based or real time, so the lobby can say which clock it opens on. */
   mode: GameState["game"]["mode"];
@@ -96,6 +106,7 @@ function lobbyOf(state: GameState, userId: string | null): LobbyView {
     : null;
   return {
     code: state.game.code,
+    id: state.game.id,
     status: state.game.status,
     mode: state.game.mode,
     win: winConditionLabel(state.game.winCondition),
@@ -142,12 +153,19 @@ export async function openTable(code: string): Promise<TableResult> {
       return { kind: "lobby", lobby: lobbyOf(loaded, session.userId) };
     }
     // Every chair is taken, but the rail is open. The watcher gets the same
-    // snapshot and the same heartbeat, read only, past the capacity.
+    // snapshot and the same heartbeat, read only, past the capacity. The
+    // gallery reads the queue through the same mask as a desk: the night work
+    // is nobody's to read, and a sealed stub keeps every count honest.
     const { state } = await resolveIfDue(loaded);
     const issues = await listIssues(state.game.id);
     return {
       kind: "spectate",
-      view: { code: state.game.code, state, issues, wire: publicWire(state) },
+      view: {
+        code: state.game.code,
+        state: tableViewFor(state, null).state,
+        issues,
+        wire: publicWire(state),
+      },
     };
   }
 
@@ -158,21 +176,27 @@ export async function openTable(code: string): Promise<TableResult> {
   }
 
   const issues = await listIssues(state.game.id);
-  const pending = state.queue
-    .filter((q) => q.playerId === settled.id && q.turn <= state.game.currentTurn)
-    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  // The view, not the ledger. Rivals' covert orders are swapped for sealed
+  // stubs before the snapshot is serialized, so the browser never holds what
+  // the desk it belongs to may not read, while every count the strip and the
+  // register render keeps its number.
+  const view = tableViewFor(state, settled.id);
+  const pending = [...view.pending].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  // The stubs in the view are exactly the orders the desk may not read.
+  const sealedAway = view.state.queue.filter((item) => item.order.type === "SEALED").length;
   const ladder = await ladderFor(session.userId);
 
   return {
     kind: "table",
     view: {
-      state,
+      state: view.state,
       me: settled,
       issues,
       pending,
       wire: visibleWire(state, settled.id),
       ladderRank: ladder.rank,
       ladderPoints: ladder.points,
+      sealedAway,
     },
   };
 }

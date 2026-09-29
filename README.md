@@ -304,12 +304,22 @@ directory gets the in-process store instead of a failed request, and the footer 
 says which of the three is in force. `CONGLOMERATE_STORE=memory` forces the in-process adapter
 anywhere. All three satisfy the same interface, so nothing above that line changes.
 
-Sessions are cookie based for local play, shaped as `{ userId, name }` so Supabase auth can replace
-them without touching the rest of the server layer.
+Sessions are cookie based for local play, shaped as `{ userId, name }`, with the seam its docstring
+has always named now in use: with the Supabase keys set, the access token the sign-in panel mirrors
+into `conglomerate_auth_token` is verified against the project and its uuid becomes the seat's
+identity, which is what row level security wants. Without the keys, or signed out, the browser keeps
+the locally minted identity and nothing else on the server layer notices.
+
+Reads are per-player. The canonical snapshot is one document holding every desk's queue, so the read
+path masks it before serialization: `src/domain/redacted.ts` replaces a rival's order in the covert
+phase with a sealed stub that keeps the seat, the window and the count but none of the work, and
+`openTable` applies that to both the seated view and the rail. The tick never sees a stub, because
+the stubs exist only on the read path, and the strip still prints how many rivals have filed without
+printing what they filed.
 
 ### The tests
 
-Thirty files, two hundred and eighty seven tests. Geometry and the catalogs are checked against
+Thirty two files, three hundred and two tests. Geometry and the catalogs are checked against
 their own contents, so a catalog edit that breaks an assumption fails a test rather than a screen:
 seventy five commodities, seventy five plants, twenty six charters, seventy five orders, a hundred and
 twenty eight event kinds, and every sprite placement inside its sheet. The table's own rules are
@@ -327,12 +337,18 @@ than the engine: `tests/render.test.ts` paints the strip, the register and the b
 and pins what they print, `tests/store.test.ts` points the table directory at a path that cannot
 exist and pins the fallback to the in-process store, and `tests/copy.test.ts` walks every source file
 for the house rules, so an em dash, a borrowed phrase, a rounded corner, a drop shadow or an emoji
-fails a check instead of reaching a screen.
+fails a check instead of reaching a screen. `tests/redacted.test.ts` pins the mask itself, order type
+by order type, and `tests/covert.test.ts` drives it through `openTable` so what a desk is handed can
+be searched for a rival's night work and come up empty.
 
 ## Deferred
 
-Realtime subscriptions, the pg_cron schedule, the desk notices and generated newspaper prose are all
-wired but inactive here, because they need credentials this machine does not have. The migration that
+The realtime subscription, the Supabase Auth seam, the pg_cron schedule, the desk notices and
+generated newspaper prose are all wired but inactive here, because they need credentials this machine
+does not have. The subscription needs only the public keys, because the transport is a small
+evidence row on the table's own event feed rather than the snapshot itself: the canonical state is
+never published, so what a subscriber receives can never carry the night work that the per-player
+view mask exists to hide. The migration that
 schedules the sweep is in `supabase/migrations/0003_cron.sql`; point `app.tick_url` at a deployed
 instance and run the migrations in order. The ladder is `supabase/migrations/0005_ladder.sql`, and it
 is the one table that is not scoped to a game: it is world readable and written only by the service
