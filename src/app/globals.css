@@ -148,6 +148,19 @@ p {
   border-right: 1px solid var(--color-rule);
 }
 
+/*
+ * A printed index sets a leader between the thing and the figure it carries,
+ * so the eye runs from the left column to the right without a ladder of
+ * spaces. It is drawn as a rule rather than as a field of dots, so it keeps
+ * the weight of every other hairline in the building.
+ */
+.leader {
+  flex: 1 1 auto;
+  align-self: flex-end;
+  margin-bottom: 3px;
+  border-bottom: 1px dotted var(--color-rule);
+}
+
 /* Anything a link can land on stands clear of the edge it lands against. */
 [id] {
   scroll-margin-top: 16px;
@@ -355,6 +368,46 @@ input[type="radio"] {
 
 .letterpress-sm {
   box-shadow: 3px 3px 0 0 #0d0b08;
+}
+
+/*
+ * The plate arrives. A drawing this size is set down in one movement: the
+ * frame lifts a few pixels into place and holds, which is the whole of the
+ * motion the front of the house allows itself. No scale and no blur, because a
+ * scale turns a plate into a zoetrope and a blur is a thing this building does
+ * not own.
+ */
+@keyframes plate-rise {
+  from {
+    opacity: 0;
+    transform: translateY(7px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.rise {
+  animation: plate-rise 560ms cubic-bezier(0.22, 0.68, 0.24, 1) both;
+}
+
+/*
+ * Ink going onto the plate, band by band. This one runs on the groups inside
+ * the drawing, so it is opacity alone: a transform written here would be read
+ * in the plate's own coordinates and throw the band off the board.
+ */
+@keyframes ink-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.ink-in {
+  animation: ink-in 520ms linear both;
 }
 
 /* An indicator lamp. Slow enough to read as a lit bulb, not as a blink. */

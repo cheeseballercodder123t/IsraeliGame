@@ -32,8 +32,8 @@ export function Panel({
   return (
     <section id={id} className={`border border-edge/70 bg-steel ${className}`}>
       <header className="flex items-center justify-between gap-3 bg-plate px-3 py-1.5">
-        <h2 className="flex items-baseline gap-2 text-[10px] tracking-[0.24em] text-dim uppercase">
-          <span className="inline-block h-[10px] w-[2px] bg-brass" aria-hidden />
+        <h2 className="flex items-baseline gap-2 text-[10px] tracking-[0.24em] text-ink uppercase">
+          <span className="inline-block h-[11px] w-[2px] bg-brass" aria-hidden />
           {title}
         </h2>
         {aside ? (
@@ -66,9 +66,10 @@ export function KeyValue({
     dim: "text-dim",
   };
   const body = (
-    <div className="flex items-baseline justify-between gap-3 border-b border-rule/60 py-1 last:border-b-0">
+    <div className="flex items-baseline gap-2 border-b border-rule/60 py-1 last:border-b-0">
       <span className="text-[11px] text-faint">{label}</span>
-      <span className={`tabular text-[12px] ${tones[tone]}`}>{value}</span>
+      <span className="leader" aria-hidden />
+      <span className={`tabular max-w-[68%] text-right text-[12px] ${tones[tone]}`}>{value}</span>
     </div>
   );
   if (!hint) return body;
