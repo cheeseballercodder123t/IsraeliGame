@@ -366,6 +366,9 @@ export function Dashboard({
 
   const idle = state.tiles.filter((tile) => tile.lastIdle !== null).length;
   const leaderRow = leader(state);
+  /** Two figures the colophon prints: how the table is held, and what stands on it. */
+  const humanSeats = state.players.filter((player) => !player.isBot).length;
+  const plantCount = state.tiles.filter((tile) => tile.recipeId !== "NONE").length;
 
   if (!me) return null;
 
@@ -953,10 +956,25 @@ export function Dashboard({
       />
       <HelpOverlay open={helpOpen} onOpenChange={setHelpOpen} />
 
-      {/* The colophon: how the window runs, what the tick buys, and every key. */}
+      {/*
+       * The colophon. A desk closes its sheet the way a works closes its own
+       * catalogue: the imprint and the run of the press first, then the four
+       * standing columns that say how a window is ordered and how the room is
+       * worked, then the two levers anybody at the table is owed.
+       */}
       <footer className="mt-6 border-t-[3px] border-double border-edge pt-4">
-        <dl className="grid gap-x-10 gap-y-4 sm:grid-cols-2 xl:grid-cols-4">
-          <div>
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-rule pb-2">
+          <span className="text-[9px] tracking-[0.26em] text-brass uppercase">
+            The colophon of table {code.toUpperCase()}
+          </span>
+          <span className="tabular text-[9px] tracking-[0.16em] text-faint uppercase">
+            Turn {state.game.currentTurn} · wind {windLabel(state.game.wind)} ·{" "}
+            {issues.length === 1 ? "one edition kept" : `${issues.length} editions kept`}
+          </span>
+        </div>
+
+        <dl className="mt-4 grid gap-x-10 gap-y-5 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="border-t border-rule pt-2">
             <dt className="text-[9px] tracking-[0.2em] text-faint uppercase">
               The order of a window
             </dt>
@@ -966,7 +984,7 @@ export function Dashboard({
               and smog, the floor, paper, the revenue service, then tenders and raids.
             </dd>
           </div>
-          <div>
+          <div className="border-t border-rule pt-2">
             <dt className="text-[9px] tracking-[0.2em] text-faint uppercase">
               Power and waste
             </dt>
@@ -975,7 +993,7 @@ export function Dashboard({
               spills onto your own plots, and the inspectors fine the air, not the intention.
             </dd>
           </div>
-          <div>
+          <div className="border-t border-rule pt-2">
             <dt className="text-[9px] tracking-[0.2em] text-faint uppercase">
               Every room one key away
             </dt>
@@ -985,7 +1003,7 @@ export function Dashboard({
               card, and the arrow keys walk the board one plot at a time.
             </dd>
           </div>
-          <div>
+          <div className="border-t border-rule pt-2">
             <dt className="text-[9px] tracking-[0.2em] text-faint uppercase">
               The wire and the bell
             </dt>
@@ -998,13 +1016,19 @@ export function Dashboard({
             </dd>
           </div>
         </dl>
-        <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-rule pt-3">
+        <div className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-2 border-t border-rule pt-3">
           <Button tone="quiet" onClick={() => startTour("full")}>
             Walk the room again
           </Button>
           <Button tone="quiet" onClick={() => setHelpOpen(true)}>
             Show me the keys
           </Button>
+          {/* The imprint, run out to the far end of the rule: how this table is
+              held, and what is standing on the board it is held over. */}
+          <span className="tabular ml-auto text-[9px] tracking-[0.16em] text-faint uppercase">
+            {humanSeats} of {state.players.length} chairs held by hand · {plantCount}{" "}
+            {plantCount === 1 ? "plant" : "plants"} standing on the board
+          </span>
         </div>
       </footer>
     </div>

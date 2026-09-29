@@ -31,13 +31,30 @@ export function Panel({
 }) {
   return (
     <section id={id} className={`border border-edge/70 bg-steel ${className}`}>
-      <header className="flex items-center justify-between gap-3 bg-plate px-3 py-1.5">
-        <h2 className="flex items-baseline gap-2 text-[10px] tracking-[0.24em] text-ink uppercase">
-          <span className="inline-block h-[11px] w-[2px] bg-brass" aria-hidden />
+      {/*
+       * The faceplate bolted over the sheet. It carries three things and no
+       * more: the brass stamp at its left edge, the title set in capitals, and
+       * whatever the panel is holding run out to the right over a leader, the
+       * way an index runs a subject to its figure.
+       *
+       * The title is never allowed to break or shrink, so the aside is what
+       * gives way: a plate is cut to its longest line, and a header that has
+       * folded to two lines is a header that has stopped being one. On a
+       * folded sheet, where the two cannot share a line, the aside drops to a
+       * line of its own under the title rather than being cut in half.
+       */}
+      <header className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 bg-plate px-3 py-1.5 sm:flex-nowrap">
+        <span className="inline-block h-[11px] w-[2px] shrink-0 self-center bg-brass" aria-hidden />
+        <h2 className="shrink-0 text-[10px] tracking-[0.22em] whitespace-nowrap text-ink uppercase">
           {title}
         </h2>
         {aside ? (
-          <div className="truncate text-right text-[10px] text-faint">{aside}</div>
+          <>
+            <span className="leader max-sm:hidden" aria-hidden />
+            <div className="w-full text-right text-[9px] tracking-[0.06em] text-faint uppercase sm:w-auto sm:min-w-0 sm:truncate">
+              {aside}
+            </div>
+          </>
         ) : null}
       </header>
       {/* The joint between header plate and body steel. Two hairlines, no blur. */}
