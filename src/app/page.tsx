@@ -150,6 +150,15 @@ function roman(value: number): string {
 }
 
 /**
+ * A score off a plot's own coordinates, used to vary the ink and nothing else.
+ * The same pair always draws the same figure, so the plate is mottled rather
+ * than blurred and still prints identically on every render.
+ */
+function grain(x: number, y: number): number {
+  return Math.abs(Math.sin((x + 1) * 12.9898 + (y + 1) * 78.233)) % 1;
+}
+
+/**
  * The board, drawn once at the front of the house.
  *
  * The grid the game is played on is a picture worth printing, and it is the one
@@ -157,14 +166,34 @@ function roman(value: number): string {
  * rim that yields and the crown in the middle. It is laid down from the same
  * generator the board itself uses, so it can never drift from the thing it
  * draws, and every cell is a flat square of pigment rather than a gradient.
+ *
+ * Three things are drawn and no more. The cell, which carries its band's
+ * pigment at that band's own ink, nudged by the plot's own score so the ground
+ * reads as inked by hand rather than poured. The band, outlined as a square, so
+ * the ring the economy is graded on is a line instead of a shade the eye has to
+ * guess at. And the crown, which wears the outline the board gives it at the
+ * table. The bands are grouped from the rim inward and arrive in that order,
+ * which is how a plate is inked.
  */
 function BoardPlate() {
   const cells = Array.from({ length: PLOT_COUNT }, (_, index) => {
     const x = index % BOARD;
     const y = Math.floor(index / BOARD);
     const ring = Math.max(Math.abs(x - CENTER), Math.abs(y - CENTER));
-    return { key: `${x}-${y}`, x, y, tint: bandTint(terrainForRing(ring)), ink: RING_INK[ring] };
+    return {
+      key: `${x}-${y}`,
+      x,
+      y,
+      ring,
+      tint: bandTint(terrainForRing(ring)),
+      ink: Math.min(1, RING_INK[ring] * (0.74 + 0.52 * grain(x, y))),
+    };
   });
+
+  const bands = [5, 4, 3, 2, 1, 0].map((ring) => ({
+    ring,
+    cells: cells.filter((cell) => cell.ring === ring),
+  }));
 
   // The plate is surveyed, so it is numbered like a survey: the same eleven
   // divisions across the head and down the side. A plot is named by its
@@ -206,23 +235,45 @@ function BoardPlate() {
           role="img"
           aria-label={`The board: ${BOARD} rows by ${BOARD} columns in six bands, the crown jewel at the centre`}
         >
-          {cells.map((cell) => (
+          {bands.map((band, order) => (
+            <g
+              key={band.ring}
+              className="ink-in"
+              style={{ animationDelay: `${order * 80}ms` }}
+            >
+              {band.cells.map((cell) => (
+                <rect
+                  key={cell.key}
+                  x={cell.x + 0.035}
+                  y={cell.y + 0.035}
+                  width={0.93}
+                  height={0.93}
+                  fill={cell.tint}
+                  opacity={cell.ink}
+                />
+              ))}
+            </g>
+          ))}
+          {/* The six bands as six squares: from the crown outward, the ring the
+              economy is graded on, drawn rather than implied. */}
+          {[1, 2, 3, 4, 5].map((ring) => (
             <rect
-              key={cell.key}
-              x={cell.x + 0.06}
-              y={cell.y + 0.06}
-              width={0.88}
-              height={0.88}
-              fill={cell.tint}
-              opacity={cell.ink}
+              key={ring}
+              x={CENTER - ring}
+              y={CENTER - ring}
+              width={2 * ring + 1}
+              height={2 * ring + 1}
+              fill="none"
+              stroke="rgba(222,212,195,0.15)"
+              strokeWidth={0.03}
             />
           ))}
           {/* The crown jewel wears the same outline the board gives it. */}
           <rect
-            x={CENTER + 0.06}
-            y={CENTER + 0.06}
-            width={0.88}
-            height={0.88}
+            x={CENTER + 0.035}
+            y={CENTER + 0.035}
+            width={0.93}
+            height={0.93}
             fill="none"
             stroke="#ded4c3"
             strokeWidth={0.07}
@@ -278,30 +329,18 @@ export default async function LobbyPage({
 
   return (
     <main className="ground relative min-h-screen sm:px-5">
-      {/*
-       * The wall. The sheet is a page lying on a table, so it wants room around
-       * it at every width, not only when the screen happens to be wider than the
-       * sheet. The gutter on main is what guarantees that: below the sheet's own
-       * measure it holds the frame off the glass, and above it the frame centres
-       * inside the same gutter. Narrow screens drop it, because the frame is not
-       * drawn there in the first place.
-       */}
-      {/*
-       * The sheet. A prospectus is a printed page lying on a dark table, so the
-       * front of the house is drawn as one: a hairline frame down both sides and
-       * across the foot, the gilt rule along the crown, and the wall left showing
-       * around it. The masthead bleeds to the frame and everything else stands
-       * inside it, which is what gives the page a head and a margin instead of an
-       * edge. On a narrow screen the frame goes away and the sheet fills the
-       * glass, because a margin nobody can afford to lose is not a margin.
-       */}
+      {/* The wall. The sheet is a page lying on a table, so it wants room around
+          it at every width, not only when the screen happens to be wider than
+          the sheet. */}
+      {/* The sheet. A prospectus is a printed page lying on a dark table, so the
+          front of the house is drawn as one: a hairline frame down both sides
+          and across the foot, the gilt rule along the crown, and the wall left
+          showing around it. */}
       <div className="relative mx-auto max-w-7xl px-3 pb-14 sm:my-8 sm:border-x sm:border-b sm:border-edge/45 sm:px-5">
-        {/*
-         * The nameplate. Brass trim along the top edge, the one flourish the
-         * building allows itself, then the rule work: a standing head over a
-         * heavy line, a hairline under that, and the nameplate below. It is
-         * set once, at the head of the sheet, and never repeated down the page.
-         */}
+        {/* The nameplate. Brass trim along the top edge, the one flourish the
+            building allows itself, then the rule work: a standing head over a
+            heavy line, a hairline under that, and the nameplate below. It is
+            set once, at the head of the sheet, and never repeated down the page. */}
         <header className="gilt-t front-wash -mx-3 px-3 pt-7 sm:-mx-5 sm:px-5 sm:pt-10">
           {/* The ears. A paper prints its standing head and its dateline in a
               box at either end of the top rule, and so does this sheet. */}
@@ -331,129 +370,150 @@ export default async function LobbyPage({
             ))}
           </nav>
 
-          {/* The measure of the two columns is fixed here and matched by the body
-              of the sheet below, so the two column rules stand on one x. The head
-              of the sheet carries no foot of its own either: it ends where this
-              grid ends, so the rule drawn here and the rule drawn below are one
-              line with a display band cut into it, not two rules with a ragged
-              gap between them. */}
-          <div className="mt-6 grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_1px_356px] lg:gap-x-0">
-            <div className="min-w-0 pb-6 lg:pr-8">
-              {/* The head steps down once more than it used to between lg and
-                  xl, because the column rule takes its own measure out of the
-                  lead column and a wordmark that overflows its column is worse
-                  than a wordmark set a size smaller. */}
-              <h1 className="font-slab text-[46px] leading-[0.86] font-extrabold tracking-[-0.03em] text-ink sm:text-[68px] lg:text-[76px] xl:text-[88px]">
-                Conglomerate
-              </h1>
-              <p className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
-                <span className="font-slab text-[22px] leading-none text-brass sm:text-[26px]">
-                  Gilded Age
-                </span>
-                <span className="h-[1px] min-w-8 flex-1 bg-rule" aria-hidden />
-                <span className="text-[10px] tracking-[0.16em] text-faint uppercase">
-                  One code opens a table
-                </span>
+          {/* The nameplate itself. The wordmark is given the width of the sheet
+              now that the plate has moved down the page, so it is set at the
+              size a masthead is set at: a kicker over it, the name as large as
+              the measure will carry, and the deck line banded between rules
+              underneath. */}
+          <div className="pt-7 sm:pt-9">
+            <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] tracking-[0.32em] text-brass uppercase">
+              <span className="inline-block h-1.5 w-1.5 shrink-0 bg-brass" aria-hidden />
+              Sealed windows, a live floor, and a paper that prints it all
+            </p>
+            <h1 className="mt-3 font-slab text-[48px] leading-[0.84] font-extrabold tracking-[-0.045em] text-ink sm:text-[70px] md:text-[84px] lg:text-[104px] xl:text-[124px]">
+              Conglomerate
+            </h1>
+            <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 border-y border-rule/60 py-2.5 sm:mt-5">
+              <span className="font-slab text-[23px] leading-none text-brass sm:text-[28px]">
+                Gilded Age
+              </span>
+              <span className="hidden h-[1px] min-w-8 flex-1 bg-rule sm:block" aria-hidden />
+              <span className="text-[10px] tracking-[0.18em] text-faint uppercase">
+                One code opens a table
+              </span>
+            </div>
+
+            {/* The standfirst and the levers. The paragraph runs at reading
+                size, because this is the one piece of prose on the sheet that
+                is meant to be read rather than consulted. */}
+            <div className="mt-6 grid gap-x-10 gap-y-6 lg:mt-7 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
+              <p className="text-[15px] leading-relaxed text-dim sm:text-[16px]">
+                <span className="font-slab text-[19px] leading-snug text-ink sm:text-[21px]">
+                  Every house plans in the dark.
+                </span>{" "}
+                You seal your orders into the open window, rivals read the count and never the
+                contents, and when the clock runs out the tick plays the whole table at once: the
+                floor repriced, the smog drifting downwind, and the paper printing what everybody
+                did after dark.
               </p>
 
-              <p className="mt-4 max-w-2xl text-[14px] leading-relaxed text-dim">
-                <span className="text-ink">Every house plans in the dark.</span> You seal your orders
-                into the open window, rivals read the count and never the contents, and when the
-                clock runs out the tick plays the whole table at once: the floor repriced, the smog
-                drifting downwind, and the paper printing what everybody did after dark.
-              </p>
-
-              <div className="mt-6 flex flex-wrap items-center gap-x-3 gap-y-3">
+              <div className="lg:pt-1">
                 {/* The lever answers in colour only. Nothing in this building
                     moves when it is pointed at. */}
-                <a
-                  href="#found"
-                  className="letterpress-sm border-2 border-brass bg-brass px-4 py-2.5 text-[12px] tracking-[0.18em] text-void uppercase transition-colors duration-150 hover:border-hazard hover:bg-hazard"
-                >
-                  Found a company
-                </a>
-                <a
-                  href="#join"
-                  className="border border-edge bg-plate px-4 py-2.5 text-[12px] tracking-[0.16em] text-ink uppercase transition-colors duration-150 hover:border-dim hover:bg-steel"
-                >
-                  Take a seat with a code
-                </a>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-3">
+                  <a
+                    href="#found"
+                    className="letterpress-sm border-2 border-brass bg-brass px-4 py-2.5 text-[12px] tracking-[0.18em] text-void uppercase transition-colors duration-150 hover:border-hazard hover:bg-hazard"
+                  >
+                    Found a company
+                  </a>
+                  <a
+                    href="#join"
+                    className="border border-edge bg-plate px-4 py-2.5 text-[12px] tracking-[0.16em] text-ink uppercase transition-colors duration-150 hover:border-dim hover:bg-steel"
+                  >
+                    Take a seat with a code
+                  </a>
+                </div>
                 <a
                   href="#brief"
-                  className="text-[11px] tracking-[0.14em] text-dim uppercase underline decoration-rule underline-offset-4 transition-colors duration-150 hover:text-ink"
+                  className="mt-3 inline-block text-[11px] tracking-[0.14em] text-dim uppercase underline decoration-rule underline-offset-4 transition-colors duration-150 hover:text-ink"
                 >
                   Read the prospectus
                 </a>
+                <p className="mt-3 text-[10.5px] leading-relaxed text-faint">
+                  Chairs from {MIN_SEATS} to {MAX_SEATS}. Chairs nobody claims can be taken by
+                  automated directors, so a table never waits on a room that is not coming.
+                </p>
               </div>
+            </div>
+          </div>
 
-              {/* The figures read as a register of the house, so the number
-                  comes first and the thing it counts stands under it. */}
-              <dl className="mt-8 grid grid-cols-2 border-t border-l border-edge bg-pit sm:grid-cols-3 lg:grid-cols-6">
-                {PROSPECTUS.map(([figure, note]) => (
-                  <div
-                    key={note}
-                    className="flex flex-col-reverse border-r border-b border-rule/50 px-3 py-3"
-                  >
-                    <dt className="mt-2 text-[9px] leading-snug tracking-[0.14em] text-faint uppercase">
-                      {note}
-                    </dt>
-                    <dd className="tabular font-slab text-[19px] leading-none text-brass">
-                      {figure}
-                    </dd>
-                  </div>
-                ))}
-              </dl>
+          {/* The register of the house. The figures read as a filed return, so
+              the number comes first and the thing it counts stands under it. */}
+          <dl className="mt-8 grid grid-cols-2 border-t border-l border-edge bg-pit sm:grid-cols-3 lg:grid-cols-6">
+            {PROSPECTUS.map(([figure, note]) => (
+              <div key={note} className="flex flex-col-reverse border-r border-b border-rule/50 px-3 py-3.5">
+                <dt className="mt-2 text-[9px] leading-snug tracking-[0.14em] text-faint uppercase">
+                  {note}
+                </dt>
+                <dd className="tabular font-slab text-[21px] leading-none text-brass">{figure}</dd>
+              </div>
+            ))}
+          </dl>
 
-              {/* The ornament that closes the head of the sheet. It used to stand
-                  between the two columned grids, where all it did was hold the
-                  rule apart at the fold. */}
-              <Plate name="rule" scale={3} className="mx-auto mt-6 hidden max-w-full sm:block" />
+          {/* The ornament that closes the head of the sheet. */}
+          <Plate name="rule" scale={3} className="mx-auto mt-7 hidden max-w-full sm:block" />
+        </header>
+
+        {/* The plate. The board is the one drawing that explains the whole
+            economy at a glance, so it is given the width of the sheet rather
+            than a column: six bands of ground, the rim that yields, and the
+            crown in the middle. An engraving in a printed sheet is framed,
+            numbered and squared, so this one is too. */}
+        <figure className="letterpress rise mt-9 border border-edge bg-pit">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 border-b border-rule/60 px-3 py-2 text-[9.5px] tracking-[0.2em] text-faint uppercase sm:px-5">
+            <span className="flex items-baseline gap-2 text-ink">
+              <span className="inline-block h-[11px] w-[2px] bg-brass" aria-hidden />
+              Fig. 1, the board
+            </span>
+            <span className="tabular">
+              {BOARD} x {BOARD} · {PLOT_COUNT} plots · six bands, crown at the middle
+            </span>
+          </div>
+
+          {/* The key stands beside the drawing only where there is room for
+              both. Below that the legend drops under the plate rather than
+              squeezing it, because the board is the one piece of art on this
+              sheet and it is not made smaller to make room for its own key. */}
+          <div className="grid items-start gap-7 p-3 sm:p-5 xl:grid-cols-[minmax(0,1fr)_336px] xl:gap-9">
+            <div className="mx-auto w-full min-w-0 max-w-[840px]">
+              <BoardPlate />
             </div>
 
-            {/* The column rule. A sheet this wide is set in columns, and the rule
-                is what says so, so it is drawn at the weight of a rule rather
-                than of a hint. */}
-            <div className="hidden self-stretch bg-rule lg:block" aria-hidden />
-
-            <div className="space-y-4 lg:pl-8">
-              {/*
-               * The plate. An engraving in a printed sheet is framed, numbered
-               * and squared, so the board is: a plate mark around the drawing,
-               * registration marks to each corner, and a scale down the head and
-               * the side, because a plot is named by its coordinates.
-               */}
-              <figure className="letterpress border border-edge bg-pit p-2.5">
-                <div className="flex items-baseline justify-between gap-2 border-b border-rule/60 pb-2 text-[9px] tracking-[0.18em] text-faint uppercase">
-                  <span>Fig. 1, the board</span>
-                  <span className="tabular">
-                    {BOARD} x {BOARD}
-                  </span>
-                </div>
-                <div className="py-2.5">
-                  <BoardPlate />
-                </div>
-                <figcaption className="border-t border-rule/60 pt-2.5 text-[10px] leading-relaxed text-faint">
-                  The rim yields. The crown at the middle takes the tallest works on the board.
-                </figcaption>
-              </figure>
-
-              <Panel title="Bands, outermost first" aside={`${census} plots`}>
-                <ul className="grid grid-cols-2 gap-x-3 gap-y-1.5">
-                  {bands.map((band) => (
-                    <li key={band.terrain} className="flex items-center gap-2 text-[10px]">
-                      <span
-                        className="inline-block h-2.5 w-2.5 shrink-0"
-                        style={{ background: bandTint(band.terrain) }}
-                        aria-hidden
-                      />
-                      <span className="text-dim">{band.name}</span>
-                      <span className="tabular ml-auto text-faint">{band.count}</span>
-                    </li>
-                  ))}
-                </ul>
-              </Panel>
-
-              <div className="hidden items-start gap-3 border border-edge/70 bg-steel p-2.5 xl:flex">
+            {/* The key. A plate is nothing without its legend, and this one
+                doubles as the band list the rest of the sheet refers to. */}
+            <div className="min-w-0">
+              <p className="text-[10px] tracking-[0.2em] text-faint uppercase">
+                What the ground will take
+              </p>
+              <ul className="mt-2 border-t border-rule/50">
+                {bands.map((band) => (
+                  <li
+                    key={band.terrain}
+                    className="flex items-baseline gap-2 border-b border-rule/40 py-2 last:border-b-0"
+                  >
+                    <span
+                      className="inline-block h-2.5 w-2.5 shrink-0 translate-y-[1px]"
+                      style={{ background: bandTint(band.terrain) }}
+                      aria-hidden
+                    />
+                    <span className="text-[12.5px] text-ink">{band.name}</span>
+                    <span className="leader" aria-hidden />
+                    <span className="tabular shrink-0 text-[10px] text-faint">
+                      tier {BAND_TIERS[band.terrain].join("/")}
+                    </span>
+                    <span className="tabular w-8 shrink-0 text-right text-[11.5px] text-brass">
+                      {band.count}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-3 text-[11px] leading-relaxed text-dim">
+                The rim yields and the crown takes the tallest works on the board. A plant has to
+                stand in a band that will take its tier, which is what makes the rim crowded and the
+                middle expensive.
+              </p>
+              <div className="mt-4 flex items-start gap-3 border border-edge/70 bg-steel p-2.5">
                 <Plate name="seal" scale={3} className="shrink-0" />
                 <p className="text-[10px] leading-relaxed text-faint">
                   Filed with the regulator. Every table opens to a win condition and closes when it
@@ -462,7 +522,12 @@ export default async function LobbyPage({
               </div>
             </div>
           </div>
-        </header>
+
+          <figcaption className="border-t border-rule/60 px-3 py-3 text-[10.5px] leading-relaxed text-faint sm:px-5">
+            {census} plots over six bands, outermost first. A plot is named by its coordinates at a
+            table, which is what the scale down the head and the side of the plate is for.
+          </figcaption>
+        </figure>
 
         {missing ? (
           <p className="mt-4 border border-blood hatch-blood px-3 py-2 text-[11px] text-ink">
@@ -472,15 +537,13 @@ export default async function LobbyPage({
         ) : null}
 
         {joinable.length > 0 ? (
-          /*
-           * The chairs that are open right now. Every row is one link with one
-           * label at the end of it, because the code is the invitation and the
-           * rest of the row is only the terms it comes with.
-           */
-          <section className="border border-edge/70 bg-steel">
+          /* The chairs that are open right now. Every row is one link with one
+             label at the end of it, because the code is the invitation and the
+             rest of the row is only the terms it comes with. */
+          <section className="mt-5 border border-edge/70 bg-steel">
             <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 bg-plate px-3 py-2">
-              <h2 className="flex items-baseline gap-2 text-[10px] tracking-[0.24em] text-dim uppercase">
-                <span className="inline-block h-[10px] w-[2px] bg-brass" aria-hidden />
+              <h2 className="flex items-baseline gap-2 text-[10px] tracking-[0.24em] text-ink uppercase">
+                <span className="inline-block h-[11px] w-[2px] bg-brass" aria-hidden />
                 Chairs open at these tables
               </h2>
               <span className="tabular text-[10px] text-faint">
@@ -532,9 +595,7 @@ export default async function LobbyPage({
                         {table.humans} human of {table.players} seated
                       </span>
                       {table.atTable > 0 ? (
-                        <span className="text-bile">
-                          {table.atTable} at the table now
-                        </span>
+                        <span className="text-bile">{table.atTable} at the table now</span>
                       ) : null}
                       <span className="tabular text-faint">
                         {table.open} chair{table.open === 1 ? "" : "s"} open
@@ -553,7 +614,7 @@ export default async function LobbyPage({
             </ul>
           </section>
         ) : (
-          <p className="border border-edge/70 bg-steel px-3 py-2.5 text-[11.5px] text-dim">
+          <p className="mt-5 border border-edge/70 bg-steel px-3 py-2.5 text-[11.5px] text-dim">
             No table is gathering a lobby right now. Found one below and the code is yours to send.
           </p>
         )}
@@ -588,11 +649,7 @@ export default async function LobbyPage({
               </p>
             </Panel>
 
-            <Panel
-              id="charters"
-              title="The charters on the register"
-              aside="pick one before you sit"
-            >
+            <Panel id="charters" title="The charters on the register" aside="pick one before you sit">
               <div className="grid gap-x-8 xl:grid-cols-2">
                 {charterColumns.map((column, columnIndex) => (
                   <table key={columnIndex} className="w-full border-collapse">
@@ -618,9 +675,9 @@ export default async function LobbyPage({
                           key={charter.id}
                           className="border-b border-rule/50 align-top transition-colors duration-150 hover:bg-plate/50"
                         >
-                          {/* A charter is filed under its number, so the
-                              number is set as a mark rather than as a digit
-                              in a column. */}
+                          {/* A charter is filed under its number, so the number
+                              is set as a mark rather than as a digit in a
+                              column. */}
                           <td className="py-2.5 pr-3 align-top">
                             <span className="tabular inline-block border border-rule/60 px-1.5 py-0.5 text-[9px] text-brass">
                               {roman(columnIndex * charterHalf + index + 1)}
@@ -696,9 +753,7 @@ export default async function LobbyPage({
                 })}
               </ul>
               <p className="mt-3 border-t border-rule/50 pt-2 text-[11px] leading-relaxed text-faint">
-                The same six bands are drawn on the plate at the top of this page. A plant has to
-                stand in a band that will take its tier, which is what makes the rim crowded and
-                the middle expensive.
+                The same six bands are drawn in the plate at the head of this page.
               </p>
             </Panel>
 
@@ -710,10 +765,7 @@ export default async function LobbyPage({
               </p>
               <dl>
                 {TABLE_GAMES.map(([name, note]) => (
-                  <div
-                    key={name}
-                    className="border-b border-rule/40 py-2 last:border-b-0"
-                  >
+                  <div key={name} className="border-b border-rule/40 py-2 last:border-b-0">
                     <dt className="flex items-baseline gap-2.5 text-[12.5px] text-ink">
                       <span
                         className="mt-[6px] inline-block h-1.5 w-1.5 shrink-0 bg-brass/80"
@@ -732,11 +784,10 @@ export default async function LobbyPage({
             </Panel>
           </div>
 
-          {/* The column rule, as in the head of the sheet and on the same x as
-              it, continuing where the display band above cut it. */}
+          {/* The column rule, standing the height of the body of the sheet. */}
           <div className="hidden self-stretch bg-rule lg:block" aria-hidden />
 
-          <aside className="space-y-5 lg:sticky lg:top-3 lg:max-h-[calc(100vh-1.5rem)] lg:pt-6 lg:pl-8 lg:overflow-y-auto lg:pb-2">
+          <aside className="space-y-5 lg:sticky lg:top-3 lg:max-h-[calc(100vh-1.5rem)] lg:pt-6 lg:overflow-y-auto lg:pb-2 lg:pl-8">
             <div id="found">
               <Panel title="Found a company" aside="you hold the first chair">
                 <p className="mb-3 border-b border-rule/50 pb-2 text-[11.5px] leading-relaxed text-dim">
@@ -837,12 +888,9 @@ export default async function LobbyPage({
               </Panel>
             </div>
 
-            {/*
-             * The ladder. Every closed era files a placing against the house that
-             * played it, and the front of the house is where a director reads
-             * whether they are getting better at this. Points are places, so a
-             * house that has never won still has something to show for turning up.
-             */}
+            {/* The ladder. Every closed era files a placing against the house that
+                played it, and the front of the house is where a director reads
+                whether they are getting better at this. */}
             <Panel id="ladder" title="The ladder" aside={`${ladder.length} houses placed`}>
               {ladder.length > 0 ? (
                 <ol>
@@ -911,9 +959,7 @@ export default async function LobbyPage({
               </dd>
             </div>
             <div>
-              <dt className="text-[10px] tracking-[0.2em] text-faint uppercase">
-                Desk notices
-              </dt>
+              <dt className="text-[10px] tracking-[0.2em] text-faint uppercase">Desk notices</dt>
               <dd className="mt-1 leading-relaxed text-dim">
                 {mailDescription()} A house may leave an address and be written to when a window
                 closes without it.
