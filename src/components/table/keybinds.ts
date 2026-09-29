@@ -23,6 +23,10 @@ export const TABLE_KEYBINDS: Keybind[] = [
   { keys: "r", label: "The Rag, the latest paper" },
   { keys: "p", label: "The replay, the era walked back a window at a time" },
   { keys: "t", label: "The walk-around, from wherever you are" },
+  {
+    keys: "1 to 5",
+    label: "Draw the board as deeds, smoke, wear, yield or reach, and 0 for the plain board",
+  },
   { keys: "arrow keys", label: "Walk the board one plot at a time once the grid has focus" },
   { keys: "/", label: "Jump to an order by name, from the desk" },
   { keys: "?", label: "This card, every key the table answers to" },

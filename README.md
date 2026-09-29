@@ -8,12 +8,14 @@ contracts that are not owed until both desks sign, and a newspaper that prints w
 The game runs immediately with no accounts and no API keys. Supabase credentials and a language
 model key are both optional and both activate automatically when present.
 
+A live table runs on Vercel at https://bigyahuapproved.vercel.app/.
+
 ## Running it
 
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # 240 engine tests
+npm test           # 349 tests in 39 files
 npm run typecheck
 npm run build
 ```
@@ -115,7 +117,8 @@ desk holds the letters and the game plays on unchanged.
 **The ladder.** A closed era files a placing against every house that played it, keyed by user rather
 than by seat, so a reputation follows a director into the next table. Points are places, not money:
 one for last and one more for every place above it, with the best era breaking a tie. The front of
-the house prints the top of the ranking and the desk prints your own line.
+the house prints the top of the ranking and the desk prints your own line. `/ladder` prints the
+whole ranking across every era the store holds.
 
 **The end.** A table is opened to a turn limit, a net worth figure, control of a number of rival
 boards or a clean era, chosen at founding and printed in the lobby, on the strip and on the open
@@ -139,6 +142,54 @@ paper, read only, riding the same heartbeat the players do. The rail cannot seal
 **Sound.** A brass bell when the window runs out and a press thump when the paper lands, both
 synthesised in the browser. Silent until the switch beside the guide is turned on, and remembered
 per browser after that.
+
+## The desk
+
+Around the board itself, the table carries a set of instruments, each one a small rulebook in
+`src/domain` read by a panel on the desk.
+
+**Lenses.** Keys one to five draw the board as five readings of the same ground, and zero puts the
+plain board back. Deeds paints every plot by its owner. Smoke is how foul the air sits on a plot.
+Wear is how far a plant has been run down. Yield is a plant's last output against the best on the
+board. Reach is how far a plot stands from the nearest ground you hold. While a lens is up, the row
+under the board prints the reading for the whole table in place of the ring legend.
+
+**The weather office.** The next window's wind is read out of the same seeded stream the tick rolls,
+so the forecast cannot disagree with what resolves. The pane names where the plume goes, who the
+window smokes, and your own chimneys; a click on one selects the tile.
+
+**The counting house.** A bill run before the window shuts: the wage bill, maintenance, scrubber
+upkeep, the safety program, track repair, the waste yard, and interest on bonds and convertibles,
+set against municipal income. A shortfall ends in a verdict that says the till runs out before the
+close, and the rest of the table's tills are printed beside it.
+
+**The Pinkerton file.** A dossier on every rival house with a threat reading out of a hundred,
+built from share of the table cap, industrial weight, boards held, patents, running plants and
+hired muscle, with the figures printed under the meter.
+
+**The board sheet.** Every commodity row on the exchange opens a deep panel: twenty windows of
+prices drawn against the cost floor, the pool and the duty, cellars, short paper, holders, and the
+loudest books on the floor.
+
+**The envelope clerk.** On a tender or a forced sale the inspector prints the reserve, a suggested
+envelope and your ceiling for the ground on the block, tuned by the neighbours' lines, and the bid
+button is written out at the suggested figure.
+
+**Calling the question.** A seat that thinks the room is done can call the window from the register.
+Once every seated house that is not on the bench and not bankrupt has called, the window closes at
+the next beat without waiting on the clock, and the calls are cleared when it resolves. The strip
+prints how many have called.
+
+**The wire's replies.** A line on the wire can be answered directly. The reply quotes the line it
+answers, and the quote drops if the line has already fallen off the wire.
+
+**The register.** Each house row carries its place, a small drawing of its net worth across the
+recent windows, and a chip for who is writing now, driven by seat ids carried on the heartbeat
+rather than by names.
+
+**The ladder page.** `/ladder` prints the whole ranking across every era the store holds: places,
+wins and games, best era, charters opened and points, with how a placing is read. The front of the
+house links to it, and so does the register's houses column.
 
 ## Rules worth knowing
 
@@ -209,7 +260,7 @@ src/domain/content/   the catalogs: commodities, recipes, charters, board bands,
 src/domain/           pure rulebook, no imports from app or server
 src/domain/orders/    the order catalog and its six phase handlers
 src/server/           store adapters, session, actions, bot directors, the Rag
-src/components/       grid canvas, pixel atlas, control room, exchange, inspector, broadsheet
+src/components/       grid canvas, pixel atlas, control room, exchange, inspector, panes, broadsheet
 supabase/             migrations, row level security, the cron wrapper
 tests/                one file per subsystem plus a full turn determinism test
 ```
@@ -319,7 +370,7 @@ printing what they filed.
 
 ### The tests
 
-Thirty two files, three hundred and two tests. Geometry and the catalogs are checked against
+Thirty nine files, three hundred and forty nine tests. Geometry and the catalogs are checked against
 their own contents, so a catalog edit that breaks an assumption fails a test rather than a screen:
 seventy five commodities, seventy five plants, twenty six charters, seventy five orders, a hundred and
 twenty eight event kinds, and every sprite placement inside its sheet. The table's own rules are
@@ -330,7 +381,10 @@ the share book and the control it buys, the pacts and their joint fund, the Rag,
 movement, the wire's deal grammar, side lines and taps, the bench's chatter, read receipts, the
 ladder and the desk notices. The engine tests cover the exchange, freight, production, waste,
 tenders, forced sales, the contract wire, the Record, raids, bonds, audits, arson, chapter 11 and a
-full turn replay. `tests/tick.test.ts` runs the
+full turn replay. Seven more pin the desk's instruments: the lenses, the wind forecast, which
+asserts the forecast names the wind the tick actually resolves, the rival dossiers, the question's
+early close driven through the store, the envelope clerk, the board sheet and the counting house's
+bill. `tests/tick.test.ts` runs the
 same input twice and asserts a byte identical event log, and `tests/rag.test.ts` asserts the paper
 prints the same broadsheet twice from the same ledger. Three of the files read the deployment rather
 than the engine: `tests/render.test.ts` paints the strip, the register and the board on the server

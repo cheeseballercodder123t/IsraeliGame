@@ -15,6 +15,7 @@ import {
   spriteStyle,
 } from "@/domain/constants";
 import { getQty } from "@/domain/inventory";
+import { envelopeClerk } from "@/domain/tender";
 import type { CSSProperties } from "react";
 import type { GameState, Order, Player, Resource, Tile } from "@/domain/types";
 import { Button, Empty, KeyValue, Panel } from "@/components/ui/primitives";
@@ -68,6 +69,13 @@ export function TileInspector({ state, player, tile, onOrder }: TileInspectorPro
   const rail = state.rails.find(
     (track) => (track.ax === tile.x && track.ay === tile.y) || (track.bx === tile.x && track.by === tile.y),
   );
+  /**
+   * What the clerk would write on the envelope. A sealed bid is the one order
+   * on this desk that is written blind, so the plot is read back before the
+   * figure goes in: what the works are worth, what the table already knows,
+   * and the number past which the envelope is buying a loss.
+   */
+  const envelope = !mine && (tile.onTender || lot) ? envelopeClerk(state, tile.id, player.id) : null;
 
   return (
     <Panel
@@ -255,6 +263,37 @@ export function TileInspector({ state, player, tile, onOrder }: TileInspectorPro
           </Button>
         ) : null}
 
+        {envelope ? (
+          <div className="mt-2.5 border-t border-rule pt-2.5">
+            <p className="text-[9px] tracking-[0.18em] text-faint uppercase">
+              The envelope clerk
+            </p>
+            <p className="tabular mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-[10px]">
+              <span className="text-faint">
+                appraised <span className="text-dim">{formatMoney(envelope.appraised)}</span>
+              </span>
+              {envelope.reserve > 0 ? (
+                <span className="text-faint">
+                  reserve <span className="text-dim">{formatMoney(envelope.reserve)}</span>
+                </span>
+              ) : null}
+              <span className="text-faint">
+                write <span className="text-brass">{formatMoney(envelope.suggested)}</span>
+              </span>
+              <span className="text-faint">
+                ceiling <span className="text-rust">{formatMoney(envelope.ceiling)}</span>
+              </span>
+            </p>
+            <ul className="mt-1.5 space-y-0.5">
+              {envelope.lines.slice(0, 3).map((line) => (
+                <li key={line} className="text-[10px] leading-relaxed text-dim">
+                  {line}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
         {!mine ? (
           <>
             {tile.onTender || lot ? (
@@ -266,14 +305,20 @@ export function TileInspector({ state, player, tile, onOrder }: TileInspectorPro
                       type: "BID_TENDER",
                       tileId: tile.id,
                       amount: Math.round(
-                        Math.max(lot ? lot.reserve * 1.15 : 120_000, player.cash * 0.2),
+                        envelope
+                          ? envelope.suggested
+                          : Math.max(lot ? lot.reserve * 1.15 : 120_000, player.cash * 0.2),
                       ),
                     },
                     bid ? "Raise the envelope" : "Seal an envelope",
                   )
                 }
               >
-                {bid ? "Raise the envelope" : lot ? "Bid at the forced sale" : "Bid at tender"}
+                {bid
+                  ? "Raise the envelope"
+                  : lot
+                    ? `Bid ${formatMoney(envelope ? envelope.suggested : lot.reserve * 1.15)} at the forced sale`
+                    : `Bid ${formatMoney(envelope ? envelope.suggested : 120_000)} at tender`}
               </Button>
             ) : null}
             {tile.ownerId ? (

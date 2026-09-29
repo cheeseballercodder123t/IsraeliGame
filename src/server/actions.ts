@@ -10,6 +10,7 @@ import { ensureSession, readSession, signOut } from "@/server/session";
 import {
   DEV_TICK,
   advanceTurn,
+  callQuestion,
   cancelOrder,
   claimSeatByCode,
   fillWithBots,
@@ -189,6 +190,7 @@ export async function postMessageAction(
   code: string,
   body: string,
   channel: string | null = null,
+  replyTo: string | null = null,
 ): Promise<{ ok: boolean; error?: string }> {
   const session = await readSession();
   if (!session) return { ok: false, error: "No session." };
@@ -199,7 +201,31 @@ export async function postMessageAction(
   const me = playerOf(state, session.userId);
   if (!me) return { ok: false, error: "Only a seated house speaks on the wire." };
 
-  const result = await say(state.game.id, me.id, me.name, body, channel);
+  const result = await say(state.game.id, me.id, me.name, body, channel, replyTo);
+  if (result.ok) revalidatePath(`/table/${code.toUpperCase()}`);
+  return result;
+}
+
+/**
+ * Calls the question on the window being played.
+ *
+ * A long window does not have to be waited out. When every hand at the table
+ * has called it the window closes there and then, and this is one hand saying
+ * so. The reply carries whether this call was the last one in.
+ */
+export async function callQuestionAction(
+  code: string,
+): Promise<{ ok: boolean; ready: boolean; error?: string }> {
+  const session = await readSession();
+  if (!session) return { ok: false, ready: false, error: "No session." };
+
+  const state = await loadGameByCode(code.toUpperCase());
+  if (!state) return { ok: false, ready: false, error: "No such table." };
+
+  const me = playerOf(state, session.userId);
+  if (!me) return { ok: false, ready: false, error: "Only a seated house can call the question." };
+
+  const result = await callQuestion(state.game.id, me.id);
   if (result.ok) revalidatePath(`/table/${code.toUpperCase()}`);
   return result;
 }

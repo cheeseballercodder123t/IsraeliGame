@@ -16,6 +16,9 @@ export function withRevision(state: GameState): GameState {
   // the default one rather than an ending nobody can read.
   state.game.winCondition = normalizeWinCondition(state.game.winCondition);
   if (typeof state.game.holdsUsed !== "number") state.game.holdsUsed = 0;
+  // Tables written before the question could be called have nobody waiting on
+  // anybody, which is the state a fresh window is in.
+  if (!Array.isArray(state.game.calls)) state.game.calls = [];
   if (state.game.lastSealAt !== null && typeof state.game.lastSealAt !== "string") {
     state.game.lastSealAt = null;
   }

@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { auditRiskOf } from "@/domain/finance";
 import { charterOf } from "@/domain/constants";
-import { netWorthOf } from "@/domain/valuation";
+import { netWorthOf, netWorthSeries } from "@/domain/valuation";
+import { questionLabel, questionOf, type QuestionState } from "@/domain/question";
 import { winConditionLabel, winProgressLabel } from "@/domain/endgame";
 import {
   SHORT_WINDOW_SECONDS,
@@ -18,6 +19,7 @@ import type { TablePresence } from "@/components/table/useTableSync";
 import { bell, ticker } from "@/lib/sound";
 import { setNothingSealed, setWindowPressure } from "@/lib/parts";
 import { clock } from "@/domain/format";
+import { Trend } from "@/components/ui/chart";
 import { formatMoney, formatPercent, countdown, ownerColor, windLabel } from "@/lib/labels";
 
 const RING_RADIUS = 14;
@@ -135,6 +137,10 @@ export function StatusStrip({
   live = true,
   present = [],
   sealedAway = 0,
+  question = null,
+  hands = [],
+  onCallQuestion,
+  callBusy = false,
 }: {
   state: GameState;
   /** The house looking, or null for somebody watching from the rail. */
@@ -152,6 +158,18 @@ export function StatusStrip({
    * gets, by design.
    */
   sealedAway?: number;
+  /** The window's calls, or null to read them off the state as it stands. */
+  question?: QuestionState | null;
+  /**
+   * Houses with a hand down on the wire right now. The register names them, so
+   * a desk can see that a rival is at the table and working rather than only
+   * that it is present.
+   */
+  hands?: TablePresence[];
+  /** Calls the question on the window being played. */
+  onCallQuestion?: () => void;
+  /** True while a call is in flight, so the lever cannot be pulled twice. */
+  callBusy?: boolean;
 }) {
   const me = state.players.find((p) => p.id === meId) ?? null;
   /** Orders a house has sealed into the window being played. */
@@ -173,6 +191,9 @@ export function StatusStrip({
       .map((player, index) => [player.id, index + 1]),
   );
 
+  const asked = question ?? questionOf(state);
+  const called = me ? asked.called.includes(me.id) : false;
+  const writing = (playerId: string) => hands.some((who) => who.playerId === playerId);
   const windowSeconds = windowSecondsOf(state.game.tickIntervalHours);
   const [remaining, setRemaining] = useState(() =>
     Math.max(0, Math.floor((new Date(state.game.nextTickAt).getTime() - Date.now()) / 1000)),
@@ -390,7 +411,42 @@ export function StatusStrip({
                 held for a late seal
               </p>
             ) : null}
+            {!finished && asked.live > 0 ? (
+              <p
+                className="text-[9px] text-faint"
+                title="A window closes early the moment every hand at the table has called it"
+              >
+                the question: {questionLabel(state)}
+              </p>
+            ) : null}
           </div>
+          {/*
+           * The question. A long window is worth waiting out only while
+           * somebody is still working, so this is one desk saying it is done.
+           * The last call closes the window, and the label says how close the
+           * table is to that. The bench does not vote.
+           */}
+          {me && !finished && asked.live > 0 && onCallQuestion ? (
+            <button
+              type="button"
+              data-tour="question"
+              onClick={onCallQuestion}
+              disabled={callBusy || called}
+              aria-pressed={called}
+              title={
+                called
+                  ? "You have called this window. It closes when every other desk has too."
+                  : "Close this window early once every desk at the table has called it"
+              }
+              className={`shrink-0 border px-2 py-1 text-[10px] tracking-[0.14em] uppercase transition-colors duration-150 active:translate-y-[1px] disabled:opacity-60 ${
+                called
+                  ? "border-brass bg-plate text-brass"
+                  : "border-edge bg-pit text-dim hover:border-brass hover:text-ink"
+              }`}
+            >
+              {called ? "called" : "call the window"}
+            </button>
+          ) : null}
           {onOpenRag && ragTurn ? (
             <button
               type="button"
@@ -452,6 +508,10 @@ export function StatusStrip({
                     {player.isBot ? <span className="ml-1 text-[9px] text-faint">auto</span> : null}
                   </span>
                   <span className="leader" aria-hidden />
+                  {/* The trend toward the era, off the standings the ledger kept. */}
+                  <span className="shrink-0" title="Net worth, window by window">
+                    <Trend series={netWorthSeries(state, player.id)} tone={ownerColor(state, player.id)} />
+                  </span>
                   <span className="tabular shrink-0 text-[10px] text-brass">
                     {formatMoney(worth.get(player.id) ?? 0)}
                   </span>
@@ -466,6 +526,11 @@ export function StatusStrip({
                     />
                     {atDesk(player.id) ? "at the table" : "away"}
                   </span>
+                  {writing(player.id) ? (
+                    <span className="text-hazard" title="A hand is down on the wire right now">
+                      writing
+                    </span>
+                  ) : null}
                   {sealed > 0 ? (
                     <span
                       className="tabular text-brass"
@@ -476,6 +541,11 @@ export function StatusStrip({
                   ) : (
                     <span>nothing sealed</span>
                   )}
+                  {asked.called.includes(player.id) ? (
+                    <span className="text-brass" title="This desk has called the window">
+                      called
+                    </span>
+                  ) : null}
                   {leads ? <span className="text-brass">leads</span> : null}
                   {player.bidsFrozen > 0 ? <span className="text-blood">no bids</span> : null}
                   {player.frozenTurns > 0 ? <span className="text-hazard">frozen</span> : null}

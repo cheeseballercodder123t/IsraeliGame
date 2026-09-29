@@ -176,6 +176,7 @@ export function createGameState(spec: NewGameSpec): GameState {
     winCondition: spec.winCondition ?? defaultWinCondition(),
     lastSealAt: null,
     holdsUsed: 0,
+    calls: [],
   };
 
   const deposits = rng.shuffle(DEPOSIT_POOL);

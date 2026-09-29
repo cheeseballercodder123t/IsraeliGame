@@ -68,6 +68,25 @@ export function netWorthTable(
     .sort((a, b) => b.value - a.value);
 }
 
+/**
+ * Net worth as the ledger has closed it, window by window, oldest first.
+ *
+ * The standing printed at the end of every window is kept on the ledger, so a
+ * trend can be read off the same numbers the paper and the Record read rather
+ * than being recomputed from today's prices. The window still open is added as
+ * the last point, which is what makes the line follow the desk as it works.
+ */
+export function netWorthSeries(state: GameState, playerId: string, windows = 12): number[] {
+  const closes: number[] = [];
+  for (const event of state.events) {
+    if (event.kind !== "TURN_END" || !event.netWorth) continue;
+    const row = event.netWorth.find((entry) => entry.playerId === playerId);
+    if (row) closes.push(row.value);
+  }
+  const series = [...closes, netWorthOf(state, playerId)];
+  return series.slice(-Math.max(2, windows));
+}
+
 export function leader(state: GameState): Player | undefined {
   const table = netWorthTable(state);
   const top = table[0];

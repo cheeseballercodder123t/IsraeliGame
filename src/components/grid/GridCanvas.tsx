@@ -14,6 +14,7 @@ import type { GameState, Terrain, Tile } from "@/domain/types";
 import { RECIPE_ABBR, RESOURCE_ABBR } from "@/domain/constants";
 import { stepCoord } from "@/domain/grid";
 import type { BoardStep } from "@/domain/grid";
+import { LENS_TINT, lensIntensity, type LensId } from "@/domain/lenses";
 import { ownerColor } from "@/lib/labels";
 import { sheetUrl, useSpriteAtlas } from "./atlas";
 
@@ -131,9 +132,22 @@ export interface GridCanvasProps {
   selectedTileId: string | null;
   onSelect: (tileId: string) => void;
   highlightPlayerId?: string | null;
+  /**
+   * The question the board is drawing. The plain board is the drawing itself;
+   * every other lens lays a flat wash over each plot, weighted by the reading,
+   * so one figure can be followed across a hundred and twenty one plots.
+   */
+  lens?: LensId;
 }
 
-export function GridCanvas({ state, selectedTileId, onSelect, highlightPlayerId }: GridCanvasProps) {
+export function GridCanvas({
+  state,
+  selectedTileId,
+  onSelect,
+  highlightPlayerId,
+  lens = "NONE",
+}: GridCanvasProps) {
+  const washing = lens !== "NONE";
   const ready = useSpriteAtlas();
   const holder = useRef<HTMLDivElement | null>(null);
   const [scale, setScale] = useState(1);
@@ -379,6 +393,24 @@ export function GridCanvas({ state, selectedTileId, onSelect, highlightPlayerId 
                         <Glyph tile={tile} color={color} />
                       </>
                     )}
+
+                    {washing ? (
+                      <span
+                        className="pointer-events-none absolute inset-0"
+                        data-lens={lens}
+                        data-lens-read={Math.round(lensIntensity(state, tile, lens, highlightPlayerId ?? null) * 100)}
+                        style={{
+                          background:
+                            lens === "DEEDS"
+                              ? tile.ownerId
+                                ? color
+                                : "transparent"
+                              : LENS_TINT[lens as Exclude<LensId, "NONE" | "DEEDS">],
+                          opacity: lensIntensity(state, tile, lens, highlightPlayerId ?? null),
+                        }}
+                        aria-hidden
+                      />
+                    ) : null}
 
                     {occupied && tile.ownerId ? (
                       <span

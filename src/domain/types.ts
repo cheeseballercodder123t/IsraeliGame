@@ -183,6 +183,12 @@ export interface ChatMessage {
    * and reaches nobody else until somebody buys the private papers.
    */
   channel?: string | null;
+  /**
+   * The line this one answers, when a house took a rival's figure and replied
+   * to it. The wire quotes that line above the answer, so a bargain argued
+   * over three windows still reads as one conversation.
+   */
+  replyTo?: string | null;
 }
 
 /**
@@ -310,6 +316,13 @@ export interface Game {
   lastSealAt: string | null;
   /** How many times this window has already been held for a late seal. */
   holdsUsed: number;
+  /**
+   * Houses that have called the question on the window being played. A window
+   * closes the moment every hand at the table has called it, which is how a
+   * room stops waiting out a clock none of them needs. Cleared when the window
+   * resolves, because the next one is a question of its own.
+   */
+  calls: string[];
 }
 
 export interface Player {

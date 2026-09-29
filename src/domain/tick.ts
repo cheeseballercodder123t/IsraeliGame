@@ -390,6 +390,9 @@ export function resolveTurnTick(input: GameState, options: TickOptions = {}): Ti
   state.queue = state.queue.filter((q) => q.turn > turn);
   state.game.lastSealAt = null;
   state.game.holdsUsed = 0;
+  // The window that just closed was closed. The next one is a question of its
+  // own, so every desk that called this one has to say so again.
+  state.game.calls = [];
   state.game.nextTickAt = new Date(
     (options.now ?? new Date()).getTime() + state.game.tickIntervalHours * 3_600_000,
   ).toISOString();

@@ -5,6 +5,7 @@ import { markRead, newestMessageId } from "@/domain/receipts";
 import { recordEra } from "@/server/ladder";
 import { defaultWinCondition, reachedWinCondition, winConditionLabel } from "@/domain/endgame";
 import { lateSealHold, type HoldRules } from "@/domain/fairness";
+import { questionOf } from "@/domain/question";
 import { resolveTurnTick } from "@/domain/tick";
 import { createGameState, makeGameCode, newPlayer } from "@/domain/world";
 import { hashSeed } from "@/domain/rng";
@@ -622,19 +623,65 @@ export async function advanceTurn(state: GameState): Promise<TurnOutcome> {
 /**
  * Lazy scheduling. Without a cron runner the board resolves itself the moment
  * somebody looks at it after the deadline, so a match never sits frozen.
+ *
+ * A window also closes early when every hand at the table has called the
+ * question. That road skips the late seal hold, because the hold exists to
+ * stop a short window punishing whoever was slowest to click and nobody was
+ * slow: the room said, in as many words, that it is done.
  */
 export async function resolveIfDue(
   state: GameState,
 ): Promise<{ state: GameState; issue: NewspaperIssue | null }> {
   if (state.game.status !== "ACTIVE") return { state, issue: null };
-  if (new Date(state.game.nextTickAt).getTime() > Date.now()) return { state, issue: null };
-  // A window that closed on somebody still sealing waits a moment for them,
-  // rather than throwing the order away. The hold is written before the table
-  // is resolved, so every other watcher of this window sees the new deadline.
-  const held = await holdForLateSeal(state.game.id);
-  if (held) return { state: held, issue: null };
+  const due = new Date(state.game.nextTickAt).getTime() <= Date.now();
+  const called = questionOf(state).ready;
+  if (!due && !called) return { state, issue: null };
+  if (due) {
+    // A window that closed on somebody still sealing waits a moment for them,
+    // rather than throwing the order away. The hold is written before the table
+    // is resolved, so every other watcher of this window sees the new deadline.
+    const held = await holdForLateSeal(state.game.id);
+    if (held) return { state: held, issue: null };
+  }
   const outcome = await advanceTurn(state);
   return { state: outcome.state, issue: outcome.issue };
+}
+
+/**
+ * Calls the question on the window being played.
+ *
+ * The name is added to the window's calls and nothing else happens here: the
+ * close itself is the read path's business, because every watcher already
+ * resolves a window it finds finished, and the question is one more way for a
+ * window to be finished. The reply says whether this call was the last one in,
+ * which is all the desk needs to say about it.
+ */
+export async function callQuestion(
+  gameId: string,
+  playerId: string,
+): Promise<{ ok: boolean; ready: boolean; error?: string }> {
+  const outcome = await commit(gameId, (state) => {
+    if (state.game.status === "FINISHED") {
+      return { ok: false as const, error: "The era has closed." };
+    }
+    if (state.game.status === "LOBBY") {
+      return { ok: false as const, error: "The window is not open yet." };
+    }
+    const player = state.players.find((entry) => entry.id === playerId);
+    if (!player) return { ok: false as const, error: "You are not seated at this table." };
+    if (player.isBot) {
+      return { ok: false as const, error: "The bench does not call the question." };
+    }
+    if (player.isBankrupt) {
+      return { ok: false as const, error: "The court has closed your operation." };
+    }
+    if (!Array.isArray(state.game.calls)) state.game.calls = [];
+    if (!state.game.calls.includes(playerId)) state.game.calls.push(playerId);
+    return { ok: true as const, value: questionOf(state).ready };
+  });
+  return outcome.ok
+    ? { ok: true, ready: outcome.value }
+    : { ok: false, ready: false, error: outcome.error };
 }
 
 /**
@@ -664,6 +711,7 @@ export async function say(
   name: string,
   body: string,
   channel: string | null = null,
+  replyTo: string | null = null,
 ): Promise<{ ok: boolean; error?: string }> {
   const text = tidyLine(body);
   if (text.length === 0) return { ok: false, error: "Nothing was said." };
@@ -678,6 +726,7 @@ export async function say(
     turn: 0,
     createdAt: new Date().toISOString(),
     channel,
+    replyTo: null,
   };
 
   const outcome = await commit(gameId, (state) => {
@@ -688,8 +737,12 @@ export async function say(
     if (message.channel && !inChannel(message.channel, playerId)) {
       return { ok: false as const, error: "That is not your conversation." };
     }
+    // The quote is resolved against the room as it stands. A line that has
+    // already fallen off the top of a full wire cannot be answered, and the
+    // reply lands as a plain line rather than pointing at nothing.
+    const quoted = replyTo && state.messages.some((line) => line.id === replyTo) ? replyTo : null;
     if (!state.messages.some((said) => said.id === message.id)) {
-      state.messages.push({ ...message, turn: state.game.currentTurn });
+      state.messages.push({ ...message, turn: state.game.currentTurn, replyTo: quoted });
       // Saying something is the strongest possible proof of having read the
       // room, so the speaker's receipt moves with their own line.
       state.reads = markRead(state.reads, playerId, message.id, message.createdAt);
