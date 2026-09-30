@@ -10,7 +10,7 @@ import {
   winConditionLabel,
 } from "@/domain/endgame";
 import Link from "next/link";
-import { countdown } from "@/domain/format";
+import { countdown, formatMoney } from "@/domain/format";
 import { foundCompanyAction, joinTableAction } from "@/server/actions";
 import { readLadder } from "@/server/ladder";
 import { mailDescription } from "@/server/mail";
@@ -23,6 +23,7 @@ import {
   BOARD,
   CENTER,
   CLEAN_AIR_TARGET,
+  SCHEME_ALARM,
   FAMILY_ORDER,
   PLOT_COUNT,
   RECIPE_LIST,
@@ -33,10 +34,12 @@ import {
   terrainForRing,
 } from "@/domain/constants";
 import { ORDER_SPEC_LIST } from "@/domain/orders/catalog";
+import { SCHEME_LIST } from "@/domain/schemes";
 import type { Terrain } from "@/domain/types";
 import { bandTint } from "@/lib/labels";
 import { Button, Field, Panel } from "@/components/ui/primitives";
 import { Plate } from "@/components/ui/plates";
+import { StoreLamp } from "@/components/panes/StoreLamp";
 
 export const dynamic = "force-dynamic";
 
@@ -805,6 +808,83 @@ export default async function LobbyPage({
                 line in the paper after the window shuts.
               </p>
             </Panel>
+
+            {/*
+             * The night office. Every covert order is one window of work, and
+             * a scheme is the other kind of thing: a plan that asks for a piece
+             * of work each window until it pays or until the Pinkertons walk
+             * in. It is drawn here from the same catalog the desk reads, so the
+             * front of the envelope cannot promise a con the engine does not
+             * run.
+             */}
+            <Panel
+              id="schemes"
+              title="The night office"
+              aside={`${SCHEME_LIST.length} long cons on the card`}
+            >
+              <p className="mb-1 border-b border-rule/50 pb-2 text-[11.5px] leading-relaxed text-dim">
+                Night work is one window at a time. A scheme is the other kind of thing: a long con
+                opened against a house you name, run for a few windows, and carried by whatever the
+                office asks for next. It is the only order in the game that asks you for something
+                in a later window, and it is how a small house takes a large one apart without
+                buying it.
+              </p>
+              <dl>
+                {SCHEME_LIST.map((spec) => (
+                  <div key={spec.id} className="border-b border-rule/40 py-2 last:border-b-0">
+                    <dt className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1 text-[12.5px] text-ink">
+                      <span className="mt-[6px] inline-block h-1.5 w-1.5 shrink-0 bg-brass/80" aria-hidden />
+                      {spec.name}
+                      <span className="leader" aria-hidden />
+                      <span className="tabular text-[10.5px] text-brass">
+                        {formatMoney(spec.cut)} a window
+                      </span>
+                      <span className="tabular text-[10.5px] text-faint">
+                        {spec.stages.length} windows
+                      </span>
+                    </dt>
+                    <dd className="mt-0.5 pl-4 text-[11.5px] leading-relaxed text-dim">
+                      {spec.blurb} Pays {spec.payoff}.
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+
+              {/*
+               * Heat, drawn once. The three zones are the whole wager: under
+               * the alarm line the office is invisible, over it every rival
+               * file reads the operation, and at the top the Pinkertons take
+               * the fine and print the story.
+               */}
+              <div className="mt-3 border-t border-rule/50 pt-2">
+                <p className="text-[10px] tracking-[0.2em] text-faint uppercase">
+                  The heat on a running office
+                </p>
+                <div className="mt-1.5 flex h-[7px] w-full border-y border-rule bg-tar">
+                  <span
+                    className="h-full bg-brass/70"
+                    style={{ width: `${SCHEME_ALARM}%` }}
+                    title={`Under ${SCHEME_ALARM}: the office is invisible to every rival file`}
+                  />
+                  <span
+                    className="h-full bg-hazard/80"
+                    style={{ width: `${100 - SCHEME_ALARM - 20}%` }}
+                    title={`Over ${SCHEME_ALARM}: every rival's Pinkerton file can read the operation`}
+                  />
+                  <span className="h-full flex-1 bg-blood" title="The Pinkertons walk in" />
+                </div>
+                <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-[10px] text-faint">
+                  <span>0 to {SCHEME_ALARM}: nobody can see it</span>
+                  <span className="text-hazard">{SCHEME_ALARM} and up: the files carry it</span>
+                  <span className="text-blood">100: the Pinkertons, the fine and the story</span>
+                </div>
+              </div>
+
+              <p className="mt-3 border-t border-rule/50 pt-2 text-[11px] leading-relaxed text-faint">
+                One office at a time, paid for window by window. A quiet con costs its cut and
+                nothing else; a loud one costs the till, the standing and the whole con.
+              </p>
+            </Panel>
           </div>
 
           {/* The column rule, standing the height of the body of the sheet. */}
@@ -974,6 +1054,7 @@ export default async function LobbyPage({
                   : store === "file"
                     ? "In files on this machine's disk."
                     : "In process only, so a restart clears every table."}
+                <StoreLamp store={store} />
               </dd>
             </div>
             <div>

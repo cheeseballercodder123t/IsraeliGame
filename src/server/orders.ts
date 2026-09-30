@@ -4,6 +4,7 @@ import {
   RECIPE_IDS,
   RESOURCE_IDS,
   ROLLING_STOCK,
+  SCHEME_IDS,
 } from "@/domain/content/ids";
 import { ORDER_SPECS, ORDER_SPEC_LIST, type OrderField } from "@/domain/orders/catalog";
 import type { Order } from "@/domain/types";
@@ -33,6 +34,8 @@ function fieldSchema(field: OrderField): z.ZodTypeAny {
       return z.boolean();
     case "RESOURCE":
       return z.enum(RESOURCE_IDS);
+    case "SCHEME":
+      return z.enum(SCHEME_IDS);
     case "RECIPE":
       return z.enum(RECIPE_IDS);
     case "GRADE":

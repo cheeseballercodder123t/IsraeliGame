@@ -39,6 +39,13 @@ import {
 import { pickForgeryLine } from "../forgery";
 import { getQty, takeQty } from "../inventory";
 import { priceOf } from "../production";
+import {
+  abortScheme as callOffNightOffice,
+  openScheme as openNightOffice,
+  schemeRoom,
+  schemeSpec,
+  SCHEME_SPECS,
+} from "../schemes";
 import { boardShareOf } from "../valuation";
 import {
   covertCost,
@@ -699,6 +706,50 @@ export const marketDump: OrderHandler = (ctx, actor, raw) => {
   });
 };
 
+/**
+ * The night office.
+ *
+ * A scheme is the only order in the game that asks a house for something in a
+ * later window. Opening one takes the cut, names the mark, and puts the
+ * operation on the desk's own board; from then on the tick reads each window
+ * against whatever stage the scheme has reached.
+ */
+export const startScheme: OrderHandler = (ctx, actor, raw) => {
+  if (raw.type !== "OPEN_SCHEME") return;
+  const spec = SCHEME_SPECS[raw.schemeId as keyof typeof SCHEME_SPECS];
+  if (!spec) return;
+  const mark = playerById(ctx, raw.playerId);
+  if (!mark || mark.id === actor.id || mark.isBankrupt) return;
+  if (!schemeRoom(ctx.state, actor.id)) return;
+  const cost = covertCost(actor, spec.cut);
+  if (!spend(actor, cost)) return;
+  openNightOffice(ctx.state, actor, spec.id, mark.id, ctx.turn);
+  ctx.state.events.push({
+    kind: "SCHEME_OPENED",
+    turn: ctx.turn,
+    playerId: actor.id,
+    targetId: mark.id,
+    amount: cost,
+    count: spec.stages.length,
+    note: spec.name.toLowerCase(),
+  });
+  // A quiet office is still an office somebody was paid to open.
+  actor.pr = Math.max(0, actor.pr - 2);
+};
+
+/** Calling the whole thing off. Nothing spent comes back and nothing is filed. */
+export const scrapScheme: OrderHandler = (ctx, actor) => {
+  const gone = callOffNightOffice(ctx.state, actor.id);
+  if (!gone) return;
+  ctx.state.events.push({
+    kind: "SCHEME_ABORTED",
+    turn: ctx.turn,
+    playerId: actor.id,
+    targetId: gone.markId,
+    note: schemeSpec(gone.kind).name.toLowerCase(),
+  });
+};
+
 export const PEOPLE_HANDLERS: Record<string, OrderHandler> = {
   SET_WAGE: setWage,
   UNION_CONTRACT: unionContract,
@@ -730,4 +781,6 @@ export const PEOPLE_HANDLERS: Record<string, OrderHandler> = {
   WHISTLEBLOWER: whistleblower,
   WILDCAT_FUND: wildcatFund,
   MARKET_DUMP: marketDump,
+  OPEN_SCHEME: startScheme,
+  ABORT_SCHEME: scrapScheme,
 };

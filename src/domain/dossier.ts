@@ -14,6 +14,7 @@
 import { RECIPES } from "./constants";
 import { boardsControlledBy } from "./equity";
 import { activeForgeries } from "./forgery";
+import { isSchemeExposed, schemeSpec } from "./schemes";
 import { netWorthOf } from "./valuation";
 import type { GameState, Player } from "./types";
 
@@ -53,6 +54,18 @@ export interface Dossier {
    * kept apart from them, so the pane can say that this one is not evidence.
    */
   forgeries: string[];
+  /**
+   * A night office this house has running, readable only once the operation is
+   * loud enough to be in the files. Even then the file carries the shape of it
+   * and not the next window's work.
+   */
+  scheme: {
+    name: string;
+    markName: string;
+    stage: number;
+    windows: number;
+    heat: number;
+  } | null;
 }
 
 /**
@@ -183,6 +196,24 @@ function build(
     tone: threat >= 70 ? "blood" : threat >= 50 ? "hazard" : threat >= 30 ? "brass" : "dim",
     notes: notes.slice(0, 4),
     forgeries: activeForgeries(state, player.id).map((forgery) => forgery.line),
+    scheme: exposedScheme(state, player.id),
+  };
+}
+
+/** A rival night office as the file can read it, or null when it is still dark. */
+function exposedScheme(state: GameState, runnerId: string) {
+  const scheme = state.schemes.find(
+    (entry) => entry.runnerId === runnerId && isSchemeExposed(entry),
+  );
+  if (!scheme) return null;
+  const spec = schemeSpec(scheme.kind);
+  const mark = state.players.find((player) => player.id === scheme.markId);
+  return {
+    name: spec.name,
+    markName: mark ? mark.name : "a house no longer at the table",
+    stage: scheme.stage,
+    windows: spec.stages.length,
+    heat: Math.round(scheme.heat),
   };
 }
 

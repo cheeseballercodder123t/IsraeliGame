@@ -8,6 +8,7 @@ import type {
   GameStore,
   GameSummary,
   NewspaperRecord,
+  StoreHealth,
 } from "./types";
 import { withRevision } from "./types";
 
@@ -263,5 +264,31 @@ export class FileStore implements GameStore {
     await withLock(this.ladderPath, async () => {
       await this.writeJson(this.ladderPath, entries);
     });
+  }
+
+  /**
+   * The probe for a directory store: can this process still see the directory
+   * it was handed. There is no wire here, so the answer is a stat rather than
+   * a round trip, and the latency is the time that stat took.
+   */
+  async health(): Promise<StoreHealth> {
+    const started = Date.now();
+    try {
+      await this.ensureDirs();
+      await readdir(this.root);
+      return {
+        kind: "file",
+        ok: true,
+        latencyMs: Date.now() - started,
+        detail: `tables on disk at ${this.root}`,
+      };
+    } catch (error) {
+      return {
+        kind: "file",
+        ok: false,
+        latencyMs: Date.now() - started,
+        detail: error instanceof Error ? error.message : String(error),
+      };
+    }
   }
 }

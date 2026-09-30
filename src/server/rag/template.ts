@@ -188,6 +188,11 @@ const GENERIC_DECKS = [
 const WEIGHTS: Partial<Record<EventKind, number>> = {
   AUDIT: 150,
   RIOT: 140,
+  // The night office. A long con is a running story: the payoff and the blow
+  // are front page, an office opening and each stage it works earn a line in
+  // the night desk, and the quiet slip that nobody saw does not print.
+  SCHEME_PAID: 86,
+  SCHEME_BLOWN: 76,
   ARSON: 130,
   CHAPTER_11: 110,
   TAKEOVER: 105,
@@ -202,6 +207,10 @@ const WEIGHTS: Partial<Record<EventKind, number>> = {
   SMUGGLING: 66,
   BLACKMAIL: 64,
   SABOTAGE: 62,
+  SCHEME_OPENED: 36,
+  SCHEME_STAGE: 34,
+  SCHEME_ABORTED: 26,
+  SCHEME_SLIPPED: 22,
   BLOCKADE: 58,
   TARIFF_PASSED: 56,
   POLLUTION_FINE: 54,
@@ -363,8 +372,12 @@ export function generateIssue(state: GameState, events: GameEvent[], turn: numbe
     })
     .join("\n");
 
+  // The index of the accused names houses and what they did, so a commodity
+  // quote has no business in it: the prices are printed in their own table,
+  // and a busy floor would otherwise fill the index with the same twelve
+  // lines every window.
   const scandals: Scandal[] = ranked
-    .filter((entry) => entry.weight >= 20)
+    .filter((entry) => entry.weight >= 20 && entry.event.kind !== "PRICE_MOVE")
     .slice(0, 12)
     .map((entry) => ({
       kind: entry.event.kind,
@@ -377,6 +390,16 @@ export function generateIssue(state: GameState, events: GameEvent[], turn: numbe
   const idle = state.tiles.filter((tile) => tile.lastIdle !== null).length;
   const blockCount = sections.reduce((sum, section) => sum + section.lines.length, 0);
 
+  // The desks. Each section that has copy is set as its own ruled block, which
+  // is what makes a violent window a broadsheet and a dull one a single sheet.
+  // The section count in the colophon was already printed; now the copy is too.
+  const sectionBlocks = sections.flatMap((section) => [
+    `### ${section.title}`,
+    "",
+    ...section.lines.map((line) => `- ${line}`),
+    "",
+  ]);
+
   const markdown = [
     `## ${headline}`,
     "",
@@ -384,6 +407,7 @@ export function generateIssue(state: GameState, events: GameEvent[], turn: numbe
     "",
     paragraphs.join("\n\n"),
     "",
+    ...sectionBlocks,
     "### Prices at the close",
     "",
     `| Commodity | Previous | Now | Move |`,

@@ -68,6 +68,20 @@ describe("the Daily Rag", () => {
     expect(ids.size).toBe(issue.sections.length);
   });
 
+  it("prints the copy it filed under each desk", () => {
+    const { state, events, turn } = busyTurn();
+    const issue = generateIssue(state, events, turn);
+    const markdown = issue.contentMarkdown;
+
+    // The section count in the colophon means nothing if the copy is dropped,
+    // so every filed line is set under its own desk's heading.
+    expect(issue.sections.length).toBeGreaterThan(0);
+    for (const section of issue.sections) {
+      expect(markdown).toContain(`### ${section.title}`);
+      for (const line of section.lines) expect(markdown).toContain(line);
+    }
+  });
+
   it("names the accused with a weight that earned the column", () => {
     const { state, events, turn } = busyTurn();
     const issue = generateIssue(state, events, turn);

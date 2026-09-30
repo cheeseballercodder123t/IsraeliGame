@@ -18,12 +18,14 @@ import {
   type OrderField,
   type OrderSpec,
 } from "@/domain/orders/catalog";
+import { SCHEME_LIST } from "@/domain/schemes";
 import { formatMoney, formatPercent, formatPrice, formatUnits } from "@/domain/format";
 import type {
   GameState,
   LaborModel,
   Order,
   OrderCategory,
+  OrderType,
   Player,
   QueuedOrder,
   RollingStock,
@@ -83,6 +85,8 @@ function initialValue(field: OrderField, state: GameState, player: Player): stri
       return state.offers.find((offer) => offer.buyerId === player.id)?.id ?? "";
     case "RAIL":
       return state.rails[0]?.id ?? "";
+    case "SCHEME":
+      return SCHEME_LIST[0]?.id ?? "";
     default:
       return "";
   }
@@ -229,6 +233,23 @@ function FieldControl({
     );
   }
 
+  if (field.kind === "SCHEME") {
+    return (
+      <select
+        className={picker}
+        value={String(value)}
+        onChange={(event) => onChange(event.target.value)}
+        aria-label={field.label}
+      >
+        {SCHEME_LIST.map((spec) => (
+          <option key={spec.id} value={spec.id}>
+            {spec.name} · {spec.stages.length} stages · pays {spec.payoff}
+          </option>
+        ))}
+      </select>
+    );
+  }
+
   if (field.kind === "PLAYER") {
     return (
       <select
@@ -364,15 +385,35 @@ export interface OrderDeskProps {
   /** Orders already sealed into the window being played. */
   sealed: QueuedOrder[];
   onQueue: (order: Order, label: string) => void;
+  /**
+   * An order another pane has asked the desk to open, with a counter so the
+   * same request twice still moves the desk. It is how the night office hands
+   * a stage call to the one place an order can actually be sealed from.
+   */
+  openOrder?: { type: OrderType; nonce: number } | null;
 }
 
-export function OrderDesk({ state, player, sealed, onQueue }: OrderDeskProps) {
+export function OrderDesk({ state, player, sealed, onQueue, openOrder = null }: OrderDeskProps) {
   const [category, setCategory] = useState<OrderCategory>("PLANNING");
   const [openType, setOpenType] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const [query, setQuery] = useState("");
   const list = useRef<HTMLUListElement | null>(null);
   const search = useRef<HTMLInputElement | null>(null);
+
+  /**
+   * A jump from another pane. The category follows the order's own phase, then
+   * the row opens the way a click on it would, and the finder is cleared so a
+   * filter left over from the last search cannot hide the row.
+   */
+  useEffect(() => {
+    if (!openOrder) return;
+    const spec = ORDER_SPECS[openOrder.type as OrderType];
+    if (!spec) return;
+    setCategory(spec.category);
+    setQuery("");
+    setOpenType(spec.type);
+  }, [openOrder]);
 
   /** What is already sealed, counted by the phase it will run in. */
   const sealedIn = useMemo(() => {

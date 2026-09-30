@@ -24,7 +24,7 @@ import { netWorthOf, leader } from "@/domain/valuation";
 import { LENSES, LENS_LABEL, lensReading, type LensId } from "@/domain/lenses";
 import { questionOf } from "@/domain/question";
 import { awayDigest, type AwayDigest } from "@/domain/digest";
-import type { ChatMessage, GameState, Order, QueuedOrder } from "@/domain/types";
+import type { ChatMessage, GameState, Order, OrderType, QueuedOrder } from "@/domain/types";
 import type { NewspaperRecord } from "@/server/store/types";
 import { GridCanvas, ringLegend } from "@/components/grid/GridCanvas";
 import { TileInspector } from "@/components/grid/TileInspector";
@@ -43,6 +43,7 @@ import { AwayDigestPanel } from "@/components/table/AwayDigest";
 import { ReplayTheater } from "@/components/table/ReplayTheater";
 import { RecordPane } from "@/components/table/RecordPane";
 import { PinkertonPane } from "@/components/table/PinkertonPane";
+import { SchemesPane } from "@/components/table/SchemesPane";
 import { WeatherPane } from "@/components/table/WeatherPane";
 import { CountingPane } from "@/components/table/CountingPane";
 import { EraClosing } from "@/components/table/EraClosing";
@@ -126,6 +127,11 @@ export function Dashboard({
   const [lens, setLens] = useState<LensId>("NONE");
   /** True while a call is in flight, so the lever cannot be pulled twice. */
   const [calling, setCalling] = useState(false);
+  /**
+   * A jump the night office asked the operations desk for, carrying a counter
+   * so that asking twice for the same order still moves the desk to its row.
+   */
+  const [orderJump, setOrderJump] = useState<{ type: OrderType; nonce: number } | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
   const [receipt, setReceipt] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -302,6 +308,19 @@ export function Dashboard({
       document.querySelector(selector)?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 60);
   }, []);
+
+  /**
+   * The night office hands a stage call to the operations desk. The desk opens
+   * the order and the page is carried back to it, so the work the scheme wants
+   * is sealed in one press rather than hunted for in the card of seventy nine.
+   */
+  const jumpToOrder = useCallback(
+    (type: OrderType) => {
+      setOrderJump((current) => ({ type, nonce: (current?.nonce ?? 0) + 1 }));
+      jumpTo('[data-tour="desk"]');
+    },
+    [jumpTo],
+  );
 
   // Every room one key away: desk, floor, market, board, orders, book, the
   // paper and the walk-around. A dialog owns the keys while it is open, and so
@@ -595,7 +614,13 @@ export function Dashboard({
             className="order-2 min-w-0 space-y-4 lg:order-none lg:col-start-1 lg:row-span-2 lg:row-start-1 2xl:col-start-1 2xl:row-span-1 2xl:row-start-1"
           >
             <FirstMoves state={state} player={me} onShow={setSelectedTileId} />
-            <OrderDesk state={state} player={me} sealed={optimistic} onQueue={handleOrder} />
+            <OrderDesk
+              state={state}
+              player={me}
+              sealed={optimistic}
+              onQueue={handleOrder}
+              openOrder={orderJump}
+            />
             <div data-tour="queue">
               <OrdersBoard orders={optimistic} onCancel={handleCancel} />
             </div>
@@ -811,6 +836,10 @@ export function Dashboard({
 
             <div data-tour="weather" className="min-w-0">
               <WeatherPane state={state} meId={meId} onSelect={setSelectedTileId} />
+            </div>
+
+            <div data-tour="schemes" className="min-w-0">
+              <SchemesPane state={state} meId={meId} sealed={optimistic} onSeal={jumpToOrder} />
             </div>
 
             <div data-tour="pinkerton" className="min-w-0">

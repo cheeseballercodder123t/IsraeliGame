@@ -44,6 +44,11 @@ export const TABLE_TOUR: TourStep[] = [
     body: "Four markets that are not the floor and not the board. The share book, where a house that floated part of itself puts that slice up for sale and half of it is control of its board. Pacts, where two houses keep a joint fund between them and either may walk off with it. The Rag itself, cut into ten points, where five run the paper and two are enough to place a story. And the clean air movement, which your own stacks feed until the city puts the question to a vote. None of the four touch a deed, and two of them can close the era.",
   },
   {
+    anchor: "schemes",
+    title: "The night office",
+    body: "Every covert order is one window of work. A scheme is the other kind of thing: a long con opened against a house you name, run for a few windows, and carried by whatever work it asks for next. The pane prints the run as a ladder, the work this window wants with a button that opens it on the operations desk, and the heat on the operation. Heat under the alarm line is invisible to every other desk; heat over it is in their Pinkerton files; heat at the top brings the Pinkertons, and the fine, the exposure and the scandal come with nothing to show for the weeks spent. One office at a time.",
+  },
+  {
     anchor: "board",
     title: "The industrial grid",
     body: "Eleven rows by eleven columns, five bands wrapped around a single crown plot. The rim is numbered along the top and the left, so any plot can be named off the screen, and a crosshair runs the row and column of the plot in hand. The arrow keys walk one plot at a time and the hand follows, so the whole board can be crossed without the mouse. The outer band is the only ground that yields raw material, so a plant has to sit near what it eats and haul the difference over track you own. The legend under the board names each band and the tiers it will take.",

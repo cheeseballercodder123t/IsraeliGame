@@ -37,6 +37,9 @@ export function withRevision(state: GameState): GameState {
   // written before counter intelligence existed holds no false lines.
   if (!Array.isArray(state.gallery)) state.gallery = [];
   if (!Array.isArray(state.forgeries)) state.forgeries = [];
+  // And a table written before the night office existed has nobody running a
+  // scheme against anybody, which is where every era starts.
+  if (!Array.isArray(state.schemes)) state.schemes = [];
   // A table written before the era ledger existed has an empty tally, which
   // the next window folds into.
   if (!Array.isArray(state.ledger)) state.ledger = [];
@@ -102,6 +105,20 @@ export interface GameSummary {
   humans: number;
 }
 
+/**
+ * What one probe of a store says about it. A store is only interesting when it
+ * is healthy, so this is deliberately small: whether a round trip landed, how
+ * long it took, and one line a desk can read.
+ */
+export interface StoreHealth {
+  kind: GameStore["kind"];
+  /** Whether the probe answered. */
+  ok: boolean;
+  /** Round trip to the store, in milliseconds. Zero for a store with no wire. */
+  latencyMs: number;
+  detail: string;
+}
+
 export interface GameStore {
   readonly kind: "memory" | "file" | "supabase";
   createGame(input: CreateGameInput): Promise<GameState>;
@@ -132,4 +149,10 @@ export interface GameStore {
    */
   listLadder(): Promise<LadderEntry[]>;
   saveLadder(entries: LadderEntry[]): Promise<void>;
+  /**
+   * One probe of the store, for the health route and the footer. It is the
+   * only method here that is allowed to fail quietly: a store that cannot
+   * answer says so in the reply rather than throwing at the caller.
+   */
+  health(): Promise<StoreHealth>;
 }

@@ -226,6 +226,36 @@ export const BLACK_OP_AUDIT_RISK = 0.04;
 export const EXPOSURE_PR_THRESHOLD = 25;
 export const EXPOSURE_RISK = 0.4;
 
+// Schemes. A night office is a long con: it runs for windows, it wants one
+// piece of work sealed each window, and it is only as safe as its quietest
+// week. Heat is the whole wager, and these are its numbers.
+/** The smallest cut a scheme asks for, used to keep the catalog honest. */
+export const SCHEME_MIN_CUT = 80_000;
+/** Heat the operation carries the window it opens. */
+export const SCHEME_OPEN_HEAT = 12;
+/** Exposure a scheme leaves on the runner's own books the window it opens. */
+export const SCHEME_OPEN_RISK = 0.05;
+/** Heat at which a rival's Pinkerton file can read the operation. */
+export const SCHEME_ALARM = 60;
+/** Heat at which the Pinkertons close in. */
+export const SCHEME_BLOWN_HEAT = 100;
+/** Exposure a blown scheme leaves on the runner's books. */
+export const SCHEME_BLOWN_RISK = 0.12;
+/** Standing a blown scheme costs the runner. */
+export const SCHEME_BLOWN_PR = 6;
+/** Share of the till the Pinkertons take when a scheme is blown. */
+export const SCHEME_BLOWN_FINE_SHARE = 0.15;
+/** Ceiling on that fine, so one bad window cannot wipe a house out. */
+export const SCHEME_BLOWN_FINE_CAP = 600_000;
+/** Heat a rival's wiretap adds to somebody else's operation. */
+export const SCHEME_TAP_HEAT = 10;
+/** Heat a rival's bought papers add, and it reads the file open. */
+export const SCHEME_ESPIONAGE_HEAT = 16;
+/** Heat a sweep of the runner's own office takes off. */
+export const SCHEME_SWEEP_RELIEF = 22;
+/** A house may keep one night office at a time. */
+export const SCHEME_LIMIT = 1;
+
 // Tendering and takeovers.
 export const ANTITRUST_THRESHOLD = 0.35;
 export const APEX_ROYALTY_RATE = 0.05;

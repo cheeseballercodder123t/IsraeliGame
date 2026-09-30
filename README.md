@@ -2,7 +2,7 @@
 
 An asynchronous industrial empire and corporate warfare simulator. One hundred and twenty one plots
 on an eleven by eleven board, fifteen lots on sealed tender every window, forced sales when a house
-fails, seventy five commodities and seventy five plants, seventy seven orders on the card, supply
+fails, seventy five commodities and seventy five plants, seventy nine orders on the card, supply
 contracts that are not owed until both desks sign, and a newspaper that prints what you did.
 
 The game runs immediately with no accounts and no API keys. Supabase credentials and a language
@@ -15,7 +15,7 @@ A live table runs on Vercel at https://bigyahuapproved.vercel.app/.
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # 406 tests in 44 files
+npm test           # 446 tests in 46 files
 npm run typecheck
 npm run build
 ```
@@ -56,15 +56,19 @@ decides which extractor may be raised on it, and a chimney has to sit near the t
    cartel pools, publicity.
 4. Night work lands: sludge, wiretaps, poached engineers, smuggling, arson, and the powers reserved
    for the trailing house.
-5. Wear, scorch recovery, maintenance and the scrubber bill are settled in cash.
-6. Labor: the wage bill, morale, the picket line, the lockout.
-7. The grid is bought by the tick. Overloaded lines black out the automated ones.
-8. Production runs from tier one outward, so the belts have something to carry.
-9. Waste that cannot be held spills onto the house's own plots, and smog drifts downwind.
-10. The floor matches every order and reprints every price.
-11. The revenue service taxes, then audits, then the debt collector calls.
-12. Tenders and raids settle, then construction held back for a winning envelope is raised.
-13. The Rag goes to press.
+5. The night offices read the window. The window an office is opened in pays the first cut and reads
+   nothing back, since the desk has no call from it yet; from the next window on a scheme whose stage
+   work was filed moves on a stage, one that was not stands still, and heat climbs on both until the
+   Pinkertons walk in.
+6. Wear, scorch recovery, maintenance and the scrubber bill are settled in cash.
+7. Labor: the wage bill, morale, the picket line, the lockout.
+8. The grid is bought by the tick. Overloaded lines black out the automated ones.
+9. Production runs from tier one outward, so the belts have something to carry.
+10. Waste that cannot be held spills onto the house's own plots, and smog drifts downwind.
+11. The floor matches every order and reprints every price.
+12. The revenue service taxes, then audits, then the debt collector calls.
+13. Tenders and raids settle, then construction held back for a winning envelope is raised.
+14. The Rag goes to press.
 
 ## The table
 
@@ -372,10 +376,10 @@ printing what they filed.
 
 ### The tests
 
-Forty three files, three hundred and ninety tests. Geometry and the catalogs are checked against
+Forty six files, four hundred and forty tests. Geometry and the catalogs are checked against
 their own contents, so a catalog edit that breaks an assumption fails a test rather than a screen:
-seventy five commodities, seventy five plants, twenty six charters, seventy seven orders, a hundred and
-thirty event kinds, and every sprite placement inside its sheet. The table's own rules are
+seventy five commodities, seventy five plants, twenty six charters, seventy nine orders, a hundred and
+thirty six event kinds, and every sprite placement inside its sheet. The table's own rules are
 pinned the same way: the late seal hold, the wire's length and its refusals, the countdown ring's
 arithmetic, the open tables list's clock, and the ending from the limit window through the closing
 edition to the rematch. `tests/table-games.test.ts` covers the paper played between houses, which is
@@ -406,7 +410,11 @@ it watches, and pins that founding to a pursuit stores the condition rather than
 `tests/forgery.test.ts` files a false line through a real wiretap at a live table and sweeps it with
 counter surveillance, and pins which file each line reads in. `tests/poll.test.ts` reads the
 transport schedule as arithmetic and pins the per hour cost of every kind of desk, from the streamed
-one that asks twice a minute to the old one that asked twelve times.
+one that asks twice a minute to the old one that asked twelve times. `tests/schemes.test.ts` runs a
+long con from the catalog through the stage pass, the opening window, the two ways it ends, the
+payoff and its floor, the file a rival can read and the order desk at a live table, and
+`tests/store-retry.test.ts` pins what the store is
+willing to try again, what it refuses to, and how long one attempt is given.
 
 ### What the room itself knows
 
@@ -464,9 +472,37 @@ check it against the deeds; the lines read for two windows and then fade. Counte
 sweeps every line aimed at your own house, and is priced as insurance, so a sweep of a clean file is
 quiet bought rather than money thrown away.
 
+The paper prints its desks. Every section with copy in it is set under its own heading, so the night desk, the floor and the courts each read as a column rather than as a count in the colophon, and the index of the accused names houses rather than repeating the price table back at the reader.
+
+The night office is a plan rather than an order. `src/domain/schemes.ts` holds seven long cons, each
+opened against a mark, each wanting one named piece of night work a window until it pays, and each
+carried by its heat: a stage met adds a little, a window that stands still or cannot be paid for adds
+a lot, a rival's wiretap adds some and the runner's own sweep takes some back. Under the alarm line
+the office is invisible; over it every rival's Pinkerton file reads the con, the mark and how far
+it has come; at the top the Pinkertons walk in, take a share of the till, freeze the office for a
+window, raise the exposure and print the story. The desk's pane draws the run as a ladder with the
+heat on it, says when an office is opening and when the window's work is sealed, and hands that work
+to the operations desk in one press; the paper files every stage, slip, blow and payoff under night
+work, and the read mask keeps a quiet office out of every rival's snapshot. The window an office is
+opened in pays the first cut and reads nothing back, since the desk has no call from it yet; the
+call comes from the window after. What a finished con pays is scoped to the mark: the Long Con takes
+half of the mark's own money, on hand and offshore, never less than the run's own cost in cuts while
+the mark can cover it, and never more than one and a half million.
+
 The closing edition is a keepsake. `/rag/<code>` prints the same sheet the desk opens, with the
 final ranking and the era's books underneath it and every earlier edition ruled along the foot, so a
 closed era can be sent to somebody rather than only remembered.
+
+The books answer for themselves. `src/server/store/resilience.ts` gives every call a deadline and
+tries again the failures worth trying again, a refused connection, a rate limit, a statement
+timeout, with a widening gap and a ceiling on it, while a schema or permission error fails at once
+rather than four times as slowly. A save prefers `save_game_state_full` from
+`supabase/migrations/0011_night_offices_and_one_write.sql`, which bumps the revision, writes the
+snapshot, fans the order mirror and appends the window's events in one transaction and one round
+trip; a database without it falls back to the three calls it replaced and says so once. Reads are
+deduplicated while they are in flight, a table code is resolved to its id once, and every store now
+answers a `health()` probe that `/api/health` and the lamp in the front page's footer print as a
+figure rather than a mood.
 
 The instruments make a noise. `src/lib/sound.ts` keeps the flat clicks the house uses: a ratchet for
 changing lens, a quarter tick for the window going late, and a knock when a call lands on the
@@ -483,10 +519,12 @@ view mask exists to hide. The migration that
 schedules the sweep is `supabase/migrations/0007_sweep_settings.sql`, which supersedes the
 `app.tick_url` setting: it keeps the endpoint and its secret in `app_settings`, so after applying it
 a deployment is guarded with `select set_tick_endpoint('https://<deployment>/api/tick',
-'<TICK_SECRET>')`. The whole set is applied in order, `0007` through `0010`, and the last three carry
-no settings: `0008_presence.sql` is the durable roster and its trim job, `0009_ladder_ledger.sql` is
-the era's books on the ladder, and `0010_redact_wiretap.sql` adds the two new covert orders to the
-read mask. The ladder is `supabase/migrations/0005_ladder.sql`, and it is the one table that is not
+'<TICK_SECRET>')`. The whole set is applied in order, `0007` through `0011`, and none of the last four
+carries a setting: `0008_presence.sql` is the durable roster and its trim job, `0009_ladder_ledger.sql`
+is the era's books on the ladder, `0010_redact_wiretap.sql` adds the wiretap orders to the
+read mask, and `0011_night_offices_and_one_write.sql` is the single round trip save plus the mask that
+keeps a quiet night office out of a rival's snapshot. A deployment that has not run `0011` still plays:
+the store falls back to the three call write and says so in `/api/health`. The ladder is `supabase/migrations/0005_ladder.sql`, and it is the one table that is not
 scoped to a game: it is world readable and written only by the service role. Notices need
 `RESEND_API_KEY` and `RESEND_EMAIL_FROM` (the provider's test sender works as the from address until
 a domain is verified); without them the desk holds the letters rather than failing a window over
