@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { readLadder } from "@/server/ladder";
-import { unlockedTiers } from "@/domain/ladder";
+import { unlockedTiers, type LadderEntry } from "@/domain/ladder";
 import { formatMoney } from "@/domain/format";
 
 export const dynamic = "force-dynamic";
@@ -22,8 +22,25 @@ export const metadata: Metadata = {
  * with the board it was made on.
  *
  * The front of the house prints the top of it. This is the whole thing, with
- * what each record has opened up in the charters.
+ * what each record has opened up in the charters and, under every name, the
+ * books of the last era that house played: what it moved, what the inspectors
+ * took off it, how long its gates stood picketed and the biggest plot it took.
  */
+
+/**
+ * The books of a record's last era, in one line. A house that has only just
+ * filed a placing has nothing to print here yet, and its line is dropped
+ * rather than shown empty.
+ */
+function booksOf(entry: LadderEntry): string | null {
+  const parts: string[] = [];
+  if (entry.bestCommodity) parts.push(`most moved in ${entry.bestCommodity}`);
+  if (entry.worstFine > 0) parts.push(`its worst fine ${formatMoney(entry.worstFine)}`);
+  if (entry.longestStrike > 1) parts.push(`${entry.longestStrike} plants picketed at once`);
+  if (entry.biggestSteal > 0) parts.push(`its biggest plot ${formatMoney(entry.biggestSteal)}`);
+  return parts.length === 0 ? null : parts.join(" · ");
+}
+
 export default async function LadderPage() {
   const entries = await readLadder();
   const eras = entries.reduce((most, entry) => Math.max(most, entry.games), 0);
@@ -78,6 +95,7 @@ export default async function LadderPage() {
             <ol>
               {entries.map((entry, index) => {
                 const tier = unlockedTiers(entry);
+                const books = booksOf(entry);
                 return (
                   <li
                     key={entry.userId}
@@ -108,6 +126,11 @@ export default async function LadderPage() {
                     <span className="tabular w-12 shrink-0 text-right text-[12px] text-brass">
                       {entry.points}
                     </span>
+                    {books ? (
+                      <span className="w-full pl-9 text-[9.5px] leading-relaxed text-faint">
+                        {books}
+                      </span>
+                    ) : null}
                   </li>
                 );
               })}
@@ -120,7 +143,7 @@ export default async function LadderPage() {
             <span className="inline-block h-[11px] w-[2px] self-center bg-brass" aria-hidden />
             <h2 className="text-[11px] tracking-[0.24em] text-ink uppercase">How a placing is read</h2>
           </div>
-          <div className="grid gap-3 px-3 py-3 sm:grid-cols-3">
+          <div className="grid gap-3 px-3 py-3 sm:grid-cols-2 lg:grid-cols-4">
             <div className="border-t border-rule pt-2">
               <p className="text-[9px] tracking-[0.2em] text-faint uppercase">Points</p>
               <p className="mt-1 text-[10.5px] leading-relaxed text-dim">
@@ -142,6 +165,15 @@ export default async function LadderPage() {
                 A record is keyed to the director rather than to a chair, so it follows a person
                 from table to table. Two wins or twenty points opens the second rank of charters,
                 and five wins or forty opens every one of them.
+              </p>
+            </div>
+            <div className="border-t border-rule pt-2">
+              <p className="text-[9px] tracking-[0.2em] text-faint uppercase">The books</p>
+              <p className="mt-1 text-[10.5px] leading-relaxed text-dim">
+                Under every name is the ledger of the last era that house closed: the commodity it
+                moved the most value of, the heaviest fine it paid, the most plants picketed in one
+                window, and the biggest plot it took at tender or by raid. A new record prints
+                nothing under the name until it has an era to read.
               </p>
             </div>
           </div>

@@ -2,6 +2,7 @@ import {
   APPRENTICESHIP_COST,
   BIAS_PAPER_COST,
   BRIBE_COST,
+  COUNTER_INTEL_COST,
   CYBERATTACK_COST,
   ESPIONAGE_COST,
   FUTURES_MAX_TURNS,
@@ -24,6 +25,7 @@ import {
   TENDER_RESERVE_PRICE,
   WASTE_DISPOSAL_COST,
   WILDCAT_FUND_COST,
+  WIRETAP_COST,
   modifiersOf,
 } from "../constants";
 import { formatMoney, formatUnits } from "../format";
@@ -753,6 +755,22 @@ export const ORDER_SPECS: Record<OrderType, OrderSpec> = {
     "Prints a rival's cash, offshore balance, debt and morale in the paper for everybody to read.",
     [fPlayer],
   ),
+  WIRETAP: spec(
+    "WIRETAP",
+    "COVERT",
+    "COVERT",
+    "Plant a false line",
+    "A bought clerk files one line in a rival's Pinkerton file, where every desk reads it for two windows. Counter surveillance clears it.",
+    [fPlayer],
+  ),
+  COUNTER_SURVEILLANCE: spec(
+    "COUNTER_SURVEILLANCE",
+    "COVERT",
+    "COVERT",
+    "Sweep the office",
+    "Counter surveillance clears every false line planted in your own file. The sweep costs its fee whether or not the file is dirty.",
+    [],
+  ),
   BLACKMAIL: spec(
     "BLACKMAIL",
     "COVERT",
@@ -979,6 +997,10 @@ export function orderLabel(order: Order): string {
       return "sabotage a span";
     case "ESPIONAGE":
       return "buy the private papers";
+    case "WIRETAP":
+      return "plant a false line in a rival's file";
+    case "COUNTER_SURVEILLANCE":
+      return "sweep the office for false lines";
     case "BLACKMAIL":
       return `apply pressure for ${money(order.amount)}`;
     case "SMUGGLING_RUN":
@@ -1040,6 +1062,10 @@ export function orderCost(state: GameState, player: Player, order: Order): numbe
       return SABOTAGE_RAIL_COST * mods.covertDiscount;
     case "ESPIONAGE":
       return ESPIONAGE_COST * mods.covertDiscount;
+    case "WIRETAP":
+      return WIRETAP_COST * mods.covertDiscount;
+    case "COUNTER_SURVEILLANCE":
+      return COUNTER_INTEL_COST * mods.covertDiscount;
     case "SMUGGLING_RUN":
       return SMUGGLING_COST * mods.covertDiscount;
     case "BLOCKADE":

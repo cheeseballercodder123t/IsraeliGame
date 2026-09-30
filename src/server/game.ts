@@ -3,8 +3,20 @@ import { botChatter } from "@/domain/chatter";
 import { channelKey, inChannel } from "@/domain/channels";
 import { markRead, newestMessageId } from "@/domain/receipts";
 import { recordEra } from "@/server/ladder";
-import { defaultWinCondition, reachedWinCondition, winConditionLabel } from "@/domain/endgame";
+import {
+  charterPursuit,
+  defaultWinCondition,
+  reachedWinCondition,
+  winConditionLabel,
+} from "@/domain/endgame";
 import { lateSealHold, type HoldRules } from "@/domain/fairness";
+import {
+  GALLERY_STAKE,
+  GALLERY_TICKETS_PER_WINDOW,
+  settleGallery,
+  trimGallery,
+} from "@/domain/gallery";
+import { eraResults } from "@/domain/ladder";
 import { questionOf } from "@/domain/question";
 import { resolveTurnTick } from "@/domain/tick";
 import { createGameState, makeGameCode, newPlayer } from "@/domain/world";
@@ -13,8 +25,9 @@ import { parseOrder } from "@/server/orders";
 import { MAX_SEATS, MIN_SEATS, clampSeats, seatOpponents } from "@/server/personas";
 import { composeClosingIssue, composeIssue, type NewspaperIssue } from "@/server/rag";
 import { clearComposing, present } from "@/server/presence";
+import { rosterCount } from "@/server/roster";
 import { sendEraNotices, sendWindowNotices } from "@/server/notices";
-import { publishRevision } from "@/server/realtime";
+import { publishHold, publishQuestion, publishRevision } from "@/server/realtime";
 import { getStore, type GameStore } from "@/server/store";
 import type { NewspaperRecord } from "@/server/store/types";
 import { planBotTurn } from "@/server/bot";
@@ -133,6 +146,10 @@ export async function startMatch(
   const seedValue = hashSeed(`${code}:${Date.now()}`);
   const total = clampSeats(seats);
   const intervalHours = windowHoursFor(mode);
+  // A table opened to the founder's pursuit reads the host's charter and
+  // stores the condition it names, so every reader downstream gets a plain
+  // condition and no reader needs the charter to read it.
+  const settled = winCondition.kind === "CHARTER" ? charterPursuit(archetype) : winCondition;
 
   const state = await store.createGame({
     code,
@@ -143,7 +160,7 @@ export async function startMatch(
     seats: [{ userId: host.userId, name: host.name, archetype, isBot: false }],
     lobbySeats: total,
     status: "LOBBY",
-    winCondition,
+    winCondition: settled,
   });
   await store.saveGame(state);
 
@@ -418,6 +435,9 @@ export async function listJoinableTables(): Promise<OpenTableSummary[]> {
     if (!state) continue;
     const open = openSeats(state);
     if (open <= 0) continue;
+    // The lobby card reads the durable roster when the deployment keeps one,
+    // so the count is the table's and not this instance's.
+    const durable = await rosterCount(state.game.id);
     tables.push({
       code: summary.code,
       status: summary.status,
@@ -428,7 +448,7 @@ export async function listJoinableTables(): Promise<OpenTableSummary[]> {
       players: state.players.length,
       open,
       seed: state.game.seed,
-      atTable: present(state.game.id).length,
+      atTable: durable ?? present(state.game.id).length,
     });
   }
   return tables.sort((a, b) =>
@@ -572,9 +592,13 @@ export async function advanceTurn(state: GameState): Promise<TurnOutcome> {
     enqueueBotChatter(current, turn);
     const result = resolveTurnTick(current, { now: new Date() });
     // The window just played can meet the table's condition. When it does the
-    // era closes here, and the paper prints the ranking instead of the wire.
+    // era closes here, the paper prints the ranking instead of the wire, and
+    // the gallery's pot is settled against the placings the close produced.
     const closing = reachedWinCondition(result.state);
-    if (closing) result.state.game.status = "FINISHED";
+    if (closing) {
+      result.state.game.status = "FINISHED";
+      result.state.gallery = settleGallery(result.state.gallery, eraResults(result.state));
+    }
     const issue = closing
       ? await composeClosingIssue(result.state, turn)
       : await composeIssue(current, result.events, turn);
@@ -679,9 +703,69 @@ export async function callQuestion(
     if (!state.game.calls.includes(playerId)) state.game.calls.push(playerId);
     return { ok: true as const, value: questionOf(state).ready };
   });
+  if (outcome.ok) {
+    // The call is a write like any other and already announced itself, but the
+    // count is what a desk wants from it: the feed prints three of five called
+    // without waiting for the snapshot to come round again.
+    const standing = questionOf(outcome.state);
+    publishQuestion(gameId, outcome.state.game.currentTurn, {
+      revision: outcome.state.game.revision,
+      called: standing.called.length,
+      needed: standing.needed.length,
+      ready: standing.ready,
+    });
+  }
   return outcome.ok
     ? { ok: true, ready: outcome.value }
     : { ok: false, ready: false, error: outcome.error };
+}
+
+/**
+ * Takes a gallery ticket on the window being played.
+ *
+ * Any signed-in watcher may buy in, seated or not, because the stake is
+ * gallery scrip and never touches a seat's ledger. A ticket names the house
+ * the watcher expects to place, and when the era closes the pot is divided
+ * among the tickets that named a house which did. A watcher may hold a few
+ * tickets on one window and no more, so the gallery cannot be bought out by
+ * whoever clicks fastest.
+ */
+export async function buyGalleryTicket(
+  gameId: string,
+  user: { userId: string; name: string },
+  pickPlayerId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const outcome = await commit(gameId, (state) => {
+    if (state.game.status !== "ACTIVE") {
+      return { ok: false as const, error: "The gallery is open while the table is playing." };
+    }
+    const pick = state.players.find((player) => player.id === pickPlayerId);
+    if (!pick) return { ok: false as const, error: "No such house at this table." };
+    const mine = state.gallery.filter(
+      (ticket) =>
+        ticket.userId === user.userId &&
+        ticket.payout === null &&
+        ticket.turn === state.game.currentTurn,
+    );
+    if (mine.length >= GALLERY_TICKETS_PER_WINDOW) {
+      return {
+        ok: false as const,
+        error: `You already hold ${GALLERY_TICKETS_PER_WINDOW} tickets on this window.`,
+      };
+    }
+    state.gallery.push({
+      id: `ticket-${state.game.currentTurn}-${state.gallery.length}`,
+      userId: user.userId,
+      name: user.name,
+      pickPlayerId,
+      stake: GALLERY_STAKE,
+      turn: state.game.currentTurn,
+      payout: null,
+    });
+    state.gallery = trimGallery(state.gallery);
+    return { ok: true as const, value: true };
+  });
+  return outcome.ok ? { ok: true } : { ok: false, error: outcome.error };
 }
 
 /**
@@ -697,6 +781,14 @@ async function holdForLateSeal(gameId: string): Promise<GameState | null> {
     state.game.holdsUsed = hold.holds;
     return { ok: true as const, value: hold.gainedMs };
   });
+  if (outcome.ok) {
+    publishHold(gameId, outcome.state.game.currentTurn, {
+      revision: outcome.state.game.revision,
+      gainedMs: outcome.value,
+      holds: outcome.state.game.holdsUsed,
+      maxHolds: MAX_WINDOW_HOLDS,
+    });
+  }
   return outcome.ok ? outcome.state : null;
 }
 

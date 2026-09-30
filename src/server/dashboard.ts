@@ -81,6 +81,12 @@ export interface SpectateView {
   issues: NewspaperRecord[];
   /** The rail reads the open wire only. Side lines are not for the gallery. */
   wire: ChatMessage[];
+  /**
+   * The watcher's own user, so the gallery can pick out the tickets they
+   * bought rather than showing a stranger's record as theirs. A rail with no
+   * session at all is null, and the gallery then shows only the pot.
+   */
+  viewerId: string | null;
 }
 
 export interface TableMiss {
@@ -165,6 +171,7 @@ export async function openTable(code: string): Promise<TableResult> {
         state: tableViewFor(state, null).state,
         issues,
         wire: publicWire(state),
+        viewerId: session.userId,
       },
     };
   }

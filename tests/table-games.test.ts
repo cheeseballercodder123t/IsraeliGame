@@ -387,9 +387,9 @@ describe("the ladder", () => {
     const ranked = applyEra(
       entries,
       [
-        { userId: "u1", name: "House 1", placing: 1, value: 4_000_000, houses: 3 },
-        { userId: "u2", name: "House 2", placing: 2, value: 9_000_000, houses: 3 },
-        { userId: "u3", name: "House 3", placing: 3, value: 10_000, houses: 3 },
+        { playerId: "p1", userId: "u1", name: "House 1", placing: 1, value: 4_000_000, houses: 3 },
+        { playerId: "p2", userId: "u2", name: "House 2", placing: 2, value: 9_000_000, houses: 3 },
+        { playerId: "p3", userId: "u3", name: "House 3", placing: 3, value: 10_000, houses: 3 },
       ],
       "2026-09-24T00:00:00.000Z",
     );

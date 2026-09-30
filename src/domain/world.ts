@@ -287,5 +287,8 @@ export function createGameState(spec: NewGameSpec): GameState {
     pacts: [],
     media: [],
     reform: { smog: 0, pressure: 0, openedTurn: 0, votes: [], ordinanceTurn: null },
+    gallery: [],
+    forgeries: [],
+    ledger: [],
   };
 }

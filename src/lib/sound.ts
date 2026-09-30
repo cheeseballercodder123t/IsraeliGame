@@ -141,6 +141,113 @@ export function ticker(): void {
   }
 }
 
+/**
+ * The lens: a brass ratchet behind the plate, one tooth per step.
+ *
+ * A board lens is a mechanical change of what the drawing answers, so it is
+ * given the sound of a mechanism rather than of a tone: three dry clicks as
+ * the stop drops into its notch, over as soon as the board repaints.
+ */
+export function ratchet(): void {
+  if (!on) return;
+  const ctx = audio();
+  if (!ctx) return;
+  const at = ctx.currentTime;
+  for (const [offset, level] of [
+    [0, 0.09],
+    [0.022, 0.13],
+    [0.045, 0.07],
+  ] as [number, number][]) {
+    const click = ctx.createBufferSource();
+    click.buffer = noiseBuffer(ctx, 0.02);
+    const filter = ctx.createBiquadFilter();
+    filter.type = "bandpass";
+    filter.frequency.setValueAtTime(2400, at + offset);
+    filter.Q.setValueAtTime(1.4, at + offset);
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.0001, at + offset);
+    gain.gain.exponentialRampToValueAtTime(level, at + offset + 0.002);
+    gain.gain.exponentialRampToValueAtTime(0.0001, at + offset + 0.02);
+    click.connect(filter);
+    filter.connect(gain);
+    gain.connect(ctx.destination);
+    click.start(at + offset);
+    click.stop(at + offset + 0.025);
+  }
+}
+
+/**
+ * The last quarter: two dry ticks on the dial as the window turns the corner.
+ *
+ * It is deliberately the plainest sound here. It is heard once a window and
+ * means only that there is no more slack in the clock, which is the one thing
+ * a director should not have to read off a dial.
+ */
+export function quarterTick(): void {
+  if (!on) return;
+  const ctx = audio();
+  if (!ctx) return;
+  const at = ctx.currentTime;
+  for (const offset of [0, 0.13]) {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(960, at + offset);
+    gain.gain.setValueAtTime(0.0001, at + offset);
+    gain.gain.exponentialRampToValueAtTime(0.11, at + offset + 0.004);
+    gain.gain.exponentialRampToValueAtTime(0.0001, at + offset + 0.07);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(at + offset);
+    osc.stop(at + offset + 0.09);
+  }
+}
+
+/**
+ * The question: two knocks on the table.
+ *
+ * A house has called the window, and the room is one hand closer to closing
+ * early. Two raps on wood are what that is at a real table, so two raps are
+ * what it is here. It sits under the bell on purpose: a call is news, a close
+ * is an event.
+ */
+export function knock(): void {
+  if (!on) return;
+  const ctx = audio();
+  if (!ctx) return;
+  const at = ctx.currentTime;
+  for (const offset of [0, 0.17]) {
+    const body = ctx.createOscillator();
+    const gain = ctx.createGain();
+    body.type = "triangle";
+    body.frequency.setValueAtTime(220, at + offset);
+    body.frequency.exponentialRampToValueAtTime(120, at + offset + 0.05);
+    gain.gain.setValueAtTime(0.0001, at + offset);
+    gain.gain.exponentialRampToValueAtTime(0.22, at + offset + 0.005);
+    gain.gain.exponentialRampToValueAtTime(0.0001, at + offset + 0.12);
+    body.connect(gain);
+    gain.connect(ctx.destination);
+    body.start(at + offset);
+    body.stop(at + offset + 0.14);
+
+    const tap = ctx.createBufferSource();
+    tap.buffer = noiseBuffer(ctx, 0.03);
+    const filter = ctx.createBiquadFilter();
+    filter.type = "bandpass";
+    filter.frequency.setValueAtTime(900, at + offset);
+    filter.Q.setValueAtTime(0.7, at + offset);
+    const tapGain = ctx.createGain();
+    tapGain.gain.setValueAtTime(0.0001, at + offset);
+    tapGain.gain.exponentialRampToValueAtTime(0.08, at + offset + 0.004);
+    tapGain.gain.exponentialRampToValueAtTime(0.0001, at + offset + 0.04);
+    tap.connect(filter);
+    filter.connect(tapGain);
+    tapGain.connect(ctx.destination);
+    tap.start(at + offset);
+    tap.stop(at + offset + 0.05);
+  }
+}
+
 /** The paper arriving: the press comes down, then the sheet slides out. */
 export function thump(): void {
   if (!on) return;

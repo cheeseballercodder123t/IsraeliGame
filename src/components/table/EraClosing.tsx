@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { eraWinner, winConditionLabel } from "@/domain/endgame";
 import { closingGloat } from "@/domain/chatter";
 import { eraResults } from "@/domain/ladder";
@@ -107,11 +108,17 @@ export function EraClosing({
             <Button tone="steel" onClick={onOpenRag}>
               Read the closing edition
             </Button>
+            <Link
+              href={`/rag/${code}`}
+              className="border border-edge bg-plate px-2.5 py-1 text-[11px] tracking-[0.1em] whitespace-nowrap text-ink uppercase transition-colors duration-150 hover:border-dim hover:bg-tar active:translate-y-[1px]"
+            >
+              Keep the edition at its own address
+            </Link>
             <p className="max-w-xl text-[10px] leading-relaxed text-faint">
               A rematch keeps the code, the houses, the clock and the condition. The board, the
               books and the wire start again, and the paper goes back to turn one. Reopening on the
               same seed draws the same country: seed {state.game.seed}, deposits and opening plots
-              included.
+              included. The keepsake keeps the sheet and the final ranking after the desk moves on.
             </p>
           </div>
           {failure ? (

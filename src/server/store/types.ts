@@ -33,6 +33,13 @@ export function withRevision(state: GameState): GameState {
     state.reform = { smog: 0, pressure: 0, openedTurn: 0, votes: [], ordinanceTurn: null };
   }
   if (!Array.isArray(state.reform.votes)) state.reform.votes = [];
+  // Tables written before the rail could buy in hold no tickets, and a table
+  // written before counter intelligence existed holds no false lines.
+  if (!Array.isArray(state.gallery)) state.gallery = [];
+  if (!Array.isArray(state.forgeries)) state.forgeries = [];
+  // A table written before the era ledger existed has an empty tally, which
+  // the next window folds into.
+  if (!Array.isArray(state.ledger)) state.ledger = [];
   if (typeof state.reform.smog !== "number") state.reform.smog = 0;
   if (typeof state.reform.pressure !== "number") state.reform.pressure = 0;
   if (typeof state.reform.openedTurn !== "number") state.reform.openedTurn = 0;

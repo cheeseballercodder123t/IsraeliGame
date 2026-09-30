@@ -141,6 +141,8 @@ export type Order =
   | { type: "POACH_ENGINEER"; tileId: string }
   | { type: "SABOTAGE_RAIL"; railId: string }
   | { type: "ESPIONAGE"; playerId: string }
+  | { type: "WIRETAP"; playerId: string }
+  | { type: "COUNTER_SURVEILLANCE" }
   | { type: "BLACKMAIL"; playerId: string; amount: number }
   | { type: "SMUGGLING_RUN"; resource: Resource; quantity: number }
   | { type: "BLOCKADE"; tileId: string }
@@ -201,7 +203,19 @@ export type WinCondition =
   /** Control of this many rival boards closes the era. */
   | { kind: "BOARDS"; boards: number }
   /** The clean air ordinance carried and the air came back. */
-  | { kind: "CLEAN" };
+  | { kind: "CLEAN" }
+  /** The first house to bank this much offshore closes the era. */
+  | { kind: "LOOT"; target: number }
+  /** Every standing house holds its crews at or above this morale. */
+  | { kind: "MORALE"; target: number }
+  /** Control of this many tenths of the Rag closes the era. */
+  | { kind: "INK"; target: number }
+  /**
+   * The founder's own pursuit. A charter carries a closing condition of its
+   * own, and a table opened to this reads the host's charter and plays to
+   * whatever it says. It is resolved once, at founding, and never travels.
+   */
+  | { kind: "CHARTER" };
 
 /**
  * A slice of a rival house on the open book. Shares are fractions of the whole
@@ -262,6 +276,68 @@ export interface ReadMark {
   playerId: string;
   messageId: string;
   at: string;
+}
+
+/**
+ * A seat on the rail, bought. A watcher stakes scrip on a house at the close
+ * of the era, the stakes go into one pot, and the pot is divided among the
+ * tickets that named a house which placed. The stake is gallery scrip, not
+ * table money: the rail has no ledger on the board and never touches one.
+ */
+export interface GalleryTicket {
+  id: string;
+  /** The watcher who bought it, by user rather than by seat. */
+  userId: string;
+  name: string;
+  /** The house the ticket backs. */
+  pickPlayerId: string;
+  /** Scrip staked into the window's pot. */
+  stake: number;
+  /** The window it was bought in, so a pot is settled by turn. */
+  turn: number;
+  /** What it paid back when the era closed, or null while it is open. */
+  payout: number | null;
+}
+
+/**
+ * A false line planted in a rival's file. It reads on that house's dossier
+ * for a couple of windows and is cleared by counter surveillance, which is
+ * the whole of the counter intelligence game: information is the target, and
+ * the file is where a director looks when they are deciding who to watch.
+ */
+export interface Forgery {
+  id: string;
+  /** The house that planted it. */
+  planterId: string;
+  /** The house the false line is about. */
+  targetId: string;
+  line: string;
+  /** The window it was planted in. */
+  turn: number;
+}
+
+/**
+ * One house's era, tallied as it is played. The tick folds each window's
+ * ledger into this, so the ladder can print a history rather than a placing:
+ * what the house actually moved, what it was fined, and what it took by force
+ * on the way to wherever it finished.
+ */
+export interface EraLedgerEntry {
+  playerId: string;
+  /** Fines paid to the revenue service and the air inspectors. */
+  fines: number;
+  /** The heaviest single fine. */
+  worstFine: number;
+  /** Windows in which a plant of this house stood picketed. */
+  strikeWeeks: number;
+  /** The most plants picketed in one window. */
+  longestStrike: number;
+  /** Plots taken at tender or by raid. */
+  tenderWins: number;
+  /** The biggest single amount paid for one of them. */
+  biggestSteal: number;
+  /** Value moved on the floor and shipped, by commodity. */
+  moved: Partial<Record<Resource, number>>;
 }
 
 export interface OrderCategoryMeta {
@@ -679,6 +755,12 @@ export interface GameState {
   media: MediaStake[];
   /** Smoke, the movement it feeds, and the ordinance when it carries. */
   reform: ReformLedger;
+  /** Tickets the rail has bought on this era, settled at the close. */
+  gallery: GalleryTicket[];
+  /** False lines planted in rival files, cleared by counter surveillance. */
+  forgeries: Forgery[];
+  /** What every house has done this era, folded window by window. */
+  ledger: EraLedgerEntry[];
 }
 
 export interface TickResult {

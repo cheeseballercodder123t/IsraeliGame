@@ -8,13 +8,13 @@
  * canonical state is untouched by any of it.
  */
 
-const PRESENCE_TTL_MS = 15_000;
+export const PRESENCE_TTL_MS = 15_000;
 /**
  * A composing beat dies faster than a presence stamp. A hand lifted off the
  * keyboard for a few seconds stops being news, and the beat is refreshed on
  * every poll while the hand stays down.
  */
-const COMPOSING_TTL_MS = 6_000;
+export const COMPOSING_TTL_MS = 6_000;
 
 interface Stamp {
   userId: string;

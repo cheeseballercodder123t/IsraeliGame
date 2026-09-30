@@ -230,7 +230,9 @@ export class SupabaseStore implements GameStore {
   async listLadder(): Promise<LadderEntry[]> {
     const { data, error } = await this.client
       .from("ladder")
-      .select("user_id, name, games, wins, points, best, updated_at")
+      .select(
+        "user_id, name, games, wins, points, best, updated_at, best_commodity, worst_fine, longest_strike, biggest_steal",
+      )
       .order("points", { ascending: false })
       .limit(500);
     if (error) throw new Error(error.message);
@@ -242,6 +244,10 @@ export class SupabaseStore implements GameStore {
       points: Number(row.points ?? 0),
       best: Number(row.best ?? 0),
       updatedAt: row.updated_at as string,
+      bestCommodity: (row.best_commodity as string | null) ?? null,
+      worstFine: Number(row.worst_fine ?? 0),
+      longestStrike: Number(row.longest_strike ?? 0),
+      biggestSteal: Number(row.biggest_steal ?? 0),
     }));
   }
 
@@ -256,6 +262,10 @@ export class SupabaseStore implements GameStore {
         points: entry.points,
         best: entry.best,
         updated_at: entry.updatedAt,
+        best_commodity: entry.bestCommodity,
+        worst_fine: entry.worstFine,
+        longest_strike: entry.longestStrike,
+        biggest_steal: entry.biggestSteal,
       })),
       { onConflict: "user_id" },
     );

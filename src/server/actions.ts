@@ -10,6 +10,7 @@ import { ensureSession, readSession, signOut } from "@/server/session";
 import {
   DEV_TICK,
   advanceTurn,
+  buyGalleryTicket,
   callQuestion,
   cancelOrder,
   claimSeatByCode,
@@ -226,6 +227,29 @@ export async function callQuestionAction(
   if (!me) return { ok: false, ready: false, error: "Only a seated house can call the question." };
 
   const result = await callQuestion(state.game.id, me.id);
+  if (result.ok) revalidatePath(`/table/${code.toUpperCase()}`);
+  return result;
+}
+
+/**
+ * Buys a gallery ticket on the window being played.
+ *
+ * The rail is read only, which means it cannot seal an order or speak on the
+ * wire. It can stake gallery scrip on a house, because the stake never becomes
+ * table money: the ticket pays out of the pot other tickets paid in, and a
+ * watcher who never takes a chair still has a reason to watch a close.
+ */
+export async function buyGalleryTicketAction(
+  code: string,
+  pickPlayerId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const session = await readSession();
+  if (!session) return { ok: false, error: "No session." };
+
+  const state = await loadGameByCode(code.toUpperCase());
+  if (!state) return { ok: false, error: "No such table." };
+
+  const result = await buyGalleryTicket(state.game.id, session, pickPlayerId);
   if (result.ok) revalidatePath(`/table/${code.toUpperCase()}`);
   return result;
 }

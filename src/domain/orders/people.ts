@@ -9,6 +9,7 @@ import {
   BRIBE_RELIEF,
   CARTEL_MAX_TURNS,
   COMPANY_TOWN_MORALE_DROP,
+  COUNTER_INTEL_COST,
   CYBERATTACK_COST,
   ESPIONAGE_COST,
   INJUNCTION_COST,
@@ -32,12 +33,22 @@ import {
   TARIFF_PRICE_EFFECT,
   TARIFF_TURNS,
   WILDCAT_FUND_COST,
+  WIRETAP_COST,
   modifiersOf,
 } from "../constants";
+import { pickForgeryLine } from "../forgery";
 import { getQty, takeQty } from "../inventory";
 import { priceOf } from "../production";
 import { boardShareOf } from "../valuation";
-import { covertCost, legalCost, playerById, railOf, tileOf, type OrderHandler } from "./context";
+import {
+  covertCost,
+  legalCost,
+  playerById,
+  railOf,
+  spend,
+  tileOf,
+  type OrderHandler,
+} from "./context";
 
 
 export const setWage: OrderHandler = (ctx, actor, raw) => {
@@ -509,6 +520,60 @@ export const espionage: OrderHandler = (ctx, actor, raw) => {
   });
 };
 
+/**
+ * The wiretap: one false line filed in a rival's Pinkerton file.
+ *
+ * The file is what every desk reads when it decides who to watch, so the
+ * attack is aimed at the reading rather than at the ledger. The line itself
+ * is drawn from a catalog by the tick's own generator, so the same window
+ * always files the same slander, and the paper prints it after the close.
+ */
+export const wiretap: OrderHandler = (ctx, actor, raw) => {
+  if (raw.type !== "WIRETAP") return;
+  const target = playerById(ctx, raw.playerId);
+  if (!target || target.id === actor.id) return;
+  const cost = covertCost(actor, WIRETAP_COST);
+  if (!spend(actor, cost)) return;
+  const line = pickForgeryLine(ctx.scratch.rng);
+  ctx.state.forgeries.push({
+    id: `forge-${ctx.turn}-${ctx.state.forgeries.length}`,
+    planterId: actor.id,
+    targetId: target.id,
+    line,
+    turn: ctx.turn,
+  });
+  // Buying a clerk is noticed in the building eventually.
+  actor.pr = Math.max(0, actor.pr - 4);
+  ctx.state.events.push({
+    kind: "WIRETAP",
+    turn: ctx.turn,
+    playerId: actor.id,
+    targetId: target.id,
+    amount: cost,
+    note: line,
+  });
+};
+
+/**
+ * Counter surveillance: the sweep that clears every false line filed against
+ * this house. It is priced as insurance rather than as a fix, so a house that
+ * sweeps a clean file has bought the quiet, not thrown the money away.
+ */
+export const counterSurveillance: OrderHandler = (ctx, actor) => {
+  const cost = covertCost(actor, COUNTER_INTEL_COST);
+  if (!spend(actor, cost)) return;
+  const before = ctx.state.forgeries.length;
+  ctx.state.forgeries = ctx.state.forgeries.filter((forgery) => forgery.targetId !== actor.id);
+  const count = before - ctx.state.forgeries.length;
+  ctx.state.events.push({
+    kind: "COUNTER_INTEL",
+    turn: ctx.turn,
+    playerId: actor.id,
+    amount: cost,
+    count,
+  });
+};
+
 export const blackmail: OrderHandler = (ctx, actor, raw) => {
   if (raw.type !== "BLACKMAIL") return;
   const target = playerById(ctx, raw.playerId);
@@ -657,6 +722,8 @@ export const PEOPLE_HANDLERS: Record<string, OrderHandler> = {
   POACH_ENGINEER: poachEngineer,
   SABOTAGE_RAIL: sabotageRail,
   ESPIONAGE: espionage,
+  WIRETAP: wiretap,
+  COUNTER_SURVEILLANCE: counterSurveillance,
   BLACKMAIL: blackmail,
   SMUGGLING_RUN: smugglingRun,
   BLOCKADE: blockade,

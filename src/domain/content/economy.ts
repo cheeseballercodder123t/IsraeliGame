@@ -215,6 +215,10 @@ export const CYBERATTACK_COST = 400_000;
 export const POACH_COST = 350_000;
 export const SABOTAGE_RAIL_COST = 300_000;
 export const ESPIONAGE_COST = 150_000;
+/** A false line in a rival's Pinkerton file, planted by a bought clerk. */
+export const WIRETAP_COST = 260_000;
+/** Sweeping your own office for the false lines somebody else planted. */
+export const COUNTER_INTEL_COST = 140_000;
 export const BLACKMAIL_COST = 500_000;
 export const SMUGGLING_COST = 400_000;
 export const WILDCAT_FUND_COST = 300_000;

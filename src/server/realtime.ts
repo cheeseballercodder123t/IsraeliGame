@@ -14,13 +14,27 @@ import { supabaseCredentials } from "@/server/store/supabase";
  * would hand every listening browser the whole document ahead of the read
  * path, redaction and all.
  *
+ * The feed also carries the window's standing. A question called and a late
+ * seal held are writes that bump the revision just like any other, and the
+ * rows filed here let a watching browser say "three of five have called" or
+ * "held for a late seal" the moment it happens rather than on the next poll.
+ * Both ride the same fire-and-forget path as the revision notice.
+ *
  * Publishing is fire and forget, exactly like the desk notices. It runs only
  * after the write that won, so a lost race never publishes twice: the mutator
  * that re-runs elsewhere publishes when its own save lands. Without Supabase
  * credentials, or with the store forced to memory or file, this is a no-op and
  * the write returns before a client is even constructed.
  */
-export function publishRevision(gameId: string, turn: number, revision: number): void {
+export type NoticeKind = "REVISION" | "QUESTION" | "HOLD";
+
+/** One row onto the table's event feed, best effort and never awaited. */
+export function publishNotice(
+  gameId: string,
+  turn: number,
+  kind: NoticeKind,
+  payload: Record<string, unknown>,
+): void {
   if (getStore().kind !== "supabase") return;
   const credentials = supabaseCredentials();
   if (!credentials) return;
@@ -30,7 +44,7 @@ export function publishRevision(gameId: string, turn: number, revision: number):
     });
     void client
       .from("game_events")
-      .insert({ game_id: gameId, turn_number: turn, kind: "REVISION", payload: { revision } })
+      .insert({ game_id: gameId, turn_number: turn, kind, payload })
       .then(({ error }) => {
         // A lost notice is a watcher that finds out on its next poll, which is
         // exactly how it would have found out without the publication.
@@ -39,4 +53,27 @@ export function publishRevision(gameId: string, turn: number, revision: number):
   } catch {
     // Publishing must never be the reason a write reports failure.
   }
+}
+
+/** The revision notice every accepted write files. */
+export function publishRevision(gameId: string, turn: number, revision: number): void {
+  publishNotice(gameId, turn, "REVISION", { revision });
+}
+
+/** A house has called the question: the window stands at the count below. */
+export function publishQuestion(
+  gameId: string,
+  turn: number,
+  payload: { revision: number; called: number; needed: number; ready: boolean },
+): void {
+  publishNotice(gameId, turn, "QUESTION", payload);
+}
+
+/** The window was held for a seal that landed as the clock ran out. */
+export function publishHold(
+  gameId: string,
+  turn: number,
+  payload: { revision: number; gainedMs: number; holds: number; maxHolds: number },
+): void {
+  publishNotice(gameId, turn, "HOLD", payload);
 }

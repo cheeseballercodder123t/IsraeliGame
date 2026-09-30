@@ -12,9 +12,10 @@ function authorised(request: Request): boolean {
 }
 
 /**
- * Called by the pg_cron sweep in supabase/migrations/0003_cron.sql. The body
- * may name a single table; with no body every active table whose window has
- * closed is resolved, which also covers a restarted application.
+ * Called by the pg_cron sweep the migrations schedule, whose endpoint and
+ * secret live in `app_settings` since 0007_sweep_settings.sql. The body may
+ * name a single table; with no body every active table whose window has closed
+ * is resolved, which also covers a restarted application.
  */
 export async function POST(request: Request) {
   if (!authorised(request)) {
@@ -70,5 +71,12 @@ export async function POST(request: Request) {
 }
 
 export async function GET() {
-  return NextResponse.json({ ok: true, endpoint: "turn resolution" });
+  // A health read, safe for a scheduler to poke. It reports whether a secret
+  // is configured rather than the secret itself, so a sweep can be checked
+  // from outside without handing anything out.
+  return NextResponse.json({
+    ok: true,
+    endpoint: "turn resolution",
+    guarded: Boolean(process.env.TICK_SECRET),
+  });
 }
