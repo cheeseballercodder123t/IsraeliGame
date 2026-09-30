@@ -24,6 +24,7 @@ import { runAudit, runDebt, runTaxation } from "./finance";
 import { runMedia } from "./media";
 import { runPacts } from "./pacts";
 import { runReform } from "./reform";
+import { pruneForgeries } from "./forgery";
 import {
   advanceInstruments,
   applyExposure,
@@ -31,6 +32,7 @@ import {
   runMilestones,
   runRegulation,
 } from "./instruments";
+import { foldLedger } from "./ledger";
 import { runLabor } from "./labor";
 import { executeOrder, recordHistory, settlePrices, settleShorts, standingDemand } from "./market";
 import { makeScratch, runFactory, spillWaste, wasteHoldingCost, type TickScratch } from "./production";
@@ -407,6 +409,12 @@ export function resolveTurnTick(input: GameState, options: TickOptions = {}): Ti
     netWorth: table,
     count: state.players.length,
   });
+
+  // 20b. The era ledger and the files. Every window's figures are folded into
+  //      the running tally the ladder prints at the close, and false lines
+  //      whose window has passed fall out of the files they were planted in.
+  foldLedger(state, events);
+  pruneForgeries(state);
 
   state.events = events.slice(-400);
   return { state, events };

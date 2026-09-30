@@ -1,5 +1,8 @@
 import {
   BOARD_CHOICES,
+  INK_CHOICES,
+  LOOT_CHOICES,
+  MORALE_CHOICES,
   NET_WORTH_CHOICES,
   TURN_LIMIT_CHOICES,
   defaultWinCondition,
@@ -42,8 +45,15 @@ const SEAT_CHOICES = Array.from(
   (_, index) => MIN_SEATS + index,
 );
 
-/** The conditions a host can open a table to, as the form carries them. */
+/**
+ * The conditions a host can open a table to, as the form carries them. The
+ * founder's pursuit leads the list, because a charter is a way of finishing as
+ * much as a way of playing and the host has just chosen one: the table stores
+ * whatever that charter plays to. The rest are the plain conditions, from the
+ * length of the match to the money run offshore to the air coming back.
+ */
 const WIN_CHOICES: { code: string; label: string }[] = [
+  { code: winConditionCode({ kind: "CHARTER" }), label: winConditionLabel({ kind: "CHARTER" }) },
   ...TURN_LIMIT_CHOICES.map((turns) => {
     const condition = { kind: "TURNS" as const, turns };
     return { code: winConditionCode(condition), label: winConditionLabel(condition) };
@@ -54,6 +64,18 @@ const WIN_CHOICES: { code: string; label: string }[] = [
   }),
   ...BOARD_CHOICES.map((boards) => {
     const condition = { kind: "BOARDS" as const, boards };
+    return { code: winConditionCode(condition), label: winConditionLabel(condition) };
+  }),
+  ...LOOT_CHOICES.map((target) => {
+    const condition = { kind: "LOOT" as const, target };
+    return { code: winConditionCode(condition), label: winConditionLabel(condition) };
+  }),
+  ...MORALE_CHOICES.map((target) => {
+    const condition = { kind: "MORALE" as const, target };
+    return { code: winConditionCode(condition), label: winConditionLabel(condition) };
+  }),
+  ...INK_CHOICES.map((target) => {
+    const condition = { kind: "INK" as const, target };
     return { code: winConditionCode(condition), label: winConditionLabel(condition) };
   }),
   { code: winConditionCode({ kind: "CLEAN" }), label: winConditionLabel({ kind: "CLEAN" }) },
@@ -836,6 +858,11 @@ export default async function LobbyPage({
                       ))}
                     </select>
                   </Field>
+                  <p className="pt-1 text-[10px] leading-relaxed text-faint">
+                    A window limit, a figure on the book, the boards of your rivals, the money run
+                    offshore, the morale on the floor and the tenths of the Rag all close an era.
+                    The founder's pursuit closes it on whatever the charter above plays to.
+                  </p>
                   <div className="pt-2">
                     <button
                       type="submit"

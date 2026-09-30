@@ -2,7 +2,7 @@
 
 An asynchronous industrial empire and corporate warfare simulator. One hundred and twenty one plots
 on an eleven by eleven board, fifteen lots on sealed tender every window, forced sales when a house
-fails, seventy five commodities and seventy five plants, sixty seven orders on the card, supply
+fails, seventy five commodities and seventy five plants, seventy seven orders on the card, supply
 contracts that are not owed until both desks sign, and a newspaper that prints what you did.
 
 The game runs immediately with no accounts and no API keys. Supabase credentials and a language
@@ -15,7 +15,7 @@ A live table runs on Vercel at https://bigyahuapproved.vercel.app/.
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # 349 tests in 39 files
+npm test           # 406 tests in 44 files
 npm run typecheck
 npm run build
 ```
@@ -132,9 +132,11 @@ window can be walked back one frame at a time in the replay, off the same ledger
 
 **Watching a table.** Every watching browser beats the same heartbeat, which carries the revision,
 the presence roster and the hands down on the wire. A real time table rides a server sent stream of
-that same payload instead of polling it, and falls back to the poll the moment a frame is late or the
-stream errors. Presence and composing stamps live in the process and expire on their own, so nothing
-they do can reach the stored game.
+that same payload instead of polling it: the stream pushes the whole summary on every write and on a
+summary beat of its own, so the poll beneath it is a net rather than a second wire, and the poll
+falls back to its own faster beat the moment a frame is late or the stream errors. Presence and
+composing stamps live in the process and expire on their own, so nothing they do can reach the
+stored game.
 
 **The rail.** Once every chair is taken the code still opens the table: board, register, wire and
 paper, read only, riding the same heartbeat the players do. The rail cannot seal, bid or speak.
@@ -370,10 +372,10 @@ printing what they filed.
 
 ### The tests
 
-Thirty nine files, three hundred and forty nine tests. Geometry and the catalogs are checked against
+Forty three files, three hundred and ninety tests. Geometry and the catalogs are checked against
 their own contents, so a catalog edit that breaks an assumption fails a test rather than a screen:
-seventy five commodities, seventy five plants, twenty six charters, seventy five orders, a hundred and
-twenty eight event kinds, and every sprite placement inside its sheet. The table's own rules are
+seventy five commodities, seventy five plants, twenty six charters, seventy seven orders, a hundred and
+thirty event kinds, and every sprite placement inside its sheet. The table's own rules are
 pinned the same way: the late seal hold, the wire's length and its refusals, the countdown ring's
 arithmetic, the open tables list's clock, and the ending from the limit window through the closing
 edition to the rematch. `tests/table-games.test.ts` covers the paper played between houses, which is
@@ -395,6 +397,81 @@ fails a check instead of reaching a screen. `tests/redacted.test.ts` pins the ma
 by order type, and `tests/covert.test.ts` drives it through `openTable` so what a desk is handed can
 be searched for a rival's night work and come up empty.
 
+Five more were added with the room's own upgrades. `tests/gallery.test.ts` settles a pot every way
+it can be settled, and then buys a ticket with no chair and pays the book out at a close.
+`tests/ledger.test.ts` folds one window's events into a house's era and follows the figures onto the
+ladder, including the era that leaves an earlier one standing. `tests/pursuit.test.ts` reads a
+closing condition off every charter on the register, meets each new condition with the plain state
+it watches, and pins that founding to a pursuit stores the condition rather than the pointer to it.
+`tests/forgery.test.ts` files a false line through a real wiretap at a live table and sweeps it with
+counter surveillance, and pins which file each line reads in. `tests/poll.test.ts` reads the
+transport schedule as arithmetic and pins the per hour cost of every kind of desk, from the streamed
+one that asks twice a minute to the old one that asked twelve times.
+
+### What the room itself knows
+
+A table is a room, and the room has its own machinery: who is in it, when the window is about to
+close, what the era left behind and what the paper kept.
+
+Presence outlives the poll. `src/server/roster.ts` stamps every heartbeat into `table_presence` and
+reads the room back from the rows through a time to live, so a watcher who reloads onto another
+instance, and a desk that has not beaten since the last one, are both still in the roster. The read
+is best effort: without the table the caller keeps the in-process roster, so a deployment that has
+not run the migration behaves exactly as it did before. `listJoinableTables` takes its head count
+from the same rows rather than counting what it can see.
+
+The realtime wire is the primary one. `src/server/realtime.ts` publishes a small evidence row on the
+table's own feed for a revision, a call on the question and a hold on a late seal, and
+`useTableSync` treats a subscribed stream as the main road: every desk rides the stream, which
+carries the whole summary the polled route serves and pushes it on every write and on a five second
+summary beat of its own, so presence, the hands down on the wire and the question all stay live
+without anybody asking. How long the poll underneath waits is plain arithmetic in `src/lib/sync.ts`:
+half a minute while the stream is up, ten seconds with nothing underneath it, three on a short window
+table, and a factor longer again while a revision subscription is also live. A stream that errors or
+goes twenty seconds quiet is dropped, covered by its own beat and tried again. At a desk at rest that
+is one ask per thirty seconds where the old five second beat asked twelve times a minute, and even
+with no stream at all the poll asks half as often as it used to. The canonical state is never
+published, so a frame can never carry the night work the read mask exists to hide.
+
+Standing without waiting. The heartbeat carries the question's count and the holds left on the
+window, and the feed accepts question and hold frames, so the strip can print three of five called
+before the snapshot has come round again.
+
+The sweep is on a schedule. `supabase/migrations/0007_sweep_settings.sql` keeps the endpoint and its
+secret in `app_settings`, rebuilds `resolve_turn_tick` and `resolve_due_turns` to read them, and
+reschedules the cron job every minute. `GET /api/tick` reports whether the schedule is guarded, so a
+deployment can be checked from outside without reading the database.
+
+Seated spectators bet. A gallery ticket names the house a watcher expects to place, every stake goes
+into one pot, and the close divides the pot among the tickets that named a top three house, or hands
+every stake back when nothing named one. `src/domain/gallery.ts` owns the arithmetic and does not
+know what a table is, which is what lets a watcher with no chair buy in at all.
+
+The era leaves books behind. `src/domain/ledger.ts` folds every window into a running tally per
+house: value moved by commodity, the heaviest fine, the longest picket and the biggest plot taken at
+tender or by raid. The ladder prints it under a name, and the keepsake prints the whole era under
+the closing edition.
+
+A charter is a way of finishing. Fourteen charters carry a pursuit of their own, and a table can be
+opened to the founder's: the condition is resolved once at founding and stored as a plain condition,
+so nothing downstream needs the charter to read the ending. The founding form offers the pursuit
+beside the window limit, the figure, the boards, the money run offshore, the morale on the floor and
+the tenths of the Rag.
+
+Counter intelligence is aimed at the file rather than at the ledger. A wiretap buys a clerk and
+files a false line in a rival's Pinkerton record, where every desk reads it and none of them can
+check it against the deeds; the lines read for two windows and then fade. Counter surveillance
+sweeps every line aimed at your own house, and is priced as insurance, so a sweep of a clean file is
+quiet bought rather than money thrown away.
+
+The closing edition is a keepsake. `/rag/<code>` prints the same sheet the desk opens, with the
+final ranking and the era's books underneath it and every earlier edition ruled along the foot, so a
+closed era can be sent to somebody rather than only remembered.
+
+The instruments make a noise. `src/lib/sound.ts` keeps the flat clicks the house uses: a ratchet for
+changing lens, a quarter tick for the window going late, and a knock when a call lands on the
+question. All of it is off until a desk asks for it, and all of it is short.
+
 ## Deferred
 
 The realtime subscription, the Supabase Auth seam, the pg_cron schedule, the desk notices and
@@ -403,9 +480,14 @@ does not have. The subscription needs only the public keys, because the transpor
 evidence row on the table's own event feed rather than the snapshot itself: the canonical state is
 never published, so what a subscriber receives can never carry the night work that the per-player
 view mask exists to hide. The migration that
-schedules the sweep is in `supabase/migrations/0003_cron.sql`; point `app.tick_url` at a deployed
-instance and run the migrations in order. The ladder is `supabase/migrations/0005_ladder.sql`, and it
-is the one table that is not scoped to a game: it is world readable and written only by the service
-role. Notices need `RESEND_API_KEY` and `RESEND_EMAIL_FROM` (the provider's test sender works as the
-from address until a domain is verified); without them the desk holds the letters rather than failing
-a window over them.
+schedules the sweep is `supabase/migrations/0007_sweep_settings.sql`, which supersedes the
+`app.tick_url` setting: it keeps the endpoint and its secret in `app_settings`, so after applying it
+a deployment is guarded with `select set_tick_endpoint('https://<deployment>/api/tick',
+'<TICK_SECRET>')`. The whole set is applied in order, `0007` through `0010`, and the last three carry
+no settings: `0008_presence.sql` is the durable roster and its trim job, `0009_ladder_ledger.sql` is
+the era's books on the ladder, and `0010_redact_wiretap.sql` adds the two new covert orders to the
+read mask. The ladder is `supabase/migrations/0005_ladder.sql`, and it is the one table that is not
+scoped to a game: it is world readable and written only by the service role. Notices need
+`RESEND_API_KEY` and `RESEND_EMAIL_FROM` (the provider's test sender works as the from address until
+a domain is verified); without them the desk holds the letters rather than failing a window over
+them.

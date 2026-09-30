@@ -16,7 +16,7 @@ import {
 import type { WindowPressure } from "@/domain/window";
 import type { GameState } from "@/domain/types";
 import type { TablePresence } from "@/components/table/useTableSync";
-import { bell, ticker } from "@/lib/sound";
+import { bell, knock, quarterTick, ticker } from "@/lib/sound";
 import { setNothingSealed, setWindowPressure } from "@/lib/parts";
 import { clock } from "@/domain/format";
 import { Trend } from "@/components/ui/chart";
@@ -255,6 +255,32 @@ export function StatusStrip({
     if (rivalSeals > rivals.current) ticker();
     rivals.current = rivalSeals;
   }, [rivalSeals]);
+
+  // A hand going up on the question is the room moving under this desk's feet,
+  // so it is answered with two raps on the table. One knock per call however
+  // the count moved, because a beat that delivers three at once is still one
+  // moment at the table.
+  const callers = useRef(asked.called.length);
+  useEffect(() => {
+    if (asked.called.length > callers.current) knock();
+    callers.current = asked.called.length;
+  }, [asked.called.length]);
+
+  // The last quarter gets two dry ticks on the dial. It arms once a window
+  // and re-arms when the next window opens, so the warning is heard on the
+  // corner rather than on every beat of the last seconds.
+  const quarterSounded = useRef(false);
+  useEffect(() => {
+    if (finished || remaining <= 0) {
+      quarterSounded.current = false;
+      return;
+    }
+    if (pressure === "late" && !quarterSounded.current) {
+      quarterSounded.current = true;
+      quarterTick();
+    }
+    if (pressure === "calm") quarterSounded.current = false;
+  }, [pressure, remaining, finished]);
 
   const windowTone = finished
     ? "text-dim"

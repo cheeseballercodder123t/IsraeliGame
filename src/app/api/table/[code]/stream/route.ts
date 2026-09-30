@@ -1,20 +1,27 @@
+import { streamFrameDue } from "@/lib/sync";
 import { currentSession, tableHeartbeat } from "@/server/heartbeat";
 
 export const dynamic = "force-dynamic";
 
 /**
- * The streamed transport for a table.
+ * The streamed transport for a table, and the desk's main wire.
  *
  * The polled heartbeat works, but polling is a guess about when the table will
- * move: a real time table closes a window every few seconds, so its watchers
- * end up asking twice as often as they need to and still arrive late. This is
- * the same payload pushed instead, one frame every time the write counter
- * moves, with a comment as a keepalive so an idle table does not look dead.
+ * move: it asks on a clock, arrives late on the writes that matter and asks
+ * again and again through windows where nothing happens. This is the same
+ * payload pushed instead.
+ *
+ * The payload is the whole summary, built by the same function the polled
+ * route answers with, so a desk can move between the two without changing what
+ * it reads. It goes out on every write, and on a summary beat of its own
+ * whether or not anything was written, because presence, the composing hands
+ * and the question all move without a revision. That cadence is what lets the
+ * client keep the poll underneath as a net rather than a second wire.
  *
  * It is deliberately boring. There is no broker and no fan out across
  * instances: this process watches the store and writes what it sees. That is
  * enough for one deployment, and it degrades to the poll because the client
- * falls back the moment a frame is late.
+ * covers the table itself the moment a frame is late.
  */
 
 /** How often the store is read looking for a new revision. */
@@ -62,6 +69,7 @@ export async function GET(
       };
 
       let seen = first.revision;
+      let sentAt = Date.now();
       send(first);
 
       const look = async () => {
@@ -72,8 +80,9 @@ export async function GET(
             close();
             return;
           }
-          if (beat.revision !== seen) {
+          if (streamFrameDue({ seen, revision: beat.revision, sentAt, now: Date.now() })) {
             seen = beat.revision;
+            sentAt = Date.now();
             send(beat);
           }
         } catch {

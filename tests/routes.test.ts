@@ -23,6 +23,7 @@ const cookiesMock = vi.hoisted(() => {
 
 vi.mock("next/headers", () => ({ cookies: cookiesMock.fn }));
 
+import { GET as streamGET } from "@/app/api/table/[code]/stream/route";
 import { GET as summaryGET } from "@/app/api/table/[code]/summary/route";
 import { GET as tickGET, POST as tickPOST } from "@/app/api/tick/route";
 import { POST as ragPOST } from "@/app/api/rag/route";
@@ -158,6 +159,89 @@ describe("POST /api/tick", () => {
       new Request("http://test/api/tick", { method: "POST", headers: { "x-tick-secret": "shhh" } }),
     );
     expect(authorised.status).toBe(200);
+  });
+});
+
+/**
+ * The first frame out of a stream, which the route sends before it schedules
+ * anything. Reading one frame and cancelling is enough to leave no timers
+ * behind, and the payload is what a browser would have parsed.
+ */
+async function firstFrame(response: Response): Promise<Record<string, unknown>> {
+  const reader = response.body!.getReader();
+  const decoder = new TextDecoder();
+  let text = "";
+  while (!text.includes("\n\n")) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    text += decoder.decode(value, { stream: true });
+  }
+  await reader.cancel();
+  const line = text
+    .split("\n\n")[0]
+    .split("\n")
+    .find((row) => row.startsWith("data: "));
+  return JSON.parse(line!.slice("data: ".length)) as Record<string, unknown>;
+}
+
+describe("GET /api/table/[code]/stream", () => {
+  it("404s a code nobody answers to, rather than opening a silent stream", async () => {
+    const response = await streamGET(new Request("http://test/stream"), {
+      params: Promise.resolve({ code: "NOPE99" }),
+    });
+    expect(response.status).toBe(404);
+    expect(await response.text()).toBe("unknown table");
+  });
+
+  it("carries the whole summary the polled route serves, field for field", async () => {
+    const state = await activeTable();
+    session(host.userId, host.name);
+
+    const polled = await summaryGET(new Request("http://test/summary"), {
+      params: Promise.resolve({ code: state.game.code }),
+    });
+    const body = (await polled.json()) as Record<string, unknown>;
+
+    const streaming = await streamGET(new Request("http://test/stream"), {
+      params: Promise.resolve({ code: state.game.code }),
+    });
+    expect(streaming.status).toBe(200);
+    expect(streaming.headers.get("content-type")).toContain("text/event-stream");
+
+    const frame = await firstFrame(streaming);
+    // The stream is not a revision notice with a summary bolted on: it is the
+    // summary, so a desk that never polls again has read everything.
+    expect(frame).toEqual(body);
+    expect(frame.question).toBeDefined();
+    expect(typeof frame.maxHolds).toBe("number");
+    expect(typeof frame.held).toBe("boolean");
+    expect(Array.isArray(frame.present)).toBe(true);
+  });
+
+  it("keeps a hand that is down rather than clearing it with a streamed beat", async () => {
+    const state = await activeTable();
+    const guestSeat = state.players.find((player) => player.userId === guest.userId)!;
+
+    // The guest puts a hand down through the polled route, the way the
+    // composer does when the first character is typed.
+    session(guest.userId, guest.name);
+    const asked = await summaryGET(new Request("http://test/summary?composing=1"), {
+      params: Promise.resolve({ code: state.game.code }),
+    });
+    const own = (await asked.json()) as { composers: { name: string }[] };
+    // A desk's own hand is filtered out of the roster it reads back.
+    expect(own.composers).toHaveLength(0);
+
+    // Streamed beats know nothing about the composer, and must not report the
+    // hand as lifted: another desk still sees it down.
+    session(host.userId, host.name);
+    const streaming = await streamGET(new Request("http://test/stream"), {
+      params: Promise.resolve({ code: state.game.code }),
+    });
+    const frame = await firstFrame(streaming);
+    const hands = frame.composers as { playerId: string | null; name: string }[];
+    expect(hands.map((who) => who.name)).toEqual([guest.name]);
+    expect(hands[0].playerId).toBe(guestSeat.id);
   });
 });
 

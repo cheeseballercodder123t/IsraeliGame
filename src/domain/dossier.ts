@@ -13,6 +13,7 @@
  */
 import { RECIPES } from "./constants";
 import { boardsControlledBy } from "./equity";
+import { activeForgeries } from "./forgery";
 import { netWorthOf } from "./valuation";
 import type { GameState, Player } from "./types";
 
@@ -47,6 +48,11 @@ export interface Dossier {
   tone: "brass" | "hazard" | "blood" | "dim";
   /** Two or three plain sentences about what the figures mean. */
   notes: string[];
+  /**
+   * False lines some rival planted in this file. They read like notes and are
+   * kept apart from them, so the pane can say that this one is not evidence.
+   */
+  forgeries: string[];
 }
 
 /**
@@ -176,6 +182,7 @@ function build(
     threatLabel: threatLabel(threat),
     tone: threat >= 70 ? "blood" : threat >= 50 ? "hazard" : threat >= 30 ? "brass" : "dim",
     notes: notes.slice(0, 4),
+    forgeries: activeForgeries(state, player.id).map((forgery) => forgery.line),
   };
 }
 

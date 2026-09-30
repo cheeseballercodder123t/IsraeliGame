@@ -47,6 +47,7 @@ export default async function TablePage({ params }: { params: Promise<{ code: st
         state={result.view.state}
         issues={result.view.issues}
         wire={result.view.wire}
+        viewerId={result.view.viewerId}
       />
     );
   }

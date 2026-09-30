@@ -1,9 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useTransition } from "react";
 import { eraWinner, winConditionLabel } from "@/domain/endgame";
 import { RECIPES } from "@/domain/constants";
+import {
+  GALLERY_STAKE,
+  galleryStandingFor,
+  galleryStandings,
+  openTickets,
+  potOf,
+  ticketLabel,
+} from "@/domain/gallery";
 import type { ChatMessage, GameState } from "@/domain/types";
+import { buyGalleryTicketAction } from "@/server/actions";
 import type { NewspaperRecord } from "@/server/store/types";
 import { GridCanvas } from "@/components/grid/GridCanvas";
 import { NewspaperModal } from "@/components/newspaper/NewspaperModal";
@@ -33,24 +42,53 @@ export function SpectatorView({
   state,
   issues,
   wire,
+  viewerId,
 }: {
   code: string;
   state: GameState;
   issues: NewspaperRecord[];
   /** The open wire. Side lines are not for the gallery. */
   wire: ChatMessage[];
+  /** The watcher's own user, for the gallery record. Null with no session. */
+  viewerId: string | null;
 }) {
   const [ragOpen, setRagOpen] = useState(false);
   /** The edition on the rail, so the shelf can open any issue and not just the latest. */
   const [ragTurn, setRagTurn] = useState<number | null>(null);
   const [selectedTileId, setSelectedTileId] = useState<string | null>(null);
+  // The rail rides the stream like every other desk, so a window closing and a
+  // rival naming itself reach the gallery at once rather than on a poll. The
+  // clock only decides the base beat the poll falls back to.
   const realtime = state.game.mode === "REALTIME";
-  const { live, present, composers } = useTableSync(
+  const { live, present, composers, question } = useTableSync(
     code,
     state.game.revision,
     realtime ? REALTIME_POLL_MS : POLL_MS,
-    { wire, stream: realtime, gameId: state.game.id },
+    { wire, stream: true, gameId: state.game.id },
   );
+  /** The house this watcher is backing with the next ticket. */
+  const [pickId, setPickId] = useState<string>("");
+  const [buying, startBuying] = useTransition();
+  const [galleryNote, setGalleryNote] = useState<string | null>(null);
+  const pick = state.players.find((player) => player.id === pickId) ?? state.players[0] ?? null;
+  const pot = potOf(state.gallery);
+  const open = openTickets(state.gallery);
+  const myTickets = viewerId
+    ? state.gallery.filter((ticket) => ticket.userId === viewerId)
+    : [];
+  const standing = viewerId ? galleryStandingFor(state.gallery, viewerId) : null;
+  const standings = galleryStandings(state.gallery).slice(0, 5);
+  const nameOf = (playerId: string) =>
+    state.players.find((player) => player.id === playerId)?.name ?? "a house";
+  const buyTicket = () => {
+    if (!pick) return;
+    startBuying(async () => {
+      const result = await buyGalleryTicketAction(code, pick.id);
+      setGalleryNote(
+        result.ok ? `Ticket taken on ${pick.name}.` : result.error ?? "The ticket was refused.",
+      );
+    });
+  };
 
   // The tab title names the room on the rail too.
   useEffect(() => {
@@ -96,6 +134,7 @@ export function SpectatorView({
         onOpenRag={() => setRagOpen(true)}
         live={live}
         present={present}
+        question={question}
       />
 
       <section className="mt-3 border border-edge/70 bg-plate px-3 py-2.5">
@@ -171,12 +210,100 @@ export function SpectatorView({
             ) : null}
           </Panel>
 
+          <Panel
+            title="The gallery"
+            aside={
+              open.length > 0
+                ? `${formatMoney(pot)} in the pot`
+                : finished
+                  ? "the last pot has settled"
+                  : "no window open"
+            }
+          >
+            <p className="border-b border-rule/50 pb-2 text-[11px] leading-relaxed text-dim">
+              The rail cannot seal an order, but it can buy a ticket on the era. Stake gallery
+              scrip on a house and when the books close the pot is divided among the tickets that
+              named a house which placed. Gallery scrip never touches the table's ledger, which is
+              what lets a watcher with no chair take a stake at all.
+            </p>
+            {!finished && pick ? (
+              <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-2">
+                <select
+                  value={pick.id}
+                  onChange={(event) => setPickId(event.target.value)}
+                  className="sheet sheet-select min-w-0 flex-1 px-2 py-1 text-[12px] text-ink"
+                >
+                  {state.players.map((player) => (
+                    <option key={player.id} value={player.id}>
+                      {player.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={buyTicket}
+                  disabled={buying}
+                  className="border border-brass bg-brass px-2.5 py-1 text-[10px] tracking-[0.14em] text-void uppercase transition-colors duration-150 hover:border-hazard hover:bg-hazard disabled:opacity-60"
+                >
+                  {buying ? "buying" : `stake ${formatMoney(GALLERY_STAKE)}`}
+                </button>
+              </div>
+            ) : (
+              <p className="mt-2 text-[11px] leading-relaxed text-faint">
+                {finished
+                  ? "The era has closed, so the gallery is shut and every ticket has settled."
+                  : "The gallery opens when a table is playing."}
+              </p>
+            )}
+            {galleryNote ? <p className="mt-2 text-[10.5px] text-brass">{galleryNote}</p> : null}
+            {myTickets.length > 0 ? (
+              <ul className="mt-2 border-t border-rule/50 pt-1.5">
+                {myTickets.slice(-4).reverse().map((ticket) => (
+                  <li
+                    key={ticket.id}
+                    className="border-b border-rule/40 py-1.5 text-[10.5px] text-dim last:border-b-0"
+                  >
+                    {ticketLabel(ticket, nameOf)}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            {standings.length > 0 ? (
+              <div className="mt-2 border-t border-rule/50 pt-1.5">
+                <p className="text-[9px] tracking-[0.18em] text-faint uppercase">The gallery book</p>
+                <ul className="mt-1">
+                  {standings.map((row) => (
+                    <li
+                      key={row.userId}
+                      className="flex items-baseline gap-2 border-b border-rule/40 py-1 text-[10.5px] last:border-b-0"
+                    >
+                      <span className="min-w-0 flex-1 truncate text-dim">
+                        {row.name || "a watcher"}
+                      </span>
+                      <span className={`tabular ${row.net >= 0 ? "text-bile" : "text-blood"}`}>
+                        {row.net >= 0 ? "+" : ""}
+                        {formatMoney(row.net)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            {standing && standing.open > 0 ? (
+              <p className="mt-2 text-[10.5px] leading-relaxed text-faint">
+                You hold {standing.open} open {standing.open === 1 ? "ticket" : "tickets"} on this
+                era.
+              </p>
+            ) : null}
+          </Panel>
+
           <Panel title="What a watcher gets" aside="no seat, no ledger">
             <ul>
               {[
                 "Every house, ranked by net worth, with what each one shipped last window.",
                 "The board, the overlays and the countdown ring, refreshed on the same poll.",
                 "The table wire and the whole shelf of the Rag.",
+                "A gallery ticket on the era: scrip staked on a house, settled against the closing placings.",
                 "No orders, no cash, no seat: the rail cannot seal, bid, or take a chair that is already held.",
               ].map((line) => (
                 <li
@@ -198,6 +325,7 @@ export function SpectatorView({
         onOpenChange={setRagOpen}
         shelf={issues}
         onSelect={openIssue}
+        keepHref={`/rag/${code}`}
       />
     </main>
   );

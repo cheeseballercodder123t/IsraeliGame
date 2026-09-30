@@ -49,7 +49,7 @@ import { EraClosing } from "@/components/table/EraClosing";
 import { HelpOverlay } from "@/components/table/HelpOverlay";
 import { HousesRegister } from "@/components/table/HousesRegister";
 import { POLL_MS, REALTIME_POLL_MS, useTableSync } from "@/components/table/useTableSync";
-import { clang, knell, siren, thump, ticker, toggleSound, useSound } from "@/lib/sound";
+import { clang, knell, ratchet, siren, thump, ticker, toggleSound, useSound } from "@/lib/sound";
 import { setTableTitle, setUnreadWire } from "@/lib/parts";
 import { Tour, startTour } from "@/components/tour/Tour";
 import { TABLE_RECAP, TABLE_TOUR } from "@/components/tour/steps";
@@ -146,17 +146,27 @@ export function Dashboard({
   // newcomer in a chair or a resolved window lands without a reload. A real
   // time table closes its window in seconds, so its watchers beat faster.
   const realtime = state.game.mode === "REALTIME";
-  // A real time table moves every few seconds, so its watchers ride the
-  // streamed transport and keep the poll underneath it as the fallback. A turn
-  // table changes on the hour, where a poll is the cheaper answer.
-  const { live, present, composers, hands, arrivals, unreadNames, noteComposing } = useTableSync(
+  // Every desk rides the stream, turn table or real time: the server pushes the
+  // whole summary on every write and on a beat of its own, which is what lets
+  // the poll underneath it slow to a net. The clock only picks the base beat
+  // the poll falls back to if the stream never opens.
+  const {
+    live,
+    present,
+    composers,
+    hands,
+    question: beatQuestion,
+    arrivals,
+    unreadNames,
+    noteComposing,
+  } = useTableSync(
     code,
     state.game.revision,
     realtime ? REALTIME_POLL_MS : POLL_MS,
     {
       wire,
       meId,
-      stream: realtime,
+      stream: true,
       gameId: state.game.id,
       // The receipt is filed as a high water mark on the server, so the hook
       // only has to say that the desk has caught up.
@@ -210,6 +220,14 @@ export function Dashboard({
     }
     if (kinds.has("CARTEL_DEFECTED") || kinds.has("PACT_BETRAYED")) clang();
   }, [state.game.currentTurn, state.events]);
+
+  // The board's lens is a mechanism, so changing it gets the ratchet. The
+  // first render is not a change and says nothing.
+  const lensSounded = useRef<LensId | null>(null);
+  useEffect(() => {
+    if (lensSounded.current !== null && lensSounded.current !== lens) ratchet();
+    lensSounded.current = lens;
+  }, [lens]);
 
   // The tab title carries the room to a director working in another tab. The
   // base is the full metadata title of this route, which React re-applies on
@@ -432,7 +450,7 @@ export function Dashboard({
         live={live}
         present={present}
         sealedAway={sealedAway}
-        question={asked}
+        question={beatQuestion ?? asked}
         hands={hands}
         onCallQuestion={handleCallQuestion}
         callBusy={calling}
@@ -1079,6 +1097,7 @@ export function Dashboard({
         onOpenChange={setRagOpen}
         shelf={issues}
         onSelect={openIssue}
+        keepHref={`/rag/${code}`}
       />
       <ReplayTheater
         state={state}

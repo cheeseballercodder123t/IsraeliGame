@@ -1,4 +1,5 @@
 import { applyEra, eraResults, rankLadder, type LadderEntry } from "@/domain/ladder";
+import { eraLedger } from "@/domain/ledger";
 import type { GameState } from "@/domain/types";
 import { getStore } from "@/server/store";
 
@@ -20,12 +21,12 @@ export async function readLadder(): Promise<LadderEntry[]> {
   }
 }
 
-/** Files one closed era against every house that played it. */
+/** Files one closed era against every house that played it, ledger and all. */
 export async function recordEra(state: GameState): Promise<LadderEntry[]> {
   const results = eraResults(state);
   if (results.length === 0) return [];
   const entries = await getStore().listLadder();
-  const next = applyEra(entries, results, new Date().toISOString());
+  const next = applyEra(entries, results, new Date().toISOString(), eraLedger(state));
   await getStore().saveLadder(next);
   return next;
 }

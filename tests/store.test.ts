@@ -110,6 +110,10 @@ describe("choosing a store", () => {
         points: 3,
         best: 12_000_000,
         updatedAt: "2026-09-24T00:00:00.000Z",
+        bestCommodity: "Coal",
+        worstFine: 0,
+        longestStrike: 0,
+        biggestSteal: 0,
       },
     ]);
 

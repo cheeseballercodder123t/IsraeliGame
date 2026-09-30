@@ -17,7 +17,8 @@ import type { GameState } from "@/domain/types";
  * can pay its paper, and how thin its air is with the inspectors.
  *
  * It reads public ground only. Nothing here is bought, and nothing here sees a
- * sealed order.
+ * sealed order. What a bought clerk has filed reads as a separate block under
+ * the notes, marked for what it is: a line nobody can check against the deeds.
  */
 export function PinkertonPane({
   state,
@@ -31,6 +32,7 @@ export function PinkertonPane({
 }) {
   const file = useMemo(() => dossiers(state, meId), [state, meId]);
   const watching = file.filter((entry) => entry.threat >= 55).length;
+  const planted = file.reduce((sum, entry) => sum + entry.forgeries.length, 0);
   const aside =
     file.length === 0
       ? "nobody else is at this table"
@@ -122,11 +124,44 @@ export function PinkertonPane({
                     </li>
                   ))}
                 </ul>
+
+                {/*
+                 * The planted lines. A wiretap does not touch the ledger, it
+                 * touches the reading of it: a bought clerk files a line in
+                 * the house's own record, and the house cannot tell it from
+                 * the truth. The block is ruled off and labelled because the
+                 * file's whole value is that everything above it can be
+                 * checked against the deeds and this cannot.
+                 */}
+                {entry.forgeries.length > 0 ? (
+                  <div className="mt-1.5 border-l-2 border-blood/70 pl-2">
+                    <p className="font-mono text-[9px] tracking-[0.16em] text-blood uppercase">
+                      Filed by a source · not evidence
+                    </p>
+                    <ul className="mt-0.5 space-y-0.5">
+                      {entry.forgeries.map((line) => (
+                        <li
+                          key={line}
+                          className="text-[10.5px] leading-relaxed text-faint italic"
+                        >
+                          {line}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
               </li>
             );
           })}
         </ol>
       )}
+
+      {planted > 0 ? (
+        <p className="mt-3 border-t border-rule pt-2 text-[10px] leading-relaxed text-faint">
+          {planted} {planted === 1 ? "line" : "lines"} on the file came from a source rather than
+          from the papers. A sweep clears them; until then they read exactly like the truth.
+        </p>
+      ) : null}
 
       {onSelect ? (
         <p className="mt-3 border-t border-rule pt-2 text-[10px] leading-relaxed text-faint">

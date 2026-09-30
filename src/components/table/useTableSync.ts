@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { STREAM_RETRY_MS, STREAM_STALL_MS, POLL_MS, REALTIME_POLL_MS, pollDelayMs } from "@/lib/sync";
+import type { QuestionState } from "@/domain/question";
 import { arrivalNames, latchNames, wireArrivals } from "@/domain/wire";
 import type { ChatMessage } from "@/domain/types";
 
@@ -16,10 +18,14 @@ const REALTIME_CONFIGURED = Boolean(
   process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
 );
 
-/** How often a watching browser asks whether the table has moved. */
-export const POLL_MS = 5000;
-/** A real time table moves on a short clock, so its watchers beat faster. */
-export const REALTIME_POLL_MS = 1500;
+/**
+ * The transport schedule, which the stream route pushes frames by as well, so
+ * a desk and the server agree on how long a beat is and when a stream owes a
+ * full summary. It lives in `src/lib/sync.ts` and is re-exported here because
+ * the desk has always read these from this module.
+ */
+export { MAX_POLL_MS, STREAM_POLL_MS, UPGRADED_POLL_FACTOR } from "@/lib/sync";
+export { POLL_MS, REALTIME_POLL_MS };
 
 export interface TablePresence {
   /** The seat this browser holds, or null for somebody only looking on. */
@@ -44,6 +50,10 @@ export interface TableSync {
    * the house rather than only naming it. Never includes this browser.
    */
   hands: TablePresence[];
+  /** The window's calls as of the last beat, or null before one lands. */
+  question: QuestionState | null;
+  /** True while the window is being held for a late seal. */
+  held: boolean;
   /** Wire lines that landed since the desk last read them, never its own. */
   arrivals: ChatMessage[];
   /** The names behind the arrivals, in the order they arrived, once each. */
@@ -64,6 +74,8 @@ interface Beat {
   present?: TablePresence[];
   composers?: { playerId: string | null; name: string; me: boolean }[];
   newestMessageId?: string | null;
+  question?: QuestionState;
+  held?: boolean;
 }
 
 /**
@@ -78,11 +90,12 @@ interface Beat {
  * as well: a house with a hand down on the wire shows up at every other desk
  * before it has said anything at all.
  *
- * A table can also be watched over a stream. When the caller asks for one the
- * server pushes the same payload every time the revision moves, and the poll
- * becomes the fallback: a stream that errors, or that goes silent for longer
- * than a few beats, is closed and the poll takes over without the desk
- * noticing anything except that it kept up.
+ * A table can also be watched over a stream, and every desk now does: the
+ * server pushes the whole summary every time the revision moves and on a beat
+ * of its own, so the roster, the question and the holds stay live without
+ * anybody asking. The poll keeps its seat underneath as the net, at the slow
+ * beat `pollDelayMs` works out, and a stream that errors or goes quiet is
+ * dropped, covered by a faster poll, and tried again rather than given up on.
  *
  * The beat does not stop when the tab is hidden. A parked tab is read through
  * its title alone, so it keeps the room at half speed rather than falling
@@ -122,6 +135,8 @@ export function useTableSync(
   const [present, setPresent] = useState<TablePresence[]>([]);
   const [composers, setComposers] = useState<string[]>([]);
   const [hands, setHands] = useState<TablePresence[]>([]);
+  const [question, setQuestion] = useState<QuestionState | null>(null);
+  const [held, setHeld] = useState(false);
   const [arrivals, setArrivals] = useState<ChatMessage[]>([]);
   const [unreadNames, setUnreadNames] = useState<string[]>([]);
   const seen = useRef(revision);
@@ -143,8 +158,15 @@ export function useTableSync(
   const stopped = useRef(false);
   /** The beat again, for the realtime frames, which land outside the effect. */
   const applyRef = useRef<((beat: Beat, newest: string | null) => void) | null>(null);
-  /** When the last realtime frame landed, for the quiet tear-down. */
+  /** When the last frame of any live transport landed, for the quiet tear-down. */
   const lastFrame = useRef(0);
+  /**
+   * Whether a revision publication is subscribed underneath the poll. When one
+   * is, the poll only has to cover what the publication does not carry, so it
+   * stretches its beat. It is the publication's own state and nothing else's:
+   * a stream has its own flag, because the two are live at the same time.
+   */
+  const upgraded = useRef(false);
 
   wire.current = options.wire ?? wire.current;
   meId.current = options.meId ?? meId.current;
@@ -166,8 +188,16 @@ export function useTableSync(
     let timer: ReturnType<typeof setTimeout> | undefined;
     let source: EventSource | null = null;
     let watchdog: ReturnType<typeof setInterval> | undefined;
-    /** True once the poll is the live transport, whether by choice or fallback. */
-    let polling = !options.stream;
+    /** When a stream was last opened, so a dropped one is tried again. */
+    let lastAttempt = 0;
+    /**
+     * Whether this run of the effect still owns the schedule. The stopped ref
+     * below is shared with the transports that outlive a render, which a
+     * strict mode double mount resets mid flight; this one belongs to the run
+     * that made it, so a beat left over from a torn down effect cannot put a
+     * second poll on the clock.
+     */
+    let live = true;
 
     const apply = (beat: Beat, newest: string | null) => {
       setLive(true);
@@ -175,6 +205,8 @@ export function useTableSync(
       // revision frame is only ever the revision, and it must not wipe the
       // presence the poll just delivered.
       if (Array.isArray(beat.present)) setPresent(beat.present);
+      if (beat.question) setQuestion(beat.question);
+      if (typeof beat.held === "boolean") setHeld(beat.held);
       if (Array.isArray(beat.composers)) {
         const names = beat.composers.map((who) => who.name);
         setComposers(names);
@@ -212,91 +244,129 @@ export function useTableSync(
       }
     };
 
-    /** One polled beat, which reschedules itself while the poll is running. */
-    const poll = async () => {
-      if (stopped.current) return;
+    /**
+     * A desk is stale only when nothing is carrying the table at all. A beat
+     * that fails under an open stream, or under a subscribed publication, is
+     * the net failing to land and says nothing about the room.
+     */
+    const goQuiet = () => {
+      if (!live) return;
+      if (source === null && !upgraded.current) setLive(false);
+    };
+
+    /** How long to wait before the next beat, by whatever is carrying the table. */
+    const delay = (): number =>
+      pollDelayMs({
+        base: pollMs,
+        streamed: source !== null,
+        upgraded: upgraded.current,
+        awake: document.visibilityState === "visible" && !document.hidden,
+        composing: composing.current,
+      });
+
+    /** Sets the next beat, replacing whatever was already on the clock. */
+    const schedule = (wait = delay()) => {
+      if (!live) return;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => void beat(), wait);
+    };
+
+    /**
+     * One beat: ask the table, hand the answer over, set the next one.
+     *
+     * The ask is the same request whatever is carrying the table, because the
+     * poll is the last transport in the room and never retires: what the
+     * transports change is how long the desk waits between asks, and the
+     * schedule for that is `pollDelayMs`, which reads them above.
+     */
+    const beat = async () => {
+      if (!live) return;
+      // A stream that is not open, or that dropped, is worth asking for again:
+      // it is the transport this desk would rather read the table by.
+      if (options.stream && source === null && Date.now() - lastAttempt > STREAM_RETRY_MS) {
+        openStream();
+      }
       try {
         const response = await fetch(
           `/api/table/${encodeURIComponent(code)}/summary${composing.current ? "?composing=1" : ""}`,
           { cache: "no-store" },
         );
-        if (stopped.current) return;
+        if (!live) return;
         if (response.ok) {
-          const beat = (await response.json()) as Beat;
-          apply(beat, beat.newestMessageId ?? null);
+          const frame = (await response.json()) as Beat;
+          apply(frame, frame.newestMessageId ?? null);
         } else {
-          setLive(false);
+          goQuiet();
         }
       } catch {
-        if (!stopped.current) setLive(false);
+        goQuiet();
       }
-      // A hidden tab keeps the room at half speed rather than dropping it, but
-      // a desk with a hand down keeps its full beat wherever it is.
-      if (!stopped.current && polling) {
-        const awake = document.visibilityState === "visible" && !document.hidden;
-        timer = setTimeout(poll, awake || composing.current ? pollMs : pollMs * 2);
-      }
+      schedule();
     };
 
-    /** Hands the room over to the poll, once, from either transport. */
-    const startPolling = () => {
-      if (polling || stopped.current) return;
-      polling = true;
-      setStreamed(false);
-      source?.close();
-      source = null;
-      if (watchdog) clearInterval(watchdog);
-      watchdog = undefined;
-      void poll();
-    };
-
-    /** Opens the stream, and treats silence as a reason to fall back. */
-    const startStream = () => {
-      if (typeof window === "undefined" || typeof EventSource === "undefined") {
-        startPolling();
-        return;
-      }
-      let last = Date.now();
+    /** Opens the stream, which carries the whole summary from then on. */
+    const openStream = () => {
+      if (!live || source !== null) return;
+      if (typeof window === "undefined" || typeof EventSource === "undefined") return;
+      lastAttempt = Date.now();
+      let opened: EventSource;
       try {
-        source = new EventSource(`/api/table/${encodeURIComponent(code)}/stream`);
+        opened = new EventSource(`/api/table/${encodeURIComponent(code)}/stream`);
       } catch {
-        startPolling();
         return;
       }
+      source = opened;
       setStreamed(true);
-      source.onmessage = (event) => {
-        last = Date.now();
+      lastFrame.current = Date.now();
+      opened.onmessage = (event) => {
+        lastFrame.current = Date.now();
         try {
-          const beat = JSON.parse(event.data) as Beat;
-          apply(beat, beat.newestMessageId ?? null);
+          const frame = JSON.parse(event.data) as Beat;
+          apply(frame, frame.newestMessageId ?? null);
         } catch {
           // A malformed frame is not worth dropping the stream for.
         }
       };
-      source.onerror = () => startPolling();
+      opened.onerror = () => dropStream();
+      // A stream can also go quiet without ever erroring, and quiet is the
+      // same news: a socket that is holding a table nobody is pushing. The
+      // watchdog is the only thing that reads it, and it reads it often.
       watchdog = setInterval(() => {
-        if (Date.now() - last > pollMs * 4) startPolling();
-      }, pollMs * 2);
+        if (source !== null && Date.now() - lastFrame.current > STREAM_STALL_MS) dropStream();
+      }, STREAM_STALL_MS);
     };
 
-    // The beat outside the schedule, for a hand going down on the wire.
-    runPoll.current = () => {
-      if (polling) {
-        if (timer) clearTimeout(timer);
-        void poll();
-        return;
+    /**
+     * Gives the table back to the poll, and asks at once rather than waiting
+     * out the slow beat the stream had earned. A dropped socket is usually a
+     * moment, so the stream is tried again on a later beat: the stream is the
+     * desk's own wire and the poll is only the net under it.
+     */
+    const dropStream = () => {
+      if (source === null) return;
+      const closing = source;
+      source = null;
+      setStreamed(false);
+      if (watchdog) clearInterval(watchdog);
+      watchdog = undefined;
+      try {
+        closing.close();
+      } catch {
+        // A socket that is already closed has nothing left to close.
       }
-      // Over a stream, a composing beat is one small request of its own.
-      void fetch(
-        `/api/table/${encodeURIComponent(code)}/summary${composing.current ? "?composing=1" : ""}`,
-        { cache: "no-store" },
-      ).catch(() => undefined);
+      void beat();
+    };
+
+    // The beat outside the schedule: a hand going down on the wire, or a tab
+    // coming back to the front. Both want an answer now, and both are a beat
+    // like any other, so the schedule restarts from here.
+    runPoll.current = () => {
+      void beat();
     };
 
     applyRef.current = apply;
 
-    if (options.stream) startStream();
-    else void poll();
+    void beat();
 
     // A tab that was in the background is the one most likely to be stale, so
     // coming back to it checks straight away rather than waiting out the beat.
@@ -311,6 +381,7 @@ export function useTableSync(
     window.addEventListener("focus", onWake);
 
     return () => {
+      live = false;
       stopped.current = true;
       runPoll.current = null;
       applyRef.current = null;
@@ -370,14 +441,19 @@ export function useTableSync(
               table: "game_events",
               filter: `game_id=eq.${gameId}`,
             } as never,
-            (payload: { new?: { kind?: string; payload?: { revision?: number } } | null }) => {
+            (payload: {
+              new?: { kind?: string; payload?: { revision?: number } } | null;
+            }) => {
               lastFrame.current = Date.now();
-              // The notice carries the revision the store stamped on the save,
-              // which is the same counter the poll reads, so a stale frame that
-              // replays an older revision is dropped the same way an out of
-              // order poll frame is. A row of any other kind is another
+              // Every notice carries the revision the store stamped on the
+              // save, which is the same counter the poll reads, so a stale
+              // frame that replays an older revision is dropped the same way
+              // an out of order poll frame is. A question call and a hold ride
+              // the feed as their own kinds and are read exactly like the
+              // revision they came with. A row of any other kind is another
               // consumer's business and is ignored.
-              if (payload.new?.kind !== "REVISION") return;
+              const kind = payload.new?.kind;
+              if (kind !== "REVISION" && kind !== "QUESTION" && kind !== "HOLD") return;
               const revision = payload.new?.payload?.revision;
               if (typeof revision === "number") {
                 applyRef.current?.({ revision }, null);
@@ -387,6 +463,7 @@ export function useTableSync(
           .subscribe((status: string) => {
             if (cancelled) return;
             if (status === "SUBSCRIBED") {
+              upgraded.current = true;
               setSubscribed(true);
               setLive(true);
             } else if (
@@ -394,6 +471,7 @@ export function useTableSync(
               status === "TIMED_OUT" ||
               status === "CLOSED"
             ) {
+              upgraded.current = false;
               setSubscribed(false);
             }
           });
@@ -436,6 +514,8 @@ export function useTableSync(
     present,
     composers,
     hands,
+    question,
+    held,
     arrivals,
     arrivalNames: arrivalNames(arrivals),
     unreadNames,

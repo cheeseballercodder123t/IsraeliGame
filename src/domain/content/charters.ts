@@ -1,3 +1,4 @@
+import type { WinCondition } from "../types";
 import type { Archetype, RecipeId } from "./ids";
 
 /**
@@ -101,6 +102,11 @@ export interface Charter {
   /** What the automated director does with it. */
   doctrine: string[];
   modifiers: Partial<CharterModifiers>;
+  /**
+   * The closing condition this charter plays to when a table is opened to the
+   * founder's pursuit. A charter without one plays to the default turn limit.
+   */
+  pursuit?: WinCondition;
 }
 
 export const CHARTERS: Record<Archetype, Charter> = {
@@ -115,6 +121,7 @@ export const CHARTERS: Record<Archetype, Charter> = {
     ],
     doctrine: ["Lay track early", "Choke a rival's supply with tolls"],
     modifiers: { railDiscount: 0.5, tollMultiplier: 2, wageMultiplier: 1.4, pollutionFineMultiplier: 0 },
+    pursuit: { kind: "BOARDS", boards: 2 },
   },
   TECH_MESSIAH: {
     id: "TECH_MESSIAH",
@@ -126,6 +133,7 @@ export const CHARTERS: Record<Archetype, Charter> = {
       "Double exposure to blackouts and cyberattacks",
     ],
     doctrine: ["Automate every line", "Build upward fast"],
+    pursuit: { kind: "NET_WORTH", target: 40_000_000 },
     modifiers: {
       immuneToStrikes: true,
       yieldByTier: { 3: 1.15, 4: 1.15 },
@@ -156,6 +164,7 @@ export const CHARTERS: Record<Archetype, Charter> = {
     ],
     doctrine: ["Route everything offshore", "Own the middle of the board"],
     modifiers: { auditDodge: 0.5, shellLicenses: 2, maxTier: 4 },
+    pursuit: { kind: "LOOT", target: 6_000_000 },
   },
   RAIL_TYCOON: {
     id: "RAIL_TYCOON",
@@ -167,6 +176,7 @@ export const CHARTERS: Record<Archetype, Charter> = {
       "Haulage over your own ground is discounted",
     ],
     doctrine: ["Own the corridors", "Sell passage, not goods"],
+    pursuit: { kind: "NET_WORTH", target: 30_000_000 },
     modifiers: { railDiscount: 0.35, tollMultiplier: 3, railUpkeep: 0.5, freightDiscount: 0.2 },
   },
   OIL_PATRIARCH: {
@@ -211,6 +221,7 @@ export const CHARTERS: Record<Archetype, Charter> = {
       "Pays thirty percent above scale and cannot bargain below it",
     ],
     doctrine: ["Keep the men paid", "Own the plant, keep the peace"],
+    pursuit: { kind: "MORALE", target: 55 },
     modifiers: {
       immuneToStrikes: true,
       startMorale: 95,
@@ -241,6 +252,7 @@ export const CHARTERS: Record<Archetype, Charter> = {
     ],
     doctrine: ["Trade the whole board", "Short what the leader makes"],
     modifiers: { shortMargin: 0.15, futuresMargin: 0.5, marketFeeRelief: 1 },
+    pursuit: { kind: "NET_WORTH", target: 25_000_000 },
   },
   PHARMA_BARON: {
     id: "PHARMA_BARON",
@@ -273,6 +285,7 @@ export const CHARTERS: Record<Archetype, Charter> = {
       "Tariffs never touch his cargo",
     ],
     doctrine: ["Sell to both sides", "Guard the device plants"],
+    pursuit: { kind: "LOOT", target: 6_000_000 },
     modifiers: {
       yieldByRecipe: { SATELLITE_WORKS: 1.25, TURBINE_PLANT: 1.25, HAULER_PLANT: 1.25 },
       covertDiscount: 0.75,
@@ -290,6 +303,7 @@ export const CHARTERS: Record<Archetype, Charter> = {
     ],
     doctrine: ["Own the whole chain from pit to plate"],
     modifiers: { yieldByTier: { 1: 1.1, 2: 1.2 }, wasteRelief: 0.15 },
+    pursuit: { kind: "BOARDS", boards: 2 },
   },
   TELEGRAPH_TITAN: {
     id: "TELEGRAPH_TITAN",
@@ -301,6 +315,7 @@ export const CHARTERS: Record<Archetype, Charter> = {
       "Starts with a better reputation than he deserves",
     ],
     doctrine: ["Wire the whole board", "Sell information both ways"],
+    pursuit: { kind: "INK", target: 5 },
     modifiers: {
       yieldByRecipe: {
         NEURAL_ENGINE_LAB: 1.25,
@@ -338,6 +353,7 @@ export const CHARTERS: Record<Archetype, Charter> = {
       "Every other house pays double pollution fines while you hold the papers",
     ],
     doctrine: ["Clean lines, loud editorials", "Shame the heavy polluters"],
+    pursuit: { kind: "CLEAN" },
     modifiers: { pollutionMultiplier: 0.5, wasteRelief: 0.33, startingPr: 90 },
   },
   FOREIGN_CARTEL: {
@@ -351,6 +367,7 @@ export const CHARTERS: Record<Archetype, Charter> = {
     ],
     doctrine: ["Keep two sets of books", "Corner the rare earths"],
     modifiers: { shellLicenses: 3, tariffRebate: 0.5, auditRelief: 0.05 },
+    pursuit: { kind: "LOOT", target: 7_000_000 },
   },
   SMUGGLER_KING: {
     id: "SMUGGLER_KING",
@@ -374,6 +391,7 @@ export const CHARTERS: Record<Archetype, Charter> = {
       "Knows every clerk on the inspection floor",
     ],
     doctrine: ["Buy the council", "Live on public contracts"],
+    pursuit: { kind: "BOARDS", boards: 3 },
     modifiers: { municipalBonus: 1.5, bribeDiscount: 0.5, startingPr: 75, auditRelief: 0.05 },
   },
   DYNASTY_HEIR: {
@@ -426,6 +444,7 @@ export const CHARTERS: Record<Archetype, Charter> = {
       "Dismisses a fifth of all audits",
     ],
     doctrine: ["File first, build never", "Sue whoever ships"],
+    pursuit: { kind: "NET_WORTH", target: 30_000_000 },
     modifiers: {
       legalDiscount: 0.4,
       yieldByRecipe: { SEMICONDUCTOR_FAB: 1.15, NEURAL_ENGINE_LAB: 1.15, SENSOR_WORKS: 1.15 },
@@ -466,6 +485,7 @@ export const CHARTERS: Record<Archetype, Charter> = {
       "A company town bleeds morale at three quarters rate",
     ],
     doctrine: ["Buy the broken plants", "Cut the yard, keep the output"],
+    pursuit: { kind: "NET_WORTH", target: 25_000_000 },
     modifiers: { buildDiscount: 0.85, wasteRelief: 0.2, townMoraleMultiplier: 0.75 },
   },
 };

@@ -21,10 +21,11 @@ export function LobbyViewPanel({ lobby }: { lobby: LobbyView }) {
   const [copied, setCopied] = useState(false);
 
   // A gathering table is watched the same way a running one is, so a friend
-  // taking the next chair shows up without anybody reloading. Where the
-  // deployment carries a project, a claimed chair also arrives over the
-  // publication, ahead of the poll.
+  // taking the next chair shows up without anybody reloading. The stream
+  // carries the roster, so the chair appears the moment it is taken and the
+  // poll underneath is only a net.
   const { live, present } = useTableSync(lobby.code, lobby.revision, undefined, {
+    stream: true,
     gameId: lobby.id,
   });
   useEffect(() => {

@@ -121,6 +121,8 @@ export const EVENT_KINDS = [
   "SCORCHED",
   "SABOTAGE",
   "ESPIONAGE",
+  "WIRETAP",
+  "COUNTER_INTEL",
   "BLACKMAIL",
   "SMUGGLING",
   "BLOCKADE",
@@ -231,6 +233,8 @@ export const SECTION_OVERRIDES: Partial<Record<EventKind, EventSection>> = {
   PIZZA_PARTY: "LABOR",
   MCKINSEY: "LABOR",
   ESPIONAGE: "WIRE",
+  WIRETAP: "WIRE",
+  COUNTER_INTEL: "WIRE",
   BLACKMAIL: "WIRE",
   EXPOSURE: "WIRE",
   TIP: "WIRE",
@@ -626,6 +630,12 @@ export const EVENT_SPECS: Record<EventKind, EventSpec> = {
     `Fishplates are pulled on a span at ${ctx.tile(e.tileId)} and ${ctx.name(e.playerId)} is not asked.`),
   ESPIONAGE: spec("ESPIONAGE", "COVERT", "Night work", (e, ctx) =>
     `${ctx.name(e.playerId)} obtains the private papers of ${ctx.name(e.targetId)}: ${e.note ?? "nothing useful"}.`),
+  WIRETAP: spec("WIRETAP", "COVERT", "Night work", (e, ctx) =>
+    `A clerk at ${ctx.name(e.targetId)} is paid ${money(e.amount)} to file a line about the house that is not true: ${e.note ?? "the paper will say what it is told"}.`),
+  COUNTER_INTEL: spec("COUNTER_INTEL", "COVERT", "Night work", (e, ctx) =>
+    e.count && e.count > 0
+      ? `Counter surveillance at ${ctx.name(e.playerId)} sweeps ${e.count} false ${e.count === 1 ? "line" : "lines"} out of the file for ${money(e.amount)}.`
+      : `Counter surveillance at ${ctx.name(e.playerId)} finds the file clean and costs ${money(e.amount)} anyway.`),
   BLACKMAIL: spec("BLACKMAIL", "COVERT", "Night work", (e, ctx) =>
     `${ctx.name(e.playerId)} extracts ${money(e.amount)} from ${ctx.name(e.targetId)} with a photograph.`),
   SMUGGLING: spec("SMUGGLING", "COVERT", "Night work", (e, ctx) =>

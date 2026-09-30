@@ -1,4 +1,5 @@
 import { eraWinner } from "./endgame";
+import { commodityName, type EraLedgerSummary } from "./ledger";
 import { netWorthOf } from "./valuation";
 import type { GameState } from "./types";
 
@@ -26,9 +27,18 @@ export interface LadderEntry {
   /** The best era this house has had, by net worth at the close. */
   best: number;
   updatedAt: string;
+  /** What the last era it played says about how it did it. */
+  bestCommodity: string | null;
+  /** The heaviest single fine its last era took. */
+  worstFine: number;
+  /** The most plants picketed in one window at its last era. */
+  longestStrike: number;
+  /** The biggest plot it took at tender or by raid in its last era. */
+  biggestSteal: number;
 }
 
 export interface EraResult {
+  playerId: string;
   userId: string;
   name: string;
   placing: number;
@@ -42,6 +52,7 @@ export function eraResults(state: GameState): EraResult[] {
     .map((player) => ({ player, value: netWorthOf(state, player.id) }))
     .sort((a, b) => b.value - a.value);
   return ranked.map((row, index) => ({
+    playerId: row.player.id,
     userId: row.player.userId,
     name: row.player.name,
     placing: index + 1,
@@ -62,16 +73,24 @@ export function eraChampion(state: GameState): string | null {
  * Points are places, not money: a house that finishes first of six earns six,
  * and a house that finishes last still earns one. That keeps a director coming
  * back to a table they lost, which a ladder paid purely in net worth would not.
+ *
+ * The era's ledger rides along with the placing, so the row says how the house
+ * got there. A later era that produced no reading in one column leaves the
+ * earlier figure standing rather than blanking it, because a house with a
+ * quiet window should not lose the record of a loud one.
  */
 export function applyEra(
   entries: LadderEntry[],
   results: EraResult[],
   at: string,
+  ledgers: Map<string, EraLedgerSummary> = new Map(),
 ): LadderEntry[] {
-  const next = entries.map((entry) => ({ ...entry }));
+  const next = normalizeLadder(entries).map((entry) => ({ ...entry }));
   for (const result of results) {
     const existing = next.find((entry) => entry.userId === result.userId);
     const earned = Math.max(1, result.houses - result.placing + 1);
+    const ledger = ledgers.get(result.playerId);
+    const commodity = commodityName(ledger?.bestCommodity ?? null);
     if (existing) {
       existing.name = result.name;
       existing.games += 1;
@@ -79,6 +98,10 @@ export function applyEra(
       existing.points += earned;
       existing.best = Math.max(existing.best, result.value);
       existing.updatedAt = at;
+      if (commodity) existing.bestCommodity = commodity;
+      existing.worstFine = Math.max(existing.worstFine, ledger?.worstFine ?? 0);
+      existing.longestStrike = Math.max(existing.longestStrike, ledger?.longestStrike ?? 0);
+      existing.biggestSteal = Math.max(existing.biggestSteal, ledger?.biggestSteal ?? 0);
       continue;
     }
     next.push({
@@ -89,14 +112,32 @@ export function applyEra(
       points: earned,
       best: result.value,
       updatedAt: at,
+      bestCommodity: commodity,
+      worstFine: ledger?.worstFine ?? 0,
+      longestStrike: ledger?.longestStrike ?? 0,
+      biggestSteal: ledger?.biggestSteal ?? 0,
     });
   }
   return rankLadder(next);
 }
 
+/**
+ * A ladder written before the ledger existed reads with empty books, so an
+ * old line still ranks and still prints rather than turning into a blank row.
+ */
+export function normalizeLadder(entries: LadderEntry[]): LadderEntry[] {
+  return entries.map((entry) => ({
+    ...entry,
+    bestCommodity: entry.bestCommodity ?? null,
+    worstFine: Number(entry.worstFine ?? 0),
+    longestStrike: Number(entry.longestStrike ?? 0),
+    biggestSteal: Number(entry.biggestSteal ?? 0),
+  }));
+}
+
 /** Highest points first, then the best era, then the name. */
 export function rankLadder(entries: LadderEntry[]): LadderEntry[] {
-  return [...entries].sort(
+  return normalizeLadder(entries).sort(
     (a, b) => b.points - a.points || b.best - a.best || a.name.localeCompare(b.name),
   );
 }
