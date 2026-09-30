@@ -1,5 +1,6 @@
 import { isCovert, isPublic } from "./orders/catalog";
-import type { GameState, QueuedOrder } from "./types";
+import { isSchemeExposed } from "./schemes";
+import type { GameState, QueuedOrder, Scheme } from "./types";
 
 /**
  * The view model.
@@ -58,14 +59,28 @@ export function redactQueueFor(state: GameState, viewerId: string | null): Queue
 }
 
 /**
+ * The night offices as one desk may read them. A house always reads its own
+ * scheme whole. A rival's operation is invisible until it is loud enough to be
+ * in the files, and from then on it reads as a file does: the con, the mark,
+ * how far along it is and how loud it has become, and never what the next
+ * window of it wants. A null viewer, the rail, reads every desk as a rival.
+ */
+export function redactSchemesFor(state: GameState, viewerId: string | null): Scheme[] {
+  return state.schemes.filter(
+    (scheme) => scheme.runnerId === viewerId || isSchemeExposed(scheme),
+  );
+}
+
+/**
  * A whole table as one desk sees it. The canonical state is copied and its
  * queue replaced with the redacted one, so nothing downstream can tell the
  * difference: the components keep reading `state.queue`, the counts keep
- * counting, and the stub keeps every shape the desk renders.
+ * counting, and the stub keeps every shape the desk renders. The same is done
+ * for the night offices, which are the other thing a desk keeps dark.
  */
 export function tableViewFor(state: GameState, viewerId: string | null): TableViewModel {
   return {
-    state: { ...state, queue: redactQueueFor(state, viewerId) },
+    state: { ...state, queue: redactQueueFor(state, viewerId), schemes: redactSchemesFor(state, viewerId) },
     pending: state.queue.filter(
       (item) => item.playerId === viewerId && item.turn <= state.game.currentTurn,
     ),

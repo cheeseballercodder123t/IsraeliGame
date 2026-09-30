@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { auditRiskOf } from "@/domain/finance";
-import { charterOf } from "@/domain/constants";
+import { charterOf, SCHEME_ALARM } from "@/domain/constants";
+import { schemeSpec } from "@/domain/schemes";
 import { netWorthOf, netWorthSeries } from "@/domain/valuation";
 import { questionLabel, questionOf, type QuestionState } from "@/domain/question";
 import { winConditionLabel, winProgressLabel } from "@/domain/endgame";
@@ -193,6 +194,15 @@ export function StatusStrip({
 
   const asked = question ?? questionOf(state);
   const called = me ? asked.called.includes(me.id) : false;
+  /**
+   * The night office, read at a glance. This desk's own scheme is its whole
+   * plan, so it is printed with its heat; a rival's is only ever the count of
+   * offices loud enough for the files to carry.
+   */
+  const nightOffice = me
+    ? state.schemes.find((scheme) => scheme.runnerId === me.id) ?? null
+    : null;
+  const officesAbroad = state.schemes.filter((scheme) => scheme.runnerId !== meId).length;
   const writing = (playerId: string) => hands.some((who) => who.playerId === playerId);
   const windowSeconds = windowSecondsOf(state.game.tickIntervalHours);
   const [remaining, setRemaining] = useState(() =>
@@ -437,6 +447,29 @@ export function StatusStrip({
                 held for a late seal
               </p>
             ) : null}
+            {nightOffice ? (
+              <p
+                className="text-[9px] text-faint"
+                title={`${schemeSpec(nightOffice.kind).name} · heat ${Math.round(nightOffice.heat)} of 100 · the alarm line is ${SCHEME_ALARM}`}
+              >
+                night office {nightOffice.stage}/{schemeSpec(nightOffice.kind).stages.length} · heat{" "}
+                <span
+                  className={
+                    nightOffice.heat >= SCHEME_ALARM ? "text-hazard" : "text-dim"
+                  }
+                >
+                  {Math.round(nightOffice.heat)}
+                </span>
+              </p>
+            ) : null}
+            {officesAbroad > 0 ? (
+              <p
+                className="text-[9px] text-blood"
+                title="Rival long cons loud enough for the Pinkerton files"
+              >
+                {officesAbroad} rival {officesAbroad === 1 ? "office" : "offices"} in the files
+              </p>
+            ) : null}
             {!finished && asked.live > 0 ? (
               <p
                 className="text-[9px] text-faint"
@@ -498,6 +531,13 @@ export function StatusStrip({
           const sealed = sealedBy(player.id);
           const place = places.get(player.id) ?? 0;
           const leads = place === 1;
+          /**
+           * The night office a house is running, as this desk can read it: its
+           * own always, a rival's only once the files carry it. The badge says
+           * the same word either way, and the title is the one thing that
+           * cannot: the desk's own office is not news to anybody yet.
+           */
+          const office = state.schemes.find((scheme) => scheme.runnerId === player.id);
           return (
             <div
               key={player.id}
@@ -570,6 +610,18 @@ export function StatusStrip({
                   {asked.called.includes(player.id) ? (
                     <span className="text-brass" title="This desk has called the window">
                       called
+                    </span>
+                  ) : null}
+                  {office ? (
+                    <span
+                      className="text-blood"
+                      title={
+                        player.id === meId
+                          ? `${schemeSpec(office.kind).name} is running, heat ${Math.round(office.heat)} of 100`
+                          : "A long con of this house is loud enough for the files"
+                      }
+                    >
+                      night office
                     </span>
                   ) : null}
                   {leads ? <span className="text-brass">leads</span> : null}

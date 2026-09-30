@@ -290,5 +290,6 @@ export function createGameState(spec: NewGameSpec): GameState {
     gallery: [],
     forgeries: [],
     ledger: [],
+    schemes: [],
   };
 }

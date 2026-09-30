@@ -319,6 +319,8 @@ export const ORDER_TYPES = [
   "WHISTLEBLOWER",
   "WILDCAT_FUND",
   "MARKET_DUMP",
+  "OPEN_SCHEME",
+  "ABORT_SCHEME",
 ] as const;
 export type OrderType = (typeof ORDER_TYPES)[number];
 
@@ -331,3 +333,19 @@ export const ORDER_CATEGORIES = [
   "COVERT",
 ] as const;
 export type OrderCategory = (typeof ORDER_CATEGORIES)[number];
+
+/**
+ * The night office's long cons. A scheme is named at the desk, runs for a few
+ * windows and wants one piece of work each window, which is what makes it a
+ * plan rather than an order.
+ */
+export const SCHEME_IDS = [
+  "LONG_CON",
+  "WHISPER_CAMPAIGN",
+  "SILENT_MANIFEST",
+  "POWDER_KEG",
+  "COUNTERFEIT_ISSUE",
+  "FIXED_TENDER",
+  "AUDIT_LEAK",
+] as const;
+export type SchemeId = (typeof SCHEME_IDS)[number];

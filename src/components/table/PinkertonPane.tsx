@@ -126,6 +126,29 @@ export function PinkertonPane({
                 </ul>
 
                 {/*
+                 * A night office loud enough for the files. The block rides
+                 * under the notes because it is a reading of the same public
+                 * ground as everything else on the file: the operation was
+                 * seen, and what was seen is its shape. The next window of it
+                 * stays on the desk that sealed the work.
+                 */}
+                {entry.scheme ? (
+                  <div className="mt-1.5 border-l-2 border-blood/70 pl-2">
+                    <p className="font-mono text-[9px] tracking-[0.16em] text-blood uppercase">
+                      A night office, read in the files
+                    </p>
+                    <p className="mt-0.5 text-[10.5px] leading-relaxed text-dim">
+                      <span className="text-ink">{entry.scheme.name}</span> against{" "}
+                      <span className="text-ink">{entry.scheme.markName}</span>, stage{" "}
+                      <span className="tabular">{entry.scheme.stage}</span> of{" "}
+                      <span className="tabular">{entry.scheme.windows}</span>, heat{" "}
+                      <span className="tabular">{entry.scheme.heat}</span>. A quiet office is dark to
+                      this file; this one has been heard.
+                    </p>
+                  </div>
+                ) : null}
+
+                {/*
                  * The planted lines. A wiretap does not touch the ledger, it
                  * touches the reading of it: a bought clerk files a line in
                  * the house's own record, and the house cannot tell it from

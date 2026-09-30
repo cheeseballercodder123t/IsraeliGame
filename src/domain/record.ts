@@ -81,6 +81,14 @@ const NIGHT_KINDS: EventKind[] = [
   "FAKE_BONDS",
   "EXPOSURE",
   "TIP",
+  // The night office. A long con is night work like any other, and the Record
+  // counts every window of it, including the one that ends it.
+  "SCHEME_OPENED",
+  "SCHEME_STAGE",
+  "SCHEME_SLIPPED",
+  "SCHEME_BLOWN",
+  "SCHEME_PAID",
+  "SCHEME_ABORTED",
 ];
 
 const PLANT_KINDS: EventKind[] = ["PLANT_BUILT", "PLANT_RETROFIT", "PLANT_DEMOLISHED"];

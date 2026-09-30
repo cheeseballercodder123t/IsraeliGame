@@ -25,6 +25,7 @@ import { runMedia } from "./media";
 import { runPacts } from "./pacts";
 import { runReform } from "./reform";
 import { pruneForgeries } from "./forgery";
+import { runSchemes } from "./schemes";
 import {
   advanceInstruments,
   applyExposure,
@@ -37,7 +38,7 @@ import { runLabor } from "./labor";
 import { executeOrder, recordHistory, settlePrices, settleShorts, standingDemand } from "./market";
 import { makeScratch, runFactory, spillWaste, wasteHoldingCost, type TickScratch } from "./production";
 import { streamRng } from "./rng";
-import { runPhase, type OrderContext, type OrderPhase } from "./orders";
+import { orderCost, runPhase, type OrderContext, type OrderPhase } from "./orders";
 import { netWorthTable, laggard } from "./valuation";
 import { decayPollution, driftSmog, rollWind } from "./wind";
 import type { GameEvent, GameState, TickResult } from "./types";
@@ -115,6 +116,12 @@ export function resolveTurnTick(input: GameState, options: TickOptions = {}): Ti
 
   // 4. Night work lands before the floor opens, and before anybody spends.
   runPhaseWithStream("COVERT", "covert");
+
+  // 4b. The night offices. A scheme reads the window it was paid for: it
+  //     moves one stage, stands still, or shows up in somebody's file. The
+  //     office covers the work it asked for, so the catalog's own price list
+  //     is handed in and the cut stays the whole cost of the run.
+  runSchemes(state, queued, turn, events, (runner, order) => orderCost(state, runner, order));
 
   // 5. Wear, scorch recovery, maintenance and the scrubber bill.
   for (const player of state.players) {

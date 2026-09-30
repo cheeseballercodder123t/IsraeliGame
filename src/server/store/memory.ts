@@ -6,6 +6,7 @@ import type {
   GameStore,
   GameSummary,
   NewspaperRecord,
+  StoreHealth,
 } from "./types";
 import { withRevision } from "./types";
 
@@ -133,5 +134,15 @@ export class MemoryStore implements GameStore {
 
   async saveLadder(entries: LadderEntry[]): Promise<void> {
     registry().ladder = entries.map((entry) => ({ ...entry }));
+  }
+
+  /** Nothing to probe: the tables are in this process and have no wire. */
+  async health(): Promise<StoreHealth> {
+    return {
+      kind: "memory",
+      ok: true,
+      latencyMs: 0,
+      detail: "tables are held in this process only and do not outlive it",
+    };
   }
 }

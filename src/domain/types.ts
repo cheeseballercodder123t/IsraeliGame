@@ -12,6 +12,7 @@ import type {
   RecipeId,
   Resource,
   RollingStock,
+  SchemeId,
   Terrain,
   TileFeature,
   WindDirection,
@@ -26,6 +27,7 @@ export type {
   RecipeId,
   Resource,
   RollingStock,
+  SchemeId,
   Terrain,
   TileFeature,
   WindDirection,
@@ -149,6 +151,13 @@ export type Order =
   | { type: "WHISTLEBLOWER"; playerId: string }
   | { type: "WILDCAT_FUND"; playerId: string }
   | { type: "MARKET_DUMP"; resource: Resource; quantity: number }
+  /**
+   * A night office, opened against a mark. The scheme names itself and the
+   * house it is aimed at; the windows after this one want whatever the scheme
+   * asks for, which is what the desk reads off its own board.
+   */
+  | { type: "OPEN_SCHEME"; schemeId: string; playerId: string }
+  | { type: "ABORT_SCHEME" }
   /**
    * Not an order anybody seals. A redacted view carries it in place of a
    * rival's hidden work: enough to keep every sealed count and presence stamp
@@ -314,6 +323,32 @@ export interface Forgery {
   line: string;
   /** The window it was planted in. */
   turn: number;
+}
+
+/**
+ * A night office at work. It is opened against a mark, it runs one stage a
+ * window, and it is carried by its heat: a quiet operation costs the cut and
+ * nothing else, and a loud one ends with the Pinkertons at the door.
+ */
+export interface Scheme {
+  id: string;
+  /** Which long con it is, read off the catalog. */
+  kind: SchemeId;
+  /** The house that opened it. */
+  runnerId: string;
+  /** The house it is aimed at. */
+  markId: string;
+  openedTurn: number;
+  /** Windows of the run already met. */
+  stage: number;
+  /** How loud the operation has become, from zero to a hundred. */
+  heat: number;
+  /** Windows the operation stood still. Two of them close it in. */
+  slips: number;
+  /** Window the last stage was met, or the window it opened when none has. */
+  lastStageTurn: number;
+  /** Window a rival read it whole, if one has. */
+  exposedTurn: number | null;
 }
 
 /**
@@ -759,6 +794,8 @@ export interface GameState {
   gallery: GalleryTicket[];
   /** False lines planted in rival files, cleared by counter surveillance. */
   forgeries: Forgery[];
+  /** Night offices at work, one per house at most, and their heat. */
+  schemes: Scheme[];
   /** What every house has done this era, folded window by window. */
   ledger: EraLedgerEntry[];
 }

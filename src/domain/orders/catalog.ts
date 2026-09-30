@@ -30,6 +30,7 @@ import {
 } from "../constants";
 import { formatMoney, formatUnits } from "../format";
 import type { GameState, Order, OrderCategory, OrderType, Player } from "../types";
+import { SCHEME_SPECS } from "../schemes";
 import { DEAL_HANDLERS } from "./deal";
 import { PEOPLE_HANDLERS } from "./people";
 import { PLANNING_HANDLERS } from "./planning";
@@ -50,6 +51,7 @@ export type FieldKind =
   | "GRADE"
   | "SIDE"
   | "OFFER"
+  | "SCHEME"
   | "BOOLEAN";
 
 export interface OrderField {
@@ -822,6 +824,22 @@ export const ORDER_SPECS: Record<OrderType, OrderSpec> = {
     [fResource, fUnits("quantity", "Units")],
     true,
   ),
+  OPEN_SCHEME: spec(
+    "OPEN_SCHEME",
+    "COVERT",
+    "COVERT",
+    "Open a night office",
+    "Name a long con and the house it is aimed at. It runs for a few windows and wants one piece of night work sealed each window, pays only while it stays quiet, and asks for its first work the window after it opens. Heat at the top brings the Pinkertons.",
+    [{ name: "schemeId", label: "The con", kind: "SCHEME", required: true }, fPlayer],
+  ),
+  ABORT_SCHEME: spec(
+    "ABORT_SCHEME",
+    "COVERT",
+    "COVERT",
+    "Call off the night office",
+    "Close the scheme this house is running and walk away from what was spent on it. Nothing is recovered, and nothing is filed.",
+    [],
+  ),
 };
 
 export const ORDER_SPEC_LIST: OrderSpec[] = Object.values(ORDER_SPECS);
@@ -997,6 +1015,12 @@ export function orderLabel(order: Order): string {
       return "sabotage a span";
     case "ESPIONAGE":
       return "buy the private papers";
+    case "OPEN_SCHEME": {
+      const scheme = SCHEME_SPECS[order.schemeId as keyof typeof SCHEME_SPECS];
+      return scheme ? `open the night office on ${scheme.name.toLowerCase()}` : "open a night office";
+    }
+    case "ABORT_SCHEME":
+      return "call off the night office";
     case "WIRETAP":
       return "plant a false line in a rival's file";
     case "COUNTER_SURVEILLANCE":
@@ -1072,6 +1096,12 @@ export function orderCost(state: GameState, player: Player, order: Order): numbe
       return 220_000 * mods.covertDiscount;
     case "WILDCAT_FUND":
       return WILDCAT_FUND_COST * mods.covertDiscount;
+    case "OPEN_SCHEME": {
+      const spec = SCHEME_SPECS[order.schemeId as keyof typeof SCHEME_SPECS];
+      return spec ? spec.cut * mods.covertDiscount : null;
+    }
+    case "ABORT_SCHEME":
+      return 0;
     case "ISSUE_BOND":
     case "ISSUE_CONVERTIBLE":
       return 0;

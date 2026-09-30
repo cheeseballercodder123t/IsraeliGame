@@ -65,6 +65,19 @@ async function main() {
   const tick = await get("/api/tick");
   check("GET /api/tick health", tick.response.status === 200);
 
+  // The store's own probe: every adapter answers it, so a deployment can be
+  // checked from outside without knowing how the tables are kept.
+  const health = await get("/api/health");
+  check("GET /api/health", health.response.status === 200, `[${health.response.status}]`);
+  let healthBody = null;
+  try {
+    healthBody = JSON.parse(health.text);
+  } catch {
+    /* handled below */
+  }
+  check("health reports a store that answers", healthBody?.ok === true, healthBody?.detail ?? "");
+  check("health names the adapter", typeof healthBody?.kind === "string");
+
   console.log(`\n${failures === 0 ? "all checks passed" : `${failures} check(s) failed`}`);
   process.exit(failures === 0 ? 0 : 1);
 }

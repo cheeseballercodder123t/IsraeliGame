@@ -126,6 +126,12 @@ export const EVENT_KINDS = [
   "BLACKMAIL",
   "SMUGGLING",
   "BLOCKADE",
+  "SCHEME_OPENED",
+  "SCHEME_STAGE",
+  "SCHEME_SLIPPED",
+  "SCHEME_BLOWN",
+  "SCHEME_PAID",
+  "SCHEME_ABORTED",
   "EXPOSURE",
   "TIP",
   // Ground, air and freight.
@@ -642,6 +648,18 @@ export const EVENT_SPECS: Record<EventKind, EventSpec> = {
     `${units(e.quantity)} of ${ctx.resource(e.resource)} leave ${ctx.name(e.playerId)} on a manifest that does not mention them.`),
   BLOCKADE: spec("BLOCKADE", "COVERT", "Night work", (e, ctx) =>
     `Freight is stopped at ${ctx.tile(e.tileId)} by men with no badges.`),
+  SCHEME_OPENED: spec("SCHEME_OPENED", "COVERT", "Night offices", (e, ctx) =>
+    `${ctx.name(e.playerId)} opens a night office against ${ctx.name(e.targetId)}: ${e.note ?? "the file does not say what for"}, ${e.count ?? 0} windows of work at ${money(e.amount)} a window.`),
+  SCHEME_STAGE: spec("SCHEME_STAGE", "COVERT", "Night offices", (e, ctx) =>
+    `The office at ${ctx.name(e.playerId)} moves on ${ctx.name(e.targetId)}, stage ${e.count ?? 1}: ${e.note ?? "no details"}.`),
+  SCHEME_SLIPPED: spec("SCHEME_SLIPPED", "COVERT", "Night offices", (e, ctx) =>
+    `The night office at ${ctx.name(e.playerId)} stands still against ${ctx.name(e.targetId)} for a window: ${e.note ?? "nobody was paid, nobody was told"}.`),
+  SCHEME_BLOWN: spec("SCHEME_BLOWN", "COVERT", "Night offices", (e, ctx) =>
+    `The Pinkertons walk into the night office of ${ctx.name(e.playerId)} and the whole operation against ${ctx.name(e.targetId)} is laid open. ${money(e.amount)} of the till goes with them.`),
+  SCHEME_PAID: spec("SCHEME_PAID", "COVERT", "Night offices", (e, ctx) =>
+    `The long con of ${ctx.name(e.playerId)} against ${ctx.name(e.targetId)} pays out after ${e.count ?? 0} windows: ${e.note ?? "the paper has the shape of it"}.`),
+  SCHEME_ABORTED: spec("SCHEME_ABORTED", "COVERT", "Night offices", (e, ctx) =>
+    `${ctx.name(e.playerId)} closes its night office against ${ctx.name(e.targetId)} and walks away from the work: ${e.note ?? "nothing was filed"}.`),
   EXPOSURE: spec("EXPOSURE", "COVERT", "The courts", (e, ctx) =>
     `${ctx.name(e.playerId)} is named in an inquiry and the office is frozen.`),
   TIP: spec("TIP", "COVERT", "The revenue", (e, ctx) =>
