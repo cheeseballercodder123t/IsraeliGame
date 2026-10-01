@@ -24,8 +24,10 @@ import {
   runSchemes,
   schemeRoom,
   schemeRunOf,
+  schemeStageOrder,
   schemesOf,
 } from "@/domain/schemes";
+import { planBotTurn } from "@/server/bot";
 import { redactSchemesFor } from "@/domain/redacted";
 import { dossierFor } from "@/domain/dossier";
 import { resolveTurnTick } from "@/domain/tick";
@@ -42,6 +44,7 @@ import type {
   Archetype,
   GameEvent,
   GameState,
+  Order,
   OrderType,
   Player,
   QueuedOrder,
@@ -610,5 +613,102 @@ describe("the night office at a table", () => {
     const played = (await advanceTurn((await loadGameByCode(opened.game.code))!)).state;
     expect(played.schemes).toEqual([]);
     expect(played.events.some((event) => event.kind === "SCHEME_ABORTED")).toBe(true);
+  });
+});
+
+describe("the bench's night offices", () => {
+  /** A funded bot at a table of four, with no tick between the scans. */
+  function bench(cash = 6_000_000): { state: GameState; bot: Player } {
+    const state = freshState();
+    const bot = seat(state, "p2");
+    bot.isBot = true;
+    bot.cash = cash;
+    return { state, bot };
+  }
+
+  function opens(order: Order): order is Extract<Order, { type: "OPEN_SCHEME" }> {
+    return order.type === "OPEN_SCHEME";
+  }
+
+  it("turns the stages that name a house into errands a bench can file", () => {
+    const long = SCHEME_SPECS.LONG_CON;
+    expect(schemeStageOrder(long.stages[0], "p2")).toEqual({ type: "WIRETAP", playerId: "p2" });
+    expect(schemeStageOrder(long.stages[1], "p2")).toEqual({
+      type: "ESPIONAGE",
+      playerId: "p2",
+    });
+    // The sweep of a run points at the office's own door.
+    expect(schemeStageOrder(SCHEME_SPECS.AUDIT_LEAK.stages[2], "p2")).toEqual({
+      type: "COUNTER_SURVEILLANCE",
+    });
+    // A stage that wants a plot, a span or a demand picked by hand has no
+    // bench answer, which is what keeps the bench off the other five cards.
+    for (const stage of SCHEME_SPECS.POWDER_KEG.stages) {
+      expect(schemeStageOrder(stage, "p2")).toBeNull();
+    }
+    expect(schemeStageOrder(SCHEME_SPECS.WHISPER_CAMPAIGN.stages[2], "p2")).toBeNull();
+  });
+
+  it("files the window's errand while an office runs, and opens no second one", () => {
+    const { state, runner, mark } = office("LONG_CON", 4_000_000);
+    runner.isBot = true;
+    const plan = planBotTurn(state, runner.id);
+
+    expect(plan).toContainEqual({ type: "WIRETAP", playerId: mark.id });
+    expect(plan.some((order) => order.type === "OPEN_SCHEME")).toBe(false);
+    // The office outranks the bench's own impulses: no random night work and
+    // no sweep while the run is still under the files.
+    expect(plan.some((order) => order.type === "ESPIONAGE")).toBe(false);
+    expect(plan.some((order) => order.type === "COUNTER_SURVEILLANCE")).toBe(false);
+  });
+
+  it("works the errand it filed through a real window", () => {
+    const { state, runner, mark } = office("LONG_CON", 4_000_000);
+    runner.isBot = true;
+    const errand = planBotTurn(state, runner.id).find((order) => order.type === "WIRETAP");
+    expect(errand).toBeDefined();
+    hold(state, runner.id, errand!);
+
+    const played = resolveTurnTick(state).state;
+    expect(schemesOf(played, runner.id)[0]?.stage).toBe(1);
+    const stage = played.events.find((event) => event.kind === "SCHEME_STAGE");
+    expect(stage?.amount).toBe(SCHEME_SPECS.LONG_CON.cut);
+    expect(stage?.targetId).toBe(mark.id);
+  });
+
+  it("opens a card it can file, and only after the table has played a while", () => {
+    const { state, bot } = bench();
+    let opened = 0;
+    for (let turn = 1; turn <= 60; turn += 1) {
+      state.game.currentTurn = turn;
+      const taken = planBotTurn(state, bot.id).filter(opens);
+      if (turn < 3) expect(taken).toEqual([]);
+      for (const order of taken) {
+        opened += 1;
+        expect(["LONG_CON", "AUDIT_LEAK"]).toContain(order.schemeId);
+        expect(order.playerId).not.toBe(bot.id);
+      }
+    }
+    expect(opened).toBeGreaterThan(0);
+  });
+
+  it("aims a skim at the house holding the most money", () => {
+    const { state, bot } = bench();
+    const fat = seat(state, "p3");
+    fat.cash = 500_000;
+    fat.offshoreCash = 3_000_000;
+    seat(state, "p1").cash = 1_000_000;
+    seat(state, "p4").cash = 2_000_000;
+
+    let skim: Extract<Order, { type: "OPEN_SCHEME" }> | null = null;
+    for (let turn = 1; turn <= 60 && !skim; turn += 1) {
+      state.game.currentTurn = turn;
+      skim =
+        planBotTurn(state, bot.id).find(
+          (order): order is Extract<Order, { type: "OPEN_SCHEME" }> =>
+            opens(order) && order.schemeId === "LONG_CON",
+        ) ?? null;
+    }
+    expect(skim?.playerId).toBe(fat.id);
   });
 });

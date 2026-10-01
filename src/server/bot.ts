@@ -1,13 +1,17 @@
 import {
   BAND_TIERS,
+  COUNTER_INTEL_COST,
   RECIPES,
   RECIPE_LIST,
+  SCHEME_ALARM,
   TRADEABLE,
   modifiersOf,
 } from "@/domain/constants";
 import { distance } from "@/domain/grid";
 import { getQty } from "@/domain/inventory";
+import { orderCost } from "@/domain/orders/catalog";
 import { streamRng } from "@/domain/rng";
+import { activeScheme, schemeRoom, schemeSpec, schemeStageOrder } from "@/domain/schemes";
 import type {
   GameState,
   LaborModel,
@@ -15,12 +19,26 @@ import type {
   Player,
   RecipeId,
   Resource,
+  SchemeId,
   Tile,
 } from "@/domain/types";
 import { boardShareOf, netWorthTable } from "@/domain/valuation";
 
 /** Room the director wants in the bank before committing to capital work. */
 const RESERVE = 400_000;
+
+/**
+ * One window in this many, a bench with a till and a mark opens a night
+ * office. Low on purpose: an office is a plan, and a bench is meant to be
+ * busy with the floor it already has.
+ */
+const SCHEME_APPETITE = 0.16;
+/** Windows a table plays before the bench starts watching for marks. */
+const SCHEME_FROM_TURN = 3;
+/** Money a mark keeps on hand and offshore before a skim is worth the run. */
+const SCHEME_MARK_FLOOR = 250_000;
+/** Heat at which a bench buys a sweep, priced a little over the alarm line. */
+const SCHEME_SWEEP_HEAT = SCHEME_ALARM + 18;
 
 /** The rarest deposits are worth fighting over, so bids go up for them. */
 const RARE_DEPOSITS: Resource[] = [
@@ -285,20 +303,64 @@ export function planBotTurn(state: GameState, playerId: string): Order[] {
   }
 
   // 9. Night work, kept occasional so the board does not settle into a brawl.
-  const hostile = rng.chance(0.35) && wallet > 600_000;
-  if (hostile) {
-    const victims = state.tiles.filter(
-      (t) => t.ownerId && t.ownerId !== player.id && RECIPES[t.recipeId].cleanRoom,
-    );
-    const victim = victims.length > 0 ? rng.pick(victims) : null;
-    const spans = state.rails.filter((r) => r.ownerId !== player.id && r.condition > 40);
-    if (victim) {
-      orders.push({ type: "SLUDGE_DUMP", tileId: victim.id });
-    } else if (spans.length > 0) {
-      orders.push({ type: "SABOTAGE_RAIL", railId: rng.pick(spans).id });
-    } else {
-      const rival = richestRival(state, player.id);
-      if (rival) orders.push({ type: "ESPIONAGE", playerId: rival.id });
+  //    A night office outranks it: while one runs, the window's errand is the
+  //    house's dark business, and an office loud enough to be in the files
+  //    buys a sweep before it buys another stage.
+  const office = activeScheme(state, player.id);
+  if (office) {
+    const spec = schemeSpec(office.kind);
+    const cut = spec.cut * mods.covertDiscount;
+    const call = spec.stages[office.stage] ?? null;
+    const errand = call ? schemeStageOrder(call, office.markId) : null;
+    const errandCost = errand ? (orderCost(state, player, errand) ?? 0) : 0;
+    // The cut has to be in the till when the window is read, and the errand is
+    // charged by its own handler before the office hands it back, so the plan
+    // holds both back from everything else it wants to do.
+    if (errand && wallet - cut - errandCost > RESERVE) {
+      wallet -= cut + errandCost;
+      orders.push(errand);
+    }
+    const sweep = COUNTER_INTEL_COST * mods.covertDiscount;
+    const sweepsTwice = errand?.type === "COUNTER_SURVEILLANCE";
+    if (!sweepsTwice && office.heat >= SCHEME_SWEEP_HEAT && wallet - sweep - cut > RESERVE) {
+      wallet -= sweep;
+      orders.push({ type: "COUNTER_SURVEILLANCE" });
+    }
+  } else {
+    const hostile = rng.chance(0.35) && wallet > 600_000;
+    if (hostile) {
+      const victims = state.tiles.filter(
+        (t) => t.ownerId && t.ownerId !== player.id && RECIPES[t.recipeId].cleanRoom,
+      );
+      const victim = victims.length > 0 ? rng.pick(victims) : null;
+      const spans = state.rails.filter((r) => r.ownerId !== player.id && r.condition > 40);
+      if (victim) {
+        orders.push({ type: "SLUDGE_DUMP", tileId: victim.id });
+      } else if (spans.length > 0) {
+        orders.push({ type: "SABOTAGE_RAIL", railId: rng.pick(spans).id });
+      } else {
+        const rival = richestRival(state, player.id);
+        if (rival) orders.push({ type: "ESPIONAGE", playerId: rival.id });
+      }
+    }
+
+    // The bench watches the table for a mark it can read and a card it can
+    // file to the end. Two of the seven fit that: THE LONG CON wants a
+    // rival's own money, and THE AUDIT LEAK wants the revenue at the door of
+    // the house leading the table. The rest ask for a plot, a span or a
+    // demand that only a desk can choose.
+    if (
+      state.game.currentTurn >= SCHEME_FROM_TURN &&
+      schemeRoom(state, player.id) &&
+      rng.chance(SCHEME_APPETITE)
+    ) {
+      const spec = rng.chance(0.65) ? schemeSpec("LONG_CON") : schemeSpec("AUDIT_LEAK");
+      const cost = spec.cut * mods.covertDiscount;
+      const mark = schemeMark(state, player, spec.id);
+      if (mark && wallet - cost > RESERVE) {
+        wallet -= cost;
+        orders.push({ type: "OPEN_SCHEME", schemeId: spec.id, playerId: mark.id });
+      }
     }
   }
 
@@ -414,6 +476,25 @@ function consumedBy(state: GameState, playerId: string, resource: Resource): num
   return state.tiles
     .filter((t) => t.ownerId === playerId)
     .reduce((sum, t) => sum + (RECIPES[t.recipeId].input[resource] ?? 0), 0);
+}
+
+/**
+ * The mark a bench picks for a con: the house holding the most money on hand
+ * and offshore when the office is there to skim it, and the house at the head
+ * of the table when the office is there to hand its books to the revenue. A
+ * chase with nothing in the till is not worth the first cut.
+ */
+function schemeMark(state: GameState, player: Player, kind: SchemeId): Player | undefined {
+  const rivals = state.players.filter((rival) => rival.id !== player.id && !rival.isBankrupt);
+  if (rivals.length === 0) return undefined;
+  if (kind === "LONG_CON") {
+    const richest = rivals.reduce((best, rival) =>
+      rival.cash + rival.offshoreCash > best.cash + best.offshoreCash ? rival : best,
+    );
+    return richest.cash + richest.offshoreCash >= SCHEME_MARK_FLOOR ? richest : undefined;
+  }
+  const head = netWorthTable(state).find((row) => row.playerId !== player.id)?.playerId;
+  return rivals.find((rival) => rival.id === head) ?? rivals[0];
 }
 
 function richestRival(state: GameState, playerId: string): Player | undefined {
