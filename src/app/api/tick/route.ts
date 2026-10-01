@@ -2,13 +2,21 @@ import { NextResponse } from "next/server";
 import type { GameState } from "@/domain/types";
 import { resolveIfDue } from "@/server/game";
 import { getStore } from "@/server/store";
+import { acceptedTickSecrets, tickAuthorised } from "@/server/tick";
 
 export const dynamic = "force-dynamic";
 
-function authorised(request: Request): boolean {
-  const expected = process.env.TICK_SECRET;
-  if (!expected) return process.env.NODE_ENV !== "production";
-  return request.headers.get("x-tick-secret") === expected;
+/**
+ * The sweep is judged against TICK_SECRET when one is set, and otherwise
+ * against the secret the database holds in `app_settings`, which is where the
+ * cron job reads the value it sends. Arming the clock is then one call to
+ * `set_tick_endpoint` rather than a matching pair of settings in two places.
+ */
+async function authorised(request: Request): Promise<boolean> {
+  return tickAuthorised(
+    request.headers.get("x-tick-secret"),
+    process.env.NODE_ENV === "production",
+  );
 }
 
 /**
@@ -18,7 +26,7 @@ function authorised(request: Request): boolean {
  * is resolved, which also covers a restarted application.
  */
 export async function POST(request: Request) {
-  if (!authorised(request)) {
+  if (!(await authorised(request))) {
     return NextResponse.json({ ok: false, error: "not authorised" }, { status: 401 });
   }
 
@@ -73,10 +81,9 @@ export async function POST(request: Request) {
 export async function GET() {
   // A health read, safe for a scheduler to poke. It reports whether a secret
   // is configured rather than the secret itself, so a sweep can be checked
-  // from outside without handing anything out.
-  return NextResponse.json({
-    ok: true,
-    endpoint: "turn resolution",
-    guarded: Boolean(process.env.TICK_SECRET),
-  });
+  // from outside without handing anything out. Both places a secret can live
+  // are counted, so the read cannot report an unguarded endpoint that is
+  // actually being judged against the database's own setting.
+  const guarded = (await acceptedTickSecrets()).length > 0;
+  return NextResponse.json({ ok: true, endpoint: "turn resolution", guarded });
 }

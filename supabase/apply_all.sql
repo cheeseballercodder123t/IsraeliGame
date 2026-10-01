@@ -1652,9 +1652,11 @@ $$;
 --   Replace YOUR-APP-URL with the deployment, no trailing slash, for example
 --   https://bigyahuapproved.vercel.app
 --
---   Replace YOUR_TICK_SECRET with the same value the application holds in its
---   TICK_SECRET environment variable. Left unset, the endpoint refuses the
---   call once the deployment is production, which is the guard working.
+--   Replace YOUR_TICK_SECRET with any long random string. The application
+--   reads this row for the secret it checks, so this one call arms the guard
+--   and there is no second copy to keep in step. Left unconfigured, the
+--   endpoint refuses the call once the deployment is production, which is the
+--   guard working.
 
 -- It is left commented so that pasting this whole file cannot store the
 -- placeholders themselves, which every sweep would then call forever. Copy the

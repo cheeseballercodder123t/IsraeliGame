@@ -59,6 +59,33 @@ export function sharedClient(url: string, key: string): SupabaseClient {
   return client;
 }
 
+/**
+ * The turn sweep's secret as the database holds it.
+ *
+ * Migration 0007 moved the sweep's endpoint and secret into `app_settings`,
+ * which is the row the cron job itself reads. Reading the same row here means
+ * a deployment is armed by one call to `set_tick_endpoint` rather than by two
+ * dashboards that have to be told the same string, and a mismatch can no
+ * longer leave the clock silently refusing to close a window. An explicit
+ * TICK_SECRET still wins, so a deployment that set one keeps working.
+ */
+export async function storedTickSecret(): Promise<string | null> {
+  const creds = supabaseCredentials();
+  if (!creds) return null;
+  try {
+    const { data } = await sharedClient(creds.url, creds.key)
+      .from("app_settings")
+      .select("value")
+      .eq("key", "tick_secret")
+      .maybeSingle();
+    const value = (data as { value?: string } | null)?.value?.trim() ?? "";
+    return value.length > 0 ? value : null;
+  } catch {
+    // An older database with no app_settings yet simply has no secret here.
+    return null;
+  }
+}
+
 /** What one PostgREST call hands back, as much of it as this file reads. */
 interface PostgrestReply<T> {
   data: T | null;
