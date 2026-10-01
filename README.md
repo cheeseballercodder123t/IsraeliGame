@@ -15,7 +15,7 @@ A live table runs on Vercel at https://bigyahuapproved.vercel.app/.
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # 466 tests in 47 files
+npm test           # 469 tests in 47 files
 npm run typecheck
 npm run build
 ```
@@ -376,7 +376,7 @@ printing what they filed.
 
 ### The tests
 
-Forty seven files, four hundred and sixty six tests. Geometry and the catalogs are checked against
+Forty seven files, four hundred and sixty nine tests. Geometry and the catalogs are checked against
 their own contents, so a catalog edit that breaks an assumption fails a test rather than a screen:
 seventy five commodities, seventy five plants, twenty six charters, seventy nine orders, a hundred and
 thirty six event kinds, and every sprite placement inside its sheet. The table's own rules are
