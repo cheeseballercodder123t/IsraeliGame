@@ -15,7 +15,7 @@ A live table runs on Vercel at https://bigyahuapproved.vercel.app/.
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # 462 tests in 46 files
+npm test           # 466 tests in 47 files
 npm run typecheck
 npm run build
 ```
@@ -376,7 +376,7 @@ printing what they filed.
 
 ### The tests
 
-Forty six files, four hundred and fifty five tests. Geometry and the catalogs are checked against
+Forty seven files, four hundred and sixty six tests. Geometry and the catalogs are checked against
 their own contents, so a catalog edit that breaks an assumption fails a test rather than a screen:
 seventy five commodities, seventy five plants, twenty six charters, seventy nine orders, a hundred and
 thirty six event kinds, and every sprite placement inside its sheet. The table's own rules are
@@ -449,8 +449,10 @@ before the snapshot has come round again.
 
 The sweep is on a schedule. `supabase/migrations/0007_sweep_settings.sql` keeps the endpoint and its
 secret in `app_settings`, rebuilds `resolve_turn_tick` and `resolve_due_turns` to read them, and
-reschedules the cron job every minute. `GET /api/tick` reports whether the schedule is guarded, so a
-deployment can be checked from outside without reading the database.
+reschedules the cron job every minute. The application reads the same row for the secret it checks,
+so the one call that names the endpoint also arms the guard: there is no second copy of the string to
+keep in step, and no hosting setting to find. `GET /api/tick` reports whether the schedule is
+guarded, so a deployment can be checked from outside without reading the database.
 
 Seated spectators bet. A gallery ticket names the house a watcher expects to place, every stake goes
 into one pot, and the close divides the pot among the tickets that named a top three house, or hands
@@ -528,8 +530,9 @@ never published, so what a subscriber receives can never carry the night work th
 view mask exists to hide. The migration that
 schedules the sweep is `supabase/migrations/0007_sweep_settings.sql`, which supersedes the
 `app.tick_url` setting: it keeps the endpoint and its secret in `app_settings`, so after applying it
-a deployment is guarded with `select set_tick_endpoint('https://<deployment>/api/tick',
-'<TICK_SECRET>')`. The whole set is applied in order, `0007` through `0011`, and none of the last four
+a deployment is armed with `select set_tick_endpoint('https://<deployment>/api/tick',
+'<TICK_SECRET>')`, and the application reads that same row, so the value never has to be set in the
+environment as well. The whole set is applied in order, `0007` through `0011`, and none of the last four
 carries a setting: `0008_presence.sql` is the durable roster and its trim job, `0009_ladder_ledger.sql`
 is the era's books on the ladder, `0010_redact_wiretap.sql` adds the wiretap orders to the
 read mask, and `0011_night_offices_and_one_write.sql` is the single round trip save plus the mask that
