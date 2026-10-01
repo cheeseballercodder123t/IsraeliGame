@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // The route handlers call the same store the game does, so this suite runs on
 // the in-process adapter and hands each handler a real `Request`.
@@ -23,6 +23,7 @@ const cookiesMock = vi.hoisted(() => {
 
 vi.mock("next/headers", () => ({ cookies: cookiesMock.fn }));
 
+import { GET as healthGET } from "@/app/api/health/route";
 import { GET as streamGET } from "@/app/api/table/[code]/stream/route";
 import { GET as summaryGET } from "@/app/api/table/[code]/summary/route";
 import { GET as tickGET, POST as tickPOST } from "@/app/api/tick/route";
@@ -242,6 +243,46 @@ describe("GET /api/table/[code]/stream", () => {
     const hands = frame.composers as { playerId: string | null; name: string }[];
     expect(hands.map((who) => who.name)).toEqual([guest.name]);
     expect(hands[0].playerId).toBe(guestSeat.id);
+  });
+});
+
+describe("GET /api/health", () => {
+  // The suite may run on a machine whose environment already holds real
+  // credentials, so each case states exactly what is set and puts the three
+  // names back as it found them.
+  const names = ["SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"] as const;
+  const before = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+
+  afterEach(() => {
+    for (const name of names) {
+      const value = before[name];
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  });
+
+  const credentials = async () =>
+    (await (await healthGET()).json()) as { credentials: { url: boolean; key: boolean } };
+
+  it("names which of the two credentials this process can see", async () => {
+    process.env.SUPABASE_URL = "https://example.supabase.co";
+    delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+    process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role-key";
+    expect((await credentials()).credentials).toEqual({ url: true, key: true });
+  });
+
+  it("falls back to the public name for the url", async () => {
+    delete process.env.SUPABASE_URL;
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
+    delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    expect((await credentials()).credentials).toEqual({ url: true, key: false });
+  });
+
+  it("counts a name holding only whitespace as absent", async () => {
+    delete process.env.SUPABASE_URL;
+    delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+    process.env.SUPABASE_SERVICE_ROLE_KEY = "   ";
+    expect((await credentials()).credentials).toEqual({ url: false, key: false });
   });
 });
 
