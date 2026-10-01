@@ -15,7 +15,7 @@ A live table runs on Vercel at https://bigyahuapproved.vercel.app/.
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # 446 tests in 46 files
+npm test           # 451 tests in 46 files
 npm run typecheck
 npm run build
 ```
@@ -412,7 +412,8 @@ counter surveillance, and pins which file each line reads in. `tests/poll.test.t
 transport schedule as arithmetic and pins the per hour cost of every kind of desk, from the streamed
 one that asks twice a minute to the old one that asked twelve times. `tests/schemes.test.ts` runs a
 long con from the catalog through the stage pass, the opening window, the two ways it ends, the
-payoff and its floor, the file a rival can read and the order desk at a live table, and
+payoff and its floor, the file a rival can read and the order desk at a live table, the errand a
+bench can file and the office an automated director runs, and
 `tests/store-retry.test.ts` pins what the store is
 willing to try again, what it refuses to, and how long one attempt is given.
 
@@ -488,6 +489,14 @@ opened in pays the first cut and reads nothing back, since the desk has no call 
 call comes from the window after. What a finished con pays is scoped to the mark: the Long Con takes
 half of the mark's own money, on hand and offshore, never less than the run's own cost in cuts while
 the mark can cover it, and never more than one and a half million.
+
+The bench keeps offices too. An automated director runs the two cons whose every stage is aimed at
+a house or at the office's own door, the Long Con and the Audit Leak, and stays off the five that
+want a plot, a span or a demand only a desk can name. Once a table has played a few windows, a
+bench with money in the till watches the table and opens one when it finds a mark worth the first
+cut: the richest books on hand and offshore for a skim, the head of the table for a leak. While a
+run is live the window's errand is the whole of that house's dark business, and an office loud
+enough to be listed buys a sweep before it buys anything else.
 
 The closing edition is a keepsake. `/rag/<code>` prints the same sheet the desk opens, with the
 final ranking and the era's books underneath it and every earlier edition ruled along the foot, so a

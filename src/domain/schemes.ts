@@ -237,6 +237,26 @@ export function schemeRunOf(scheme: Scheme): SchemeReading {
   };
 }
 
+/**
+ * The errand a stage names, as an order, when the desk has a house to point
+ * it at: a tap, the private papers, a dark plant, or the office's own sweep.
+ * A stage that wants a plot, a span or a demand picked by hand returns null,
+ * because those are calls only a desk can make and the code that asks for
+ * them is the code that keeps them out of an automated director's hands.
+ */
+export function schemeStageOrder(stage: SchemeStage, markId: string): Order | null {
+  switch (stage.order) {
+    case "WIRETAP":
+    case "ESPIONAGE":
+    case "CYBERATTACK":
+      return { type: stage.order, playerId: markId };
+    case "COUNTER_SURVEILLANCE":
+      return { type: "COUNTER_SURVEILLANCE" };
+    default:
+      return null;
+  }
+}
+
 /** Heat at which the operation is in every rival's file. */
 export function isSchemeExposed(scheme: Scheme): boolean {
   return scheme.exposedTurn !== null || scheme.heat >= SCHEME_ALARM;
