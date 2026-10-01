@@ -426,7 +426,7 @@ begin
   select (q->>'id')::uuid, p_game_id, (q->>'playerId')::uuid, (q->>'turn')::int,
          q->'order'->>'type', q->'order'
   from jsonb_array_elements(p_snapshot->'queue') as q
-  where q->>'turn' >= (p_snapshot->'game'->>'currentTurn')::int
+  where (q->>'turn')::int >= (p_snapshot->'game'->>'currentTurn')::int
   on conflict (id) do nothing;
 end;
 $$;

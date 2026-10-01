@@ -1,7 +1,7 @@
 import {
   MIN_SEATS,
   listIssues,
-  loadGameByCode,
+  loadSettledByCode,
   openSeats,
   playerOf,
   resolveIfDue,
@@ -140,7 +140,10 @@ function lobbyOf(state: GameState, userId: string | null): LobbyView {
  */
 export async function openTable(code: string): Promise<TableResult> {
   const session = await readSession();
-  const loaded = await loadGameByCode(code.toUpperCase());
+  // The page a founder is sent to the second the table is made, so a read that
+  // arrives a beat before the write is visible is waited out rather than shown
+  // as a table that never filed.
+  const loaded = await loadSettledByCode(code);
   if (!loaded) return { kind: "miss", miss: { reason: "no-table" } };
 
   if (session) beat(loaded.game.id, session.userId, session.name);

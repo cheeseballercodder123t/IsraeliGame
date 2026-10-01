@@ -10,6 +10,7 @@ import {
   fillWithBots,
   joinMatch,
   listJoinableTables,
+  loadSettledByCode,
   openSeats,
   startMatch,
   startTable,
@@ -194,6 +195,14 @@ describe("lobby tables", () => {
     expect(first).not.toBeNull();
     const again = await joinMatch(lobby.state.game.code, guest, "KLEPTOCRAT");
     expect(again!.playerId).toBe(first!.playerId);
+  });
+
+  it("answers for a founded code before the founder is sent to it", async () => {
+    const { state } = await startMatch(host, "ROBBER_BARON", 5);
+    // The redirect names the code, so the code has to answer right away.
+    const settled = await loadSettledByCode(state.game.code.toLowerCase());
+    expect(settled?.game.id).toBe(state.game.id);
+    expect(settled?.game.status).toBe("LOBBY");
   });
 
   it("reports human seats in the store summary", async () => {

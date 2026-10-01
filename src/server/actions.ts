@@ -17,6 +17,7 @@ import {
   fillWithBots,
   joinMatch,
   loadGameByCode,
+  loadSettledByCode,
   markWireRead,
   playerOf,
   queueOrder,
@@ -60,9 +61,11 @@ export async function joinTableAction(formData: FormData): Promise<void> {
   const session = await ensureSession(name);
   const joined = await joinMatch(code, session, archetype);
   if (!joined) {
-    // Every chair is taken. The table page still opens on the rail, read only,
-    // which is better than a refusal for somebody who was sent the code.
-    const running = await loadGameByCode(code);
+    // Every chair is taken, or the code arrived before the table was readable.
+    // The table page still opens on the rail, read only, which is better than
+    // a refusal for somebody who was sent the code, so the second look waits
+    // a beat for a table that was just founded.
+    const running = await loadSettledByCode(code);
     if (running && running.game.status !== "LOBBY") redirect(`/table/${code}`);
     redirect(`/?missing=${encodeURIComponent(code)}`);
   }

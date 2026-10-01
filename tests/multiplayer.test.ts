@@ -21,13 +21,27 @@ const ARCHETYPES: Archetype[] = ["ROBBER_BARON", "TECH_MESSIAH", "PE_VULTURE", "
 
 let dir = "";
 const saved = new Map<string, string | undefined>();
-const MANAGED = ["CONGLOMERATE_DATA_DIR", "CONGLOMERATE_STORE", "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "RAG_PROVIDER"];
+const MANAGED = [
+  "CONGLOMERATE_DATA_DIR",
+  "CONGLOMERATE_STORE",
+  "SUPABASE_URL",
+  "NEXT_PUBLIC_SUPABASE_URL",
+  "SUPABASE_SERVICE_ROLE_KEY",
+  "OPENAI_API_KEY",
+  "ANTHROPIC_API_KEY",
+  "RAG_PROVIDER",
+];
 
 beforeAll(async () => {
   dir = await mkdtemp(path.join(tmpdir(), "conglomerate-sync-"));
   for (const key of MANAGED) saved.set(key, process.env[key]);
   process.env.CONGLOMERATE_DATA_DIR = dir;
   delete process.env.CONGLOMERATE_STORE;
+  // The subject here is the file store, so credentials left over from a real
+  // environment must not be allowed to pick Supabase instead.
+  delete process.env.SUPABASE_URL;
+  delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+  delete process.env.SUPABASE_SERVICE_ROLE_KEY;
   // The paper must be the deterministic writer, or the tick tests would need a
   // network and a model to resolve a window.
   delete process.env.OPENAI_API_KEY;

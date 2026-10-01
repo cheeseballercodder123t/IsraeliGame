@@ -30,6 +30,22 @@ function fail(message) {
   process.exitCode = 1;
 }
 
+/**
+ * Clicks a control that only becomes live once React has hydrated. A click
+ * that lands on the server's markup before hydration is attached is dropped
+ * by the browser, which is the one race a script hits and a person does not.
+ * The click is retried until the panel it should open is on the page, so a
+ * dropped first click is harmless; it stops as soon as the app answers.
+ */
+async function clickWhenLive(page, selector, expect, tries = 25) {
+  for (let attempt = 0; attempt < tries; attempt += 1) {
+    if (expect && (await page.locator(expect).count()) > 0) return;
+    const target = page.locator(selector).first();
+    if ((await target.count()) > 0) await target.click({ timeout: 4_000 }).catch(() => {});
+    await page.waitForTimeout(400);
+  }
+}
+
 try {
   // ---- Host founds a gathering table.
   const hostCtx = await browser.newContext();
@@ -56,12 +72,12 @@ try {
   if ((await listing.count()) === 0) throw new Error(`table ${code} missing from the open-chair listing`);
   await listing.first().click();
   await guest.waitForSelector("text=Take a chair", { timeout: 20_000 });
-  await guest.click("button:has-text('Take a chair')");
+  await clickWhenLive(guest, "button:has-text('Take a chair')", "text=Your seat");
   await guest.waitForSelector("text=Your seat", { timeout: 20_000 });
   log("guest claimed a chair through the lobby");
 
   // ---- The host opens the window; the bench fills and the desk appears.
-  await host.click("button:has-text('Open the window')");
+  await clickWhenLive(host, "button:has-text('Open the window')", "text=Operations desk");
   await host.waitForSelector("text=Operations desk", { timeout: 30_000 });
   await host.waitForSelector("text=Industrial grid", { timeout: 30_000 });
   log("host opened the window; dashboard rendered");

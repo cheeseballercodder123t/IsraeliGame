@@ -29,6 +29,7 @@ import { rosterCount } from "@/server/roster";
 import { sendEraNotices, sendWindowNotices } from "@/server/notices";
 import { publishHold, publishQuestion, publishRevision } from "@/server/realtime";
 import { getStore, type GameStore } from "@/server/store";
+import { readWhenSettled } from "@/server/store/resilience";
 import type { NewspaperRecord } from "@/server/store/types";
 import { planBotTurn } from "@/server/bot";
 import type {
@@ -163,6 +164,14 @@ export async function startMatch(
     winCondition: settled,
   });
   await store.saveGame(state);
+
+  // The browser is about to ask for this code by name, so the founding call
+  // does not return until the store answers for it. The write is awaited, but
+  // a read can still reach an instance that has not seen it yet, and a table
+  // that reads as missing the moment it was founded is the one glitch a
+  // founder should never meet. This never blocks long: the first read usually
+  // answers, and a code that is genuinely unknown is not waited on here.
+  await loadSettledByCode(code);
 
   const hostPlayer = state.players.find((p) => p.userId === host.userId);
   return { state, playerId: hostPlayer?.id ?? state.players[0].id };
@@ -458,6 +467,23 @@ export async function listJoinableTables(): Promise<OpenTableSummary[]> {
 
 export async function loadGameByCode(code: string): Promise<GameState | null> {
   return getStore().getGameByCode(code);
+}
+
+/**
+ * Loads a table by code, giving a store that has not caught up with the write
+ * that made it a moment to answer.
+ *
+ * The read path is the one a browser meets first: a founder is redirected to
+ * the table the instant it is created, and a joiner follows a code somebody
+ * handed them. A hosted database can answer that read from a place that has
+ * not seen the row yet, and a short wait is what keeps the registrar's notice
+ * off a table that does exist. An unknown code still answers null, just after
+ * the budget rather than on the first read.
+ */
+export async function loadSettledByCode(code: string): Promise<GameState | null> {
+  const store = getStore();
+  const upper = code.toUpperCase();
+  return readWhenSettled(() => store.getGameByCode(upper));
 }
 
 export async function queueOrder(

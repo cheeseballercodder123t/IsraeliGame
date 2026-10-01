@@ -65,6 +65,41 @@ function codeOf(error: unknown): string | null {
   return null;
 }
 
+/** How a read that may arrive before its write is repeated. */
+export interface SettleOptions {
+  /** Total reads, including the first. */
+  attempts?: number;
+  /** How long to wait between reads. */
+  delayMs?: number;
+  /** Injected by tests so a wait does not need real time. */
+  sleep?: (ms: number) => Promise<void>;
+}
+
+/**
+ * A read that is allowed to be a beat early.
+ *
+ * A write is awaited before the caller is told it landed, so a table that
+ * cannot be read back is not a lost write: it is a read that reached a replica
+ * or an instance that has not seen the row yet. This is the policy that turns
+ * that moment into a short wait rather than a missing table, and it returns the
+ * first answer it gets. A code that answers to nothing still answers null, just
+ * after the whole budget rather than on the first read.
+ */
+export async function readWhenSettled<T>(
+  read: () => Promise<T | null>,
+  options: SettleOptions = {},
+): Promise<T | null> {
+  const attempts = Math.max(1, options.attempts ?? 5);
+  const delayMs = Math.max(0, options.delayMs ?? 120);
+  const sleep = options.sleep ?? defaultSleep;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const value = await read();
+    if (value !== null && value !== undefined) return value;
+    if (attempt < attempts && delayMs > 0) await sleep(delayMs);
+  }
+  return null;
+}
+
 /**
  * Whether an error is worth another try.
  *
@@ -129,12 +164,16 @@ export function isTransientError(error: unknown): boolean {
  */
 export function isMissingFunction(error: unknown): boolean {
   const code = codeOf(error);
-  if (code === "42883" || code === "PGRST202") return true;
+  if (code === "PGRST202") return true;
   const text = textOf(error).toLowerCase();
-  return (
-    text.includes("could not find the function") ||
-    text.includes("does not exist") && text.includes("function")
-  );
+  // Postgres files both an undefined function and an undefined operator under
+  // 42883, so the code alone cannot answer this. An operator complaint raised
+  // inside a function the caller did have must not be mistaken for the function
+  // being absent, or the caller quietly falls back and hides the real fault.
+  if (code === "42883" || (text.includes("does not exist") && text.includes("function"))) {
+    return text.includes("function");
+  }
+  return text.includes("could not find the function");
 }
 
 function delayFor(attempt: number, options: RetryOptions): number {

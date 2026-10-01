@@ -3,6 +3,7 @@ import {
   StoreRequestError,
   isMissingFunction,
   isTransientError,
+  readWhenSettled,
   withRetry,
 } from "@/server/store/resilience";
 
@@ -53,6 +54,17 @@ describe("what is worth trying again", () => {
       }),
     ).toBe(true);
     expect(isMissingFunction({ message: "deadlock detected", code: "40P01" })).toBe(false);
+  });
+
+  it("does not mistake an operator fault inside a function for a missing one", () => {
+    // Postgres files undefined operators under 42883 as well. A caller that has
+    // the function must still hear the real error rather than fall back.
+    expect(
+      isMissingFunction({
+        message: "operator does not exist: text >= integer",
+        code: "42883",
+      }),
+    ).toBe(false);
   });
 });
 
@@ -147,5 +159,52 @@ describe("the retry policy", () => {
     expect(error).toBeInstanceOf(StoreRequestError);
     expect((error as StoreRequestError).what).toBe("request");
     expect((error as StoreRequestError).code).toBe("TIMEOUT");
+  });
+});
+
+describe("a read that may arrive before its write", () => {
+  it("takes the first answer without waiting", async () => {
+    const { gaps, sleep } = recorder();
+    let reads = 0;
+    const value = await readWhenSettled(
+      async () => {
+        reads += 1;
+        return "the table";
+      },
+      { sleep },
+    );
+    expect(value).toBe("the table");
+    expect(reads).toBe(1);
+    expect(gaps).toEqual([]);
+  });
+
+  it("reads again when the row has not landed yet", async () => {
+    const { gaps, sleep } = recorder();
+    let reads = 0;
+    const value = await readWhenSettled(
+      async () => {
+        reads += 1;
+        return reads < 3 ? null : "the table";
+      },
+      { sleep, attempts: 5, delayMs: 120 },
+    );
+    expect(value).toBe("the table");
+    expect(reads).toBe(3);
+    expect(gaps).toEqual([120, 120]);
+  });
+
+  it("answers nothing after the budget on a code that never lands", async () => {
+    const { gaps, sleep } = recorder();
+    let reads = 0;
+    const value = await readWhenSettled(
+      async () => {
+        reads += 1;
+        return null;
+      },
+      { sleep, attempts: 4, delayMs: 50 },
+    );
+    expect(value).toBeNull();
+    expect(reads).toBe(4);
+    expect(gaps).toEqual([50, 50, 50]);
   });
 });

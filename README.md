@@ -15,7 +15,7 @@ A live table runs on Vercel at https://bigyahuapproved.vercel.app/.
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # 451 tests in 46 files
+npm test           # 462 tests in 46 files
 npm run typecheck
 npm run build
 ```
@@ -376,7 +376,7 @@ printing what they filed.
 
 ### The tests
 
-Forty six files, four hundred and forty tests. Geometry and the catalogs are checked against
+Forty six files, four hundred and fifty five tests. Geometry and the catalogs are checked against
 their own contents, so a catalog edit that breaks an assumption fails a test rather than a screen:
 seventy five commodities, seventy five plants, twenty six charters, seventy nine orders, a hundred and
 thirty six event kinds, and every sprite placement inside its sheet. The table's own rules are
@@ -415,7 +415,8 @@ long con from the catalog through the stage pass, the opening window, the two wa
 payoff and its floor, the file a rival can read and the order desk at a live table, the errand a
 bench can file and the office an automated director runs, and
 `tests/store-retry.test.ts` pins what the store is
-willing to try again, what it refuses to, and how long one attempt is given.
+willing to try again, what it refuses to, how long one attempt is given, and the short wait a read
+of a just founded table is allowed before the registrar's notice is printed.
 
 ### What the room itself knows
 

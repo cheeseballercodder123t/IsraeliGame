@@ -33,14 +33,16 @@ function diskTakes(root: string): boolean {
 
 /**
  * Supabase when credentials are present, the directory store when the disk
- * takes it, the in-process store when it does not. CONGLOMERATE_STORE=memory
- * still forces memory off the disk, which is what keeps the tests off it.
+ * takes it, the in-process store when it does not. CONGLOMERATE_STORE=memory is
+ * an instruction rather than a fallback, so it is read before anything else is
+ * weighed: it is what keeps the test pass off a real database even on a machine
+ * that happens to have working credentials in its environment.
  */
 function chooseKind(): GameStore["kind"] {
   if (chosen) return chosen;
   const root = fileStoreRoot();
-  if (supabaseCredentials()) chosen = "supabase";
-  else if (process.env.CONGLOMERATE_STORE === "memory") chosen = "memory";
+  if (process.env.CONGLOMERATE_STORE === "memory") chosen = "memory";
+  else if (supabaseCredentials()) chosen = "supabase";
   else if (diskTakes(root)) chosen = "file";
   else chosen = "memory";
 

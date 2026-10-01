@@ -84,7 +84,8 @@ from game_states s
 left join lateral (
   select jsonb_agg(
     case
-      when entry->>'playerId' = my_player_id(s.game_id) then entry
+      -- The queue carries ids as strings, so the seat id is compared as text.
+      when entry->>'playerId' = my_player_id(s.game_id)::text then entry
       when (entry->>'turn')::int > s.turn_number then entry
       when (entry->'order'->>'type') in (
         'SLUDGE_DUMP', 'CYBERATTACK', 'POACH_ENGINEER', 'SABOTAGE_RAIL',
@@ -116,7 +117,7 @@ left join lateral (
       else '[]'::jsonb
     end
   ) with ordinality as r(entry, ord)
-  where entry->>'runnerId' = my_player_id(s.game_id)
+  where entry->>'runnerId' = my_player_id(s.game_id)::text
      or entry->>'exposedTurn' is not null
      or coalesce((entry->>'heat')::numeric, 0) >= 60
 ) runs on true
