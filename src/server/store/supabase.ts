@@ -12,9 +12,22 @@ import type {
 import { withRevision } from "./types";
 import { StoreRequestError, isMissingFunction, withRetry, type RetryOptions } from "./resilience";
 
+/**
+ * The two values this adapter needs, tidied.
+ *
+ * A project URL is copied by hand out of a dashboard, so it arrives wearing
+ * what hand copying leaves on it: a trailing slash, or a stray space. Supabase
+ * appends its own path onto this value, so a trailing slash becomes a doubled
+ * one and the database refuses the whole request as an invalid path (PGRST125)
+ * rather than naming the table it wanted. The API screen also shows a URL that
+ * already ends in /rest/v1, which the client would add a second time, so that
+ * suffix goes too. Nothing else about the value is touched, and a key is only
+ * trimmed, since trailing whitespace in a header is just as quiet a failure.
+ */
 export function supabaseCredentials(): { url: string; key: string } | null {
-  const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const raw = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+  const url = raw.trim().replace(/\/+$/, "").replace(/\/rest\/v1$/, "");
+  const key = (process.env.SUPABASE_SERVICE_ROLE_KEY ?? "").trim();
   if (!url || !key) return null;
   return { url, key };
 }

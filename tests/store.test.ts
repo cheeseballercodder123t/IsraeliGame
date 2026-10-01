@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { getStore, resetStore, storeKind } from "@/server/store";
+import { getStore, resetStore, storeKind, supabaseCredentials } from "@/server/store";
 
 /**
  * The store is chosen once per process, and the choice is what decides whether
@@ -97,6 +97,16 @@ describe("choosing a store", () => {
     expect(getStore().kind).toBe("memory");
   });
 
+  // The override is how the test pass keeps itself off a real database. A
+  // machine that has credentials in its environment must not be able to win.
+  it("lets an explicit memory choice beat credentials in the environment", () => {
+    process.env.SUPABASE_URL = "https://example.supabase.co";
+    process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role-key-for-tests-only-0000000000";
+    process.env.CONGLOMERATE_STORE = "memory";
+    expect(storeKind()).toBe("memory");
+    expect(getStore().kind).toBe("memory");
+  });
+
   it("keeps the ladder on the disk, across a fresh store", async () => {
     process.env.CONGLOMERATE_DATA_DIR = await scratch();
     const first = getStore();
@@ -136,5 +146,45 @@ describe("choosing a store", () => {
     process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role-key-for-tests-only-0000000000";
     expect(storeKind()).toBe("supabase");
     expect(getStore().kind).toBe("supabase");
+  });
+});
+
+/**
+ * The credentials are typed in by hand, so the shapes hand typing produces are
+ * pinned here. A trailing slash is the one that matters: the client appends its
+ * own path to this value, so the doubled slash makes the database reject every
+ * request as an invalid path and the store looks broken rather than mistyped.
+ */
+describe("reading the Supabase credentials", () => {
+  it("answers nothing until both halves are present", () => {
+    process.env.SUPABASE_URL = "https://example.supabase.co";
+    expect(supabaseCredentials()).toBeNull();
+    delete process.env.SUPABASE_URL;
+    process.env.SUPABASE_SERVICE_ROLE_KEY = "key";
+    expect(supabaseCredentials()).toBeNull();
+  });
+
+  it("strips the trailing slash that would double the path", () => {
+    process.env.SUPABASE_URL = "https://example.supabase.co/";
+    process.env.SUPABASE_SERVICE_ROLE_KEY = "key";
+    expect(supabaseCredentials()?.url).toBe("https://example.supabase.co");
+  });
+
+  it("strips the /rest/v1 suffix the API screen sometimes shows", () => {
+    process.env.SUPABASE_URL = "https://example.supabase.co/rest/v1";
+    process.env.SUPABASE_SERVICE_ROLE_KEY = "key";
+    expect(supabaseCredentials()?.url).toBe("https://example.supabase.co");
+  });
+
+  it("takes the whitespace off a pasted value", () => {
+    process.env.SUPABASE_URL = " https://example.supabase.co \n";
+    process.env.SUPABASE_SERVICE_ROLE_KEY = "  key  ";
+    expect(supabaseCredentials()).toEqual({ url: "https://example.supabase.co", key: "key" });
+  });
+
+  it("accepts the public URL name as well", () => {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co/";
+    process.env.SUPABASE_SERVICE_ROLE_KEY = "key";
+    expect(supabaseCredentials()?.url).toBe("https://example.supabase.co");
   });
 });
