@@ -39,6 +39,24 @@ async function clearPaper(page) {
   }
 }
 
+/**
+ * Works out a line and insists the Say button go live. The composer is a
+ * controlled field, so a fill that lands before React hydrates is silently
+ * erased; trying again is what keeps the check from reporting a line that was
+ * never actually said.
+ */
+async function compose(page, line) {
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    await page.fill('input[placeholder="A figure, a threat, a name"]', line);
+    const live = await page
+      .waitForSelector("button:has-text('Say'):not([disabled])", { timeout: 4_000 })
+      .then(() => true)
+      .catch(() => false);
+    if (live) return true;
+  }
+  return false;
+}
+
 function fail(message) {
   console.error("WIRE FAILED:", message);
   process.exitCode = 1;
@@ -90,18 +108,8 @@ try {
   // ---- The guest lands on the live desk and works out a line.
   await guest.reload({ waitUntil: "domcontentloaded" });
   await guest.waitForSelector("text=Industrial grid", { timeout: 30_000 });
-  // The composer is a controlled field, so a fill that lands before React
-  // hydrates is silently erased on hydration. Fill, then insist the Say
-  // button go live, trying again if the desk was not ready yet.
-  let penDown = false;
-  for (let attempt = 0; attempt < 5 && !penDown; attempt += 1) {
-    await guest.fill('input[placeholder="A figure, a threat, a name"]', "The floor is yours, take it.");
-    penDown = await guest
-      .waitForSelector("button:has-text('Say'):not([disabled])", { timeout: 4_000 })
-      .then(() => true)
-      .catch(() => false);
-  }
-  if (!penDown) fail("the composer never took the line (field keeps emptying)");
+  if (!(await compose(guest, "The floor is yours, take it.")))
+    fail("the composer never took the line (field keeps emptying)");
   else log("guest put pen to paper (composing)");
 
   // ---- The host, who is watching, must see the rival composing within one
@@ -130,10 +138,16 @@ try {
   // ---- drift interval is what keeps the flag on the title at all.
   await host.evaluate(() => Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true }));
   await host.evaluate(() => Object.defineProperty(document, "hidden", { value: true, configurable: true }));
-  await guest.fill('input[placeholder="A figure, a threat, a name"]', "And the tender with it.");
+  if (!(await compose(guest, "And the tender with it.")))
+    fail("the composer never took the second line (field keeps emptying)");
   await clearPaper(guest);
   await guest.click("button:has-text('Say')");
-  log("guest said the second line while the host tab was parked");
+  const secondLanded = await host
+    .waitForSelector("div[data-wire-log] >> text=And the tender with it", { timeout: 15_000 })
+    .then(() => true)
+    .catch(() => false);
+  if (!secondLanded) fail("the guest's second line never reached the host's wire log");
+  else log("guest said the second line while the host tab was parked");
 
   let titled = false;
   for (let attempt = 0; attempt < 8; attempt += 1) {
@@ -151,7 +165,7 @@ try {
   // ---- room, pressure aside, because the desk has now read the wire.
   await host.evaluate(() => Object.defineProperty(document, "visibilityState", { value: "visible", configurable: true }));
   await host.evaluate(() => Object.defineProperty(document, "hidden", { value: false, configurable: true }));
-  host.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await host.evaluate(() => window.dispatchEvent(new Event("focus")));
   let cleared = false;
   for (let attempt = 0; attempt < 6 && titled; attempt += 1) {
     await host.waitForTimeout(3_000);
