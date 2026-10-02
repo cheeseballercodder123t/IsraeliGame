@@ -1,5 +1,6 @@
-import { beatPrint, streamFrameDue } from "@/lib/sync";
-import { currentSession, tableHeartbeat } from "@/server/heartbeat";
+import { beatPrint, rosterPrint, streamFrameDue, streamLookDue } from "@/lib/sync";
+import { currentSession, tableHeartbeat, tableRoster } from "@/server/heartbeat";
+import { getStore } from "@/server/store";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +22,14 @@ export const dynamic = "force-dynamic";
  * lands within one tick of the read that sees it instead of within five
  * seconds. That cadence is what lets the client keep the poll underneath as a
  * net rather than a second wire.
+ *
+ * A tick is cheap on purpose. The table's dial, which is one indexed row, and
+ * the room, which is presence stamps, are read on every tick; the whole
+ * snapshot is only loaded when the dial says the table moved, when the room
+ * moved, when the window's clock has run out, or when the summary beat is due.
+ * A desk watching a quiet table therefore costs a small row read rather than
+ * the entire document once a second, which leaves the database free for the
+ * writes the table is actually making.
  *
  * It is deliberately boring. There is no broker and no fan out across
  * instances: this process watches the store and writes what it sees. That is
@@ -72,26 +81,65 @@ export async function GET(
         }
       };
 
+      const store = getStore();
       let seen = first.revision;
       let printed = beatPrint(first);
+      let status: string = first.status;
+      /** The room as the last tick found it, for the change the dial cannot carry. */
+      let room: string | null = null;
       let sentAt = Date.now();
       send(first);
 
       const look = async () => {
         if (closed) return;
         try {
-          const beat = await tableHeartbeat(code, session, false);
-          if (!beat) {
+          const pulse = await store.gamePulseByCode(code);
+          if (!pulse) {
+            // The table is gone, or the store cannot answer for it. Either way
+            // there is nothing left to push, and the desk's poll takes over.
             close();
             return;
           }
-          const printedNow = beatPrint(beat);
-          const moved = printedNow !== printed;
-          if (streamFrameDue({ seen, revision: beat.revision, changed: moved, sentAt, now: Date.now() })) {
-            seen = beat.revision;
-            printed = printedNow;
-            sentAt = Date.now();
-            send(beat);
+          // The room is stamped on every tick, so a hand stays down and a desk
+          // stays present without anybody paying for the document to find out.
+          const now = Date.now();
+          const standing = rosterPrint(await tableRoster(pulse.id, session, false));
+          const rosterChanged = room !== null && standing !== room;
+          room = standing;
+
+          if (
+            streamLookDue({
+              seen,
+              revision: pulse.revision,
+              seenStatus: status,
+              status: pulse.status,
+              nextTickAt: pulse.nextTickAt,
+              sentAt,
+              now,
+              rosterChanged,
+            })
+          ) {
+            const beat = await tableHeartbeat(code, session, false);
+            if (!beat) {
+              close();
+              return;
+            }
+            const printedNow = beatPrint(beat);
+            const moved = printedNow !== printed;
+            // The summary beat sends whether or not anything moved, which is
+            // the frame that tells a desk its wire is still alive. It is also
+            // the only frame a quiet table sends, so the timestamp it moves is
+            // what keeps the next summary beat a full window away rather than
+            // due on every tick.
+            if (
+              streamFrameDue({ seen, revision: beat.revision, changed: moved, sentAt, now: Date.now() })
+            ) {
+              seen = beat.revision;
+              printed = printedNow;
+              sentAt = Date.now();
+              send(beat);
+            }
+            status = beat.status;
           }
         } catch {
           close();

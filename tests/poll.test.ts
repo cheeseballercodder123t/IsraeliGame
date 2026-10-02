@@ -12,7 +12,9 @@ import {
   UPGRADED_POLL_FACTOR,
   beatPrint,
   pollDelayMs,
+  rosterPrint,
   streamFrameDue,
+  streamLookDue,
   streamRetryDelayMs,
 } from "@/lib/sync";
 
@@ -250,6 +252,92 @@ describe("what a stream compares between its ticks", () => {
       beatPrint({ ...standing, question: { called: ["p1"], needed: ["p1"], ready: false } }),
     ).not.toBe(beatPrint(standing));
     expect(beatPrint({ ...standing, held: true })).not.toBe(beatPrint(standing));
+  });
+});
+
+describe("what a stream compares of the room", () => {
+  const one = { userId: "u1", name: "Cornelius Hale" };
+  const two = { userId: "u2", name: "Hetty Green" };
+
+  it("prints one string for one room, whatever order the rows arrive in", () => {
+    expect(rosterPrint({ present: [one], composers: [] })).toBe(
+      rosterPrint({ present: [{ ...one }], composers: [] }),
+    );
+    expect(rosterPrint({ present: [one, two], composers: [] })).toBe(
+      rosterPrint({ present: [two, one], composers: [] }),
+    );
+  });
+
+  it("prints a different string when a hand goes down, with nothing written", () => {
+    const quiet = rosterPrint({ present: [one], composers: [] });
+    expect(rosterPrint({ present: [one], composers: [one] })).not.toBe(quiet);
+  });
+
+  it("prints a different string when a house arrives or leaves", () => {
+    const alone = rosterPrint({ present: [one], composers: [] });
+    expect(rosterPrint({ present: [one, two], composers: [] })).not.toBe(alone);
+    expect(rosterPrint({ present: [], composers: [] })).not.toBe(alone);
+  });
+
+  it("carries no timestamp, so a room that only stamped again is not news", () => {
+    // A desk refreshes its row on a stamp window, and a print that moved every
+    // time one said it was still here would drag the whole document along with
+    // it on every refresh.
+    const stamped = { userId: one.userId, name: one.name, at: 1_700_000_000_000 };
+    expect(rosterPrint({ present: [stamped], composers: [] })).toBe(
+      rosterPrint({ present: [one], composers: [] }),
+    );
+  });
+});
+
+describe("when a streamed tick owes the table a look", () => {
+  const sentAt = 1_000_000;
+  const deadline = sentAt + 60_000;
+  const dial = {
+    seen: 7,
+    revision: 7,
+    seenStatus: "ACTIVE",
+    status: "ACTIVE",
+    nextTickAt: new Date(deadline).toISOString(),
+    sentAt,
+    now: sentAt + 100,
+    rosterChanged: false,
+  };
+
+  it("looks on a write and leaves the document alone otherwise", () => {
+    expect(streamLookDue(dial)).toBe(false);
+    expect(streamLookDue({ ...dial, revision: 8 })).toBe(true);
+  });
+
+  it("looks when the room moves without a write", () => {
+    expect(streamLookDue({ ...dial, rosterChanged: true })).toBe(true);
+  });
+
+  it("looks when the summary beat comes round, so a quiet table is still read", () => {
+    expect(streamLookDue({ ...dial, now: sentAt + STREAM_SUMMARY_MS - 1 })).toBe(false);
+    expect(streamLookDue({ ...dial, now: sentAt + STREAM_SUMMARY_MS })).toBe(true);
+  });
+
+  it("looks when the window's clock has run out, which is how a turn closes", () => {
+    // The summary beat is put far away, so the deadline is the only rule that
+    // can answer here.
+    const near = { ...dial, sentAt: deadline - 100 };
+    expect(streamLookDue({ ...near, now: deadline - 1 })).toBe(false);
+    expect(streamLookDue({ ...near, now: deadline })).toBe(true);
+  });
+
+  it("does not look at a closed era's historical deadline", () => {
+    // A finished table keeps the deadline the last window closed on, and
+    // reading its document on every tick forever is the load this rule exists
+    // to avoid. The summary beat is kept far away so the clock is the only
+    // rule the tick could answer by.
+    const closed = { ...dial, sentAt: deadline - 100, status: "FINISHED", seenStatus: "FINISHED" };
+    expect(streamLookDue({ ...closed, now: deadline + 100 })).toBe(false);
+  });
+
+  it("looks the moment the status moves, even on a closed era's clock", () => {
+    const before = { ...dial, sentAt: deadline - 100 };
+    expect(streamLookDue({ ...before, status: "FINISHED", now: deadline + 1 })).toBe(true);
   });
 });
 

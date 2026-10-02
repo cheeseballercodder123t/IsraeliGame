@@ -6,7 +6,15 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Archetype, QueuedOrder } from "@/domain/types";
 import { FileStore } from "@/server/store/file";
 import { resetStore } from "@/server/store";
-import { advanceTurn, claimSeatByCode, queueOrder } from "@/server/game";
+import {
+  COMMIT_ATTEMPT,
+  COMMIT_ATTEMPTS,
+  COMMIT_BUDGET_MS,
+  advanceTurn,
+  claimSeatByCode,
+  guardedRoundSpent,
+  queueOrder,
+} from "@/server/game";
 
 /**
  * Synchronous multiplayer, server side.
@@ -123,6 +131,50 @@ describe("a table's revision", () => {
     const before = state.game.revision;
     expect(await store.saveGame(state)).toBe(true);
     expect(state.game.revision).toBe(before + 1);
+  });
+
+  it("answers the table's dial without loading the document", async () => {
+    const store = new FileStore(dir);
+    const state = await table(store, "PULSE1");
+    expect(await store.gamePulseByCode("pulse1")).toEqual({
+      id: state.game.id,
+      revision: state.game.revision,
+      currentTurn: state.game.currentTurn,
+      nextTickAt: state.game.nextTickAt,
+      status: "ACTIVE",
+    });
+    expect(await store.gamePulseByCode("NOPE99")).toBeNull();
+
+    // The dial moves with the write that moved the table.
+    state.game.currentTurn = 2;
+    await store.saveGame(state);
+    const moved = await store.gamePulseByCode("PULSE1");
+    expect(moved?.currentTurn).toBe(2);
+    expect(moved?.revision).toBe(state.game.revision);
+  });
+});
+
+describe("how long a guarded write may take", () => {
+  it("lets the first read through and then answers on the clock", () => {
+    const started = 1_000_000;
+    // The first attempt is the read the round cannot do without, however long
+    // the caller has already waited.
+    expect(guardedRoundSpent(started, started + COMMIT_BUDGET_MS * 10, 0)).toBe(false);
+    expect(guardedRoundSpent(started, started + COMMIT_BUDGET_MS - 1, 3)).toBe(false);
+    expect(guardedRoundSpent(started, started + COMMIT_BUDGET_MS, 3)).toBe(true);
+  });
+
+  it("gives a desk an answer in seconds rather than minutes", () => {
+    // What the budget exists for: a struggling store used to hold a seal or a
+    // message for as long as six rounds of a long retry ladder each, so the
+    // desk waited minutes to be told the table had moved.
+    expect(COMMIT_BUDGET_MS).toBeLessThanOrEqual(30_000);
+    // One attempt cannot spend more than the whole round, and a round cannot
+    // repeat it without bound.
+    expect(COMMIT_ATTEMPT.attempts * COMMIT_ATTEMPT.timeoutMs).toBeLessThanOrEqual(
+      COMMIT_BUDGET_MS,
+    );
+    expect(COMMIT_ATTEMPTS).toBeLessThanOrEqual(6);
   });
 });
 

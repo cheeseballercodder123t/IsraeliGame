@@ -79,6 +79,38 @@ function mergeRoster(...groups: PresenceEntry[][]): PresenceEntry[] {
 }
 
 /**
+ * Records one beat and hands back the room as it stands: who has a browser on
+ * the table and whose hand is down on the wire.
+ *
+ * This is the part of a beat that does not need the table's document at all.
+ * It is split out so the streamed transport can keep the room warm on every
+ * tick while it reads only the table's dial, and pay for the whole snapshot
+ * just when something on the dial says the table has moved.
+ */
+export async function tableRoster(
+  gameId: string,
+  session: Session | null,
+  composing: boolean,
+): Promise<{ present: PresenceEntry[]; composers: PresenceEntry[] }> {
+  if (session) {
+    const down = composing || handIsDown(gameId, session.userId);
+    if (composing) beatComposing(gameId, session.userId, session.name);
+    else beat(gameId, session.userId, session.name);
+    // The row outlives the process, which is what keeps the room standing
+    // still when a deployment answers from somewhere else next time, and it
+    // carries the hand as the registry has it rather than as this beat found
+    // it: a streamed desk keeps typing over instances it is not served by.
+    stampRoster(gameId, session.userId, session.name, down);
+  }
+
+  const durable = await readRoster(gameId);
+  return {
+    present: durable ? mergeRoster(durable.present, present(gameId)) : present(gameId),
+    composers: durable ? mergeRoster(durable.composers, composers(gameId)) : composers(gameId),
+  };
+}
+
+/**
  * Builds one beat for a table, or null when the code answers to nothing. The
  * caller has already resolved the session, because stamping presence needs to
  * know who is looking.
@@ -91,26 +123,11 @@ export async function tableHeartbeat(
   const loaded = await getStore().getGameByCode(code.toUpperCase());
   if (!loaded) return null;
 
-  if (session) {
-    const down = composing || handIsDown(loaded.game.id, session.userId);
-    if (composing) beatComposing(loaded.game.id, session.userId, session.name);
-    else beat(loaded.game.id, session.userId, session.name);
-    // The row outlives the process, which is what keeps the room standing
-    // still when a deployment answers from somewhere else next time, and it
-    // carries the hand as the registry has it rather than as this beat found
-    // it: a streamed desk keeps typing over instances it is not served by.
-    stampRoster(loaded.game.id, session.userId, session.name, down);
-  }
-
+  // The room is stamped and read first, so a desk that just beat is on the
+  // roster whatever the window does next.
+  const roster = await tableRoster(loaded.game.id, session, composing);
   const { state } = await resolveIfDue(loaded);
   const newest = state.messages[state.messages.length - 1]?.id ?? null;
-  const durable = await readRoster(state.game.id);
-  const roster = durable
-    ? mergeRoster(durable.present, present(state.game.id))
-    : present(state.game.id);
-  const hands = durable
-    ? mergeRoster(durable.composers, composers(state.game.id))
-    : composers(state.game.id);
   const question = questionOf(state);
 
   return {
@@ -119,12 +136,12 @@ export async function tableHeartbeat(
     currentTurn: state.game.currentTurn,
     nextTickAt: state.game.nextTickAt,
     status: state.game.status,
-    present: roster.map((who) => ({
+    present: roster.present.map((who) => ({
       playerId: state.players.find((player) => player.userId === who.userId)?.id ?? null,
       name: who.name,
       me: session !== null && who.userId === session.userId,
     })),
-    composers: hands
+    composers: roster.composers
       .filter((who) => who.userId !== session?.userId)
       .map((who) => ({
         playerId: state.players.find((player) => player.userId === who.userId)?.id ?? null,

@@ -152,3 +152,58 @@ export function beatPrint(beat: {
     beat.newestMessageId,
   ]);
 }
+
+/**
+ * The room half of a frame, printed as one string: who has a browser on the
+ * table and whose hand is down on the wire.
+ *
+ * It is deliberately built from the roster's own entries, which are small
+ * rows, rather than from the whole summary, which is the table's document. A
+ * streamed tick compares this against the last print to know the room moved,
+ * which is the one kind of news the table's counter does not carry.
+ */
+export function rosterPrint(roster: {
+  present: { userId: string; name: string }[];
+  composers: { userId: string; name: string }[];
+}): string {
+  const flat = (who: { userId: string; name: string }[]) =>
+    who.map((entry) => `${entry.userId}|${entry.name}`).sort();
+  return JSON.stringify([flat(roster.present), flat(roster.composers)]);
+}
+
+/**
+ * Whether a streamed tick owes the table a full look, or whether the dial it
+ * has already read can answer for it.
+ *
+ * Most of what a watcher sees move rides the table's counter: a write of any
+ * kind bumps the revision, and the turn, the status and the deadline all live
+ * on the same row. The room is the exception, so a changed roster is a reason
+ * to look on its own. The summary beat is the floor: a quiet table still gets
+ * a full frame often enough for a desk to know its wire is alive. And a window
+ * whose clock has run out has to be looked at whatever else has happened,
+ * because closing it is the one thing only a full beat does. A finished table
+ * is never looked at on its clock: its deadline is historical and a closed era
+ * has nothing to resolve.
+ */
+export function streamLookDue(input: {
+  /** The revision of the last frame sent. */
+  seen: number;
+  /** The revision the table's dial reports now. */
+  revision: number;
+  /** The status of the last frame sent, and the status the dial reports now. */
+  seenStatus: string;
+  status: string;
+  /** The window's deadline, as the dial holds it. */
+  nextTickAt: string;
+  /** When the last frame went out, so the summary beat is measured from it. */
+  sentAt: number;
+  now: number;
+  /** Whether the room moved since the last look. */
+  rosterChanged: boolean;
+}): boolean {
+  if (input.revision !== input.seen) return true;
+  if (input.status !== input.seenStatus) return true;
+  if (input.rosterChanged) return true;
+  if (input.now - input.sentAt >= STREAM_SUMMARY_MS) return true;
+  return input.status === "ACTIVE" && new Date(input.nextTickAt).getTime() <= input.now;
+}

@@ -3,6 +3,7 @@ import { createGameState } from "@/domain/world";
 import type { GameState, QueuedOrder } from "@/domain/types";
 import type {
   CreateGameInput,
+  GamePulse,
   GameStore,
   GameSummary,
   NewspaperRecord,
@@ -70,6 +71,22 @@ export class MemoryStore implements GameStore {
     const upper = code.toUpperCase();
     for (const state of registry().games.values()) {
       if (state.game.code === upper) return withRevision(state);
+    }
+    return null;
+  }
+
+  /** The dial of the live document, which in this adapter is the document. */
+  async gamePulseByCode(code: string): Promise<GamePulse | null> {
+    const upper = code.toUpperCase();
+    for (const state of registry().games.values()) {
+      if (state.game.code !== upper) continue;
+      return {
+        id: state.game.id,
+        revision: state.game.revision ?? 0,
+        currentTurn: state.game.currentTurn,
+        nextTickAt: state.game.nextTickAt,
+        status: state.game.status,
+      };
     }
     return null;
   }
