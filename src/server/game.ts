@@ -42,11 +42,37 @@ import type {
   WinCondition,
 } from "@/domain/types";
 
-export const TICK_INTERVAL_HOURS = Number(process.env.TICK_INTERVAL_HOURS ?? 24);
+/**
+ * A length of time off the environment, or the default when the variable is
+ * missing, blank, unreadable or not a positive number.
+ *
+ * This reads blanks as well as values on purpose. A deployment variable that
+ * is set but empty reaches the process as `""`, which `Number` reads as zero,
+ * and a window of no length is a window that is always due: the table then
+ * resolves a turn on every read instead of once a window. A mistyped value
+ * reads as NaN and does the same damage through the date arithmetic, so both
+ * are treated as "not set" and the default stands.
+ */
+export function envQuantity(raw: string | undefined, fallback: number): number {
+  const value = Number(raw);
+  return raw === undefined || raw.trim() === "" || !Number.isFinite(value) || value <= 0
+    ? fallback
+    : value;
+}
+
+/** A count off the environment, where zero is a real answer rather than a blank. */
+export function envCount(raw: string | undefined, fallback: number): number {
+  const value = Number(raw);
+  return raw === undefined || raw.trim() === "" || !Number.isFinite(value) || value < 0
+    ? fallback
+    : value;
+}
+
+export const TICK_INTERVAL_HOURS = envQuantity(process.env.TICK_INTERVAL_HOURS, 24);
 /** Seconds a real time window stays open before it closes and resolves. */
 export const REALTIME_WINDOW_SECONDS = Math.max(
   5,
-  Number(process.env.REALTIME_WINDOW_SECONDS ?? 20),
+  envQuantity(process.env.REALTIME_WINDOW_SECONDS, 20),
 );
 export const DEV_TICK = process.env.TICK_DEV_MODE !== "false";
 export { MAX_SEATS, MIN_SEATS };
@@ -56,8 +82,8 @@ export { MAX_SEATS, MIN_SEATS };
  * a window buys it this many seconds, and a window can only be held this many
  * times, so the table cannot be stalled by sealing in a loop.
  */
-export const SEAL_GRACE_SECONDS = Math.max(1, Number(process.env.FAIRNESS_GRACE_SECONDS ?? 3));
-export const MAX_WINDOW_HOLDS = Math.max(0, Number(process.env.FAIRNESS_HOLDS ?? 2));
+export const SEAL_GRACE_SECONDS = Math.max(1, envQuantity(process.env.FAIRNESS_GRACE_SECONDS, 3));
+export const MAX_WINDOW_HOLDS = Math.floor(envCount(process.env.FAIRNESS_HOLDS, 2));
 const HOLD_RULES: HoldRules = { graceSeconds: SEAL_GRACE_SECONDS, maxHolds: MAX_WINDOW_HOLDS };
 
 /** How many times a losing writer re-reads before it gives the table up. */
@@ -465,8 +491,25 @@ export async function listJoinableTables(): Promise<OpenTableSummary[]> {
   );
 }
 
+/**
+ * A window with a length.
+ *
+ * A table written while a deployment's window setting was blank or mistyped
+ * holds a length of nothing, and a window of nothing is always due: that table
+ * would resolve a turn on every read rather than once a window. Reading it on
+ * its mode's own clock is what puts such a table back on the rails instead of
+ * freezing it shut, and it leaves every real setting, however short, alone.
+ */
+function withLengthOfWindow(state: GameState): GameState {
+  if (!(state.game.tickIntervalHours > 0)) {
+    state.game.tickIntervalHours = windowHoursFor(state.game.mode);
+  }
+  return state;
+}
+
 export async function loadGameByCode(code: string): Promise<GameState | null> {
-  return getStore().getGameByCode(code);
+  const state = await getStore().getGameByCode(code);
+  return state ? withLengthOfWindow(state) : state;
 }
 
 /**
@@ -483,7 +526,8 @@ export async function loadGameByCode(code: string): Promise<GameState | null> {
 export async function loadSettledByCode(code: string): Promise<GameState | null> {
   const store = getStore();
   const upper = code.toUpperCase();
-  return readWhenSettled(() => store.getGameByCode(upper));
+  const state = await readWhenSettled(() => store.getGameByCode(upper));
+  return state ? withLengthOfWindow(state) : state;
 }
 
 export async function queueOrder(

@@ -3,12 +3,14 @@ import {
   executeOrder,
   priceAnchor,
   priceFloor,
+  recordHistory,
   settlePrices,
   settleShorts,
   standingDemand,
   stepPrice,
   type MarketIntent,
 } from "@/domain/market";
+import { resolveTurnTick } from "@/domain/tick";
 import {
   CITY_APPETITE,
   COMMODITIES,
@@ -177,6 +179,40 @@ describe("the exchange", () => {
     expect(state.game.powerTariff).toBeGreaterThanOrEqual(0.6);
     expect(state.game.powerTariff).toBeLessThanOrEqual(1.8);
     expect(log.some((event) => event.kind === "GRID_TARIFF")).toBe(true);
+  });
+
+  it("files the settled prices under the turn they open, one row each", () => {
+    // The book mirrors into a table that keeps a single price per turn and
+    // resource, so a second row for the same turn is a write the database
+    // refuses outright: the window that closed used to be filed under its own
+    // turn, on top of the opening row the world was drawn with, and the whole
+    // save was then rejected and the desk answered with an error.
+    const state = freshState();
+    const closing = state.game.currentTurn;
+    const resources = state.market.length;
+    expect(state.history.filter((row) => row.turn === closing)).toHaveLength(resources);
+
+    const { state: next } = resolveTurnTick(state);
+    expect(next.game.currentTurn).toBe(closing + 1);
+    // One row for the turn that closed, one for the turn the new prices open.
+    expect(next.history.filter((row) => row.turn === closing)).toHaveLength(resources);
+    expect(next.history.filter((row) => row.turn === closing + 1)).toHaveLength(resources);
+
+    const keys = new Set(next.history.map((row) => `${row.turn}|${row.resource}`));
+    expect(keys.size).toBe(next.history.length);
+
+    // A second close in a row opens another turn and still keeps one row each.
+    const { state: third } = resolveTurnTick(next);
+    const keysAgain = new Set(third.history.map((row) => `${row.turn}|${row.resource}`));
+    expect(keysAgain.size).toBe(third.history.length);
+    expect(third.history.filter((row) => row.turn === closing + 2)).toHaveLength(resources);
+  });
+
+  it("rewrites a turn's row rather than adding a second one for it", () => {
+    const state = freshState();
+    const rows = state.history.length;
+    recordHistory(state, 1);
+    expect(state.history).toHaveLength(rows);
   });
 
   it("pays a short when the price falls and eats the margin when it rises", () => {

@@ -8,6 +8,8 @@ import {
   REALTIME_WINDOW_SECONDS,
   TICK_INTERVAL_HOURS,
   claimSeatByCode,
+  envCount,
+  envQuantity,
   loadGameByCode,
   resolveIfDue,
   startMatch,
@@ -81,6 +83,53 @@ describe("the two clocks a table can run on", () => {
     // The next window is short too, so the table does not slow down after one.
     const gap = new Date(state.game.nextTickAt).getTime() - Date.now();
     expect(gap).toBeLessThanOrEqual(REALTIME_WINDOW_SECONDS * 1000 + 2000);
+  });
+
+  it("keeps a clock's own length out of the hands of a blank variable", () => {
+    // A deployment variable that is set but empty arrives as "", which Number
+    // reads as zero. A window of no length is a window that is always due, so
+    // the table resolves a turn on every read, and the mistyped value reads as
+    // NaN and does the same through the date arithmetic.
+    expect(TICK_INTERVAL_HOURS).toBeGreaterThan(0);
+    expect(envQuantity(undefined, 24)).toBe(24);
+    expect(envQuantity("", 24)).toBe(24);
+    expect(envQuantity("   ", 24)).toBe(24);
+    expect(envQuantity("0", 24)).toBe(24);
+    expect(envQuantity("-6", 24)).toBe(24);
+    expect(envQuantity("24 hours", 24)).toBe(24);
+    expect(envQuantity("nothing", 24)).toBe(24);
+    // A real setting is still honoured, including a short one.
+    expect(envQuantity("12", 24)).toBe(12);
+    expect(envQuantity("0.5", 24)).toBe(0.5);
+
+    // A count is allowed to be nothing at all: no holds is a choice.
+    expect(envCount("0", 2)).toBe(0);
+    expect(envCount("", 2)).toBe(2);
+    expect(envCount("three", 2)).toBe(2);
+    expect(envCount("3", 2)).toBe(3);
+  });
+
+  it("reads a table stored with no window at all on its mode's own clock", async () => {
+    // A table written while the window setting was blank holds a length of
+    // nothing, and a window of nothing resolves on every read. Reading it on
+    // its mode's clock is what puts it back on the rails.
+    const { state } = await startMatch(host, CHARTERS[0], 4);
+    state.game.tickIntervalHours = 0;
+    await getStore().saveGame(state);
+    const reread = (await loadGameByCode(state.game.code))!;
+    expect(reread.game.tickIntervalHours).toBe(TICK_INTERVAL_HOURS);
+
+    const live = await startMatch(host, CHARTERS[0], 3, "REALTIME");
+    live.state.game.tickIntervalHours = 0;
+    await getStore().saveGame(live.state);
+    const rereadLive = (await loadGameByCode(live.state.game.code))!;
+    expect(rereadLive.game.tickIntervalHours).toBe(windowHoursFor("REALTIME"));
+
+    // A short window somebody actually asked for is left exactly as it is.
+    reread.game.tickIntervalHours = 0.5;
+    await getStore().saveGame(reread);
+    const short = (await loadGameByCode(state.game.code))!;
+    expect(short.game.tickIntervalHours).toBe(0.5);
   });
 
   it("reads a table written before real time as turn based", () => {

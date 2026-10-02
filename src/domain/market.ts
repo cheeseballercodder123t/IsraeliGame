@@ -322,12 +322,24 @@ export function settleShorts(state: GameState, events: GameEvent[]): ShortPositi
   return closed;
 }
 
-export function recordHistory(state: GameState): void {
+/**
+ * Files the prices just settled as the opening prices of a turn.
+ *
+ * The turn is passed in rather than read off the clock, because the window
+ * that has closed is not the turn these prices belong to: they open the next
+ * one. A row filed under the closing turn lands on top of the opening row the
+ * world was drawn with, and the book that mirrors this one keeps a single
+ * price per turn and resource, so a second row for the same turn is a write
+ * the database refuses outright. Any older row for the turn being written is
+ * dropped first, which is what makes the call safe to repeat.
+ */
+export function recordHistory(state: GameState, turn = state.game.currentTurn): void {
   const rows: MarketHistoryRow[] = state.market.map((m) => ({
-    turn: state.game.currentTurn,
+    turn,
     resource: m.resource,
     price: m.price,
   }));
+  state.history = state.history.filter((h) => h.turn !== turn);
   state.history.push(...rows);
   const cutoff = state.game.currentTurn - 40;
   state.history = state.history.filter((h) => h.turn >= cutoff);
