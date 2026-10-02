@@ -97,6 +97,24 @@ async function main() {
     await page.waitForTimeout(wait);
     return true;
   };
+  /**
+   * Clicks a control that only becomes live once React has hydrated, retrying
+   * until the thing it should open is on the page. A click that lands before
+   * hydration is attached is dropped by the browser, and a lobby has two steps
+   * between the door and the desk, so one press is never enough to be sure.
+   */
+  const clickWhenLive = async (selector, expect, tries = 40) => {
+    for (let attempt = 0; attempt < tries; attempt += 1) {
+      if (expect && (await page.locator(expect).count()) > 0) return true;
+      const target = page.locator(selector).first();
+      if ((await target.count()) > 0) {
+        const ready = await target.isEnabled().catch(() => false);
+        if (ready) await target.click({ timeout: 4_000 }).catch(() => {});
+      }
+      await page.waitForTimeout(500);
+    }
+    return (await page.locator(expect).count()) > 0;
+  };
 
   // ------------------------------------------------------------- the lobby
   await page.goto(BASE, { waitUntil: "domcontentloaded", timeout: 60_000 });
@@ -116,14 +134,23 @@ async function main() {
   await page.waitForURL(/\/table\//, { timeout: 60_000 });
   await page.waitForTimeout(1200);
 
-  // Tables gather in a lobby now; the host seats the bench and opens the
-  // window before the rest of the pass can play a match.
-  const openButton = page.locator("button:has-text('FILL THE EMPTY CHAIRS')");
-  if ((await openButton.count()) > 0) {
+  // Tables gather in a lobby now, and seating the bench starts the window by
+  // itself: there is no second press to make. The desk is only believed once
+  // the board is actually on the page, so the press is retried until it is.
+  if ((await page.locator("button:has-text('Fill the empty chairs')").count()) > 0) {
     await shoot("02a-table-lobby");
-    await openButton.click();
-    await page.waitForTimeout(1800);
+    await clickWhenLive("button:has-text('Fill the empty chairs')", "text=Industrial grid", 40);
   }
+  if ((await page.locator("text=Industrial grid").count()) === 0) {
+    await clickWhenLive("button:has-text('Open the window')", "text=Industrial grid", 40);
+  }
+  if ((await page.locator("text=Industrial grid").count()) === 0) {
+    note("the host never reached the desk; the table stayed in its lobby");
+  }
+  // The walk-around opens itself for a newcomer, and it covers the desk, so
+  // the pass stands it down before anything is photographed.
+  await clickFirst("button:has-text('Skip')", 500);
+  await page.waitForTimeout(900);
   await shoot("02-table-desk");
 
   const tableReport = await page.evaluate(collectReport);

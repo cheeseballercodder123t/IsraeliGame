@@ -172,6 +172,7 @@ export function ChatPanel({
 
   return (
     <Panel
+      weight="lead"
       title={channel ? "A side line" : "The wire"}
       aside={`${visible.length} line${visible.length === 1 ? "" : "s"} · window ${state.game.currentTurn}`}
     >
@@ -205,10 +206,13 @@ export function ChatPanel({
         </p>
       ) : null}
 
+      {/* The wire is read line by line, so it is sunk into a well rather than
+          floated on the plate: the talk of the table sits below the panel that
+          holds it, and a line of type is never read against a field of tone. */}
       <div
         ref={log}
         data-wire-log
-        className="max-h-56 min-h-[52px] overflow-y-auto border border-rule/70 bg-pit px-2.5 py-1.5"
+        className="well max-h-56 min-h-[52px] overflow-y-auto px-2.5 py-1.5"
       >
         {composers.length > 0 ? (
           <p className="border-b border-rule/50 pb-1.5 text-[10px] italic leading-relaxed text-faint">

@@ -56,7 +56,7 @@ import { setTableTitle, setUnreadWire } from "@/lib/parts";
 import { switchboardEntries, type SwitchboardEntry } from "@/lib/switchboard";
 import { Tour, startTour } from "@/components/tour/Tour";
 import { TABLE_RECAP, TABLE_TOUR } from "@/components/tour/steps";
-import { Button, KeyValue, Meter, Notice, Panel } from "@/components/ui/primitives";
+import { Button, KeyValue, Meter, Notice, Panel, Section } from "@/components/ui/primitives";
 import {
   callQuestionAction,
   cancelOrderAction,
@@ -714,10 +714,28 @@ export function Dashboard({
         />
       ) : view === "DESK" ? (
         /*
-         * Three columns only where there is room for three. A laptop gets two:
-         * the desk down the left, and the board, the register and the inspector
+         * The desk is set in two bands rather than in one long run.
+         *
+         * The working surface is a row: the desk down the left, the board and
+         * the register across the middle, and the room down the right, which
+         * is the three columns a wide screen has room for. A laptop gets two:
+         * the desk down the left, and the board, the register and the room
          * stacked down the right so the grid can have the width it needs.
+         *
+         * The reference matter goes under all of it, as one catalogue band.
+         * Set down a third rail instead it ran six and a half thousand pixels
+         * down one side of the sheet while the other two columns ran out at
+         * seventeen hundred, and a desk with a column of holes beside it is a
+         * desk that cannot be read across. Those panels are of wildly
+         * different lengths, so the band is set in columns rather than in a
+         * grid: see `mill-columns`.
          */
+        <>
+        <Section
+          label="The table at work"
+          aside="the board, the lever, the register and the room"
+          className="mt-5"
+        />
         <div className="mt-4 grid items-start gap-4 lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)] 2xl:grid-cols-[360px_minmax(0,1fr)_340px]">
           <div
             data-tour="desk"
@@ -739,6 +757,7 @@ export function Dashboard({
           <div className="order-1 min-w-0 space-y-4 lg:order-none lg:col-start-2 lg:row-start-1 2xl:col-start-2 2xl:row-start-1">
             <div data-tour="board">
               <Panel
+                weight="lead"
                 title="Industrial grid"
                 aside={`${BOARD} by ${BOARD} · ${PLOT_COUNT} plots · wind ${windLabel(state.game.wind)}`}
               >
@@ -889,7 +908,7 @@ export function Dashboard({
             </div>
 
             <div data-tour="register">
-              <Panel title="Houses on the register" aside="net worth, plots, output">
+              <Panel weight="lead" title="Houses on the register" aside="net worth, plots, output">
                 <HousesRegister state={state} meId={meId} />
                 <p className="mt-2 border-t border-rule pt-2 text-[10px] leading-relaxed text-faint">
                   The register is this table. The ladder is every table this house has played:{" "}
@@ -919,6 +938,12 @@ export function Dashboard({
             ) : null}
           </div>
 
+          {/*
+           * The room: what the table is saying, signing and playing, and on a
+           * wide screen the rail beside the board. On a narrow one it follows
+           * the register, because the wire belongs next to the table it is
+           * about.
+           */}
           <div className="order-3 grid min-w-0 items-start gap-4 md:grid-cols-2 lg:order-none lg:col-start-2 lg:row-start-2 2xl:col-start-3 2xl:row-start-1 2xl:grid-cols-1">
             <div className="min-w-0">
               <ChatPanel
@@ -939,7 +964,19 @@ export function Dashboard({
             <div data-tour="table-games" className="min-w-0">
               <TableGames state={state} meId={meId} onOrder={handleOrder} />
             </div>
+          </div>
+        </div>
 
+          {/*
+           * The catalogue band, under the whole working surface rather than
+           * down one side of it.
+           */}
+          <Section
+            label="The books and the files"
+            aside="kept open beside the work"
+            className="mt-6"
+          />
+          <div className="mill-columns mt-3 grid items-start gap-4 md:grid-cols-2">
             <div data-tour="counting" className="min-w-0">
               <CountingPane state={state} meId={meId} />
             </div>
@@ -1078,7 +1115,7 @@ export function Dashboard({
               </Panel>
             </div>
 
-            <div className="min-w-0 md:col-span-2 2xl:col-span-1">
+            <div className="min-w-0">
               <Panel title="Goods on hand" aside={`${held.length} families`}>
                 {held.length === 0 ? (
                   <p className="text-[11px] text-faint">
@@ -1106,7 +1143,7 @@ export function Dashboard({
               </Panel>
             </div>
           </div>
-        </div>
+        </>
       ) : (
         <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,340px)] 2xl:grid-cols-[minmax(0,1fr)_360px]">
           {/* A flex column, so the book keeps its own scroll region inside a

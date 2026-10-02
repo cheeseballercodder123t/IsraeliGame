@@ -490,6 +490,7 @@ export function OrderDesk({ state, player, sealed, onQueue, openOrder = null }: 
 
   return (
     <Panel
+      weight="lead"
       title="Operations desk"
       aside={`${sealed.length} sealed · ${ORDER_SPEC_LIST.length} orders on the card`}
     >

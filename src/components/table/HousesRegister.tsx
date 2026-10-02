@@ -53,10 +53,15 @@ export function HousesRegister({ state, meId = null }: { state: GameState; meId?
   );
 
   return (
-    <div className="overflow-x-auto">
+    // The register is read as a ledger, so it sits in a well: the page's own
+    // ground with a hairline cut around it, which puts the column heads and the
+    // standing of every house below the plate rather than on top of it.
+    <div className="well overflow-x-auto p-2">
       <table className="w-full border-collapse">
         <thead>
-          <tr className="border-b border-rule">
+          {/* The head is closed with the doubled rule the collar of the table
+              wears, so the figures below are read off a ruled sheet. */}
+          <tr className="border-b-[3px] border-double border-edge">
             {[
               ["House", ""],
               ["Charter", "hidden sm:table-cell"],
@@ -83,7 +88,10 @@ export function HousesRegister({ state, meId = null }: { state: GameState; meId?
         </thead>
         <tbody>
           {rows.map((entry) => (
-            <tr key={entry.player.id} className="border-b border-rule/40">
+            <tr
+              key={entry.player.id}
+              className="border-b border-rule/40 transition-colors duration-150 hover:bg-steel/60"
+            >
               <td className="py-1.5 text-[11px]">
                 <span
                   className="mr-1.5 inline-block h-2 w-3 align-middle"
@@ -127,7 +135,7 @@ export function HousesRegister({ state, meId = null }: { state: GameState; meId?
           ))}
         </tbody>
         <tfoot>
-          <tr className="border-t border-rule">
+          <tr className="border-t border-edge">
             <td
               colSpan={2}
               className="py-1.5 text-[9px] tracking-[0.16em] text-faint uppercase"
