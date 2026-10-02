@@ -15,7 +15,7 @@ A live table runs on Vercel at https://bigyahuapproved.vercel.app/.
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # 487 tests in 48 files
+npm test           # 505 tests in 49 files
 npm run typecheck
 npm run build
 ```
@@ -136,11 +136,17 @@ window can be walked back one frame at a time in the replay, off the same ledger
 
 **Watching a table.** Every watching browser beats the same heartbeat, which carries the revision,
 the presence roster and the hands down on the wire. A real time table rides a server sent stream of
-that same payload instead of polling it: the stream pushes the whole summary on every write and on a
-summary beat of its own, so the poll beneath it is a net rather than a second wire, and the poll
-falls back to its own faster beat the moment a frame is late or the stream errors. Presence and
-composing stamps live in the process and expire on their own, so nothing they do can reach the
-stored game.
+that same payload instead of polling it: the stream pushes the whole summary on every write, the
+moment anything else in it moves (a house arriving, a hand going down on the wire, a question
+gaining a call, a hold landing) on the tick that reads the change, and on a summary beat of its own,
+so the poll beneath it is a net rather than a second wire. A stream that drops is not waited out:
+the first call back is half a second away and each failure doubles it, up to a quarter of a minute,
+with any open resetting the count; the silence watchdog reads on a fifth of the window it watches,
+so a dead socket is found in seconds; and a network that comes back is asked at once. The strip's
+lamp says which transport is carrying the desk: live where the table is pushed to the browser and
+polled where only the beat is left. The roster is durable as well as in process, and both its stamp
+and its read are windows now rather than a row write and a round trip on every desk's every tick,
+so a table's desks ask the database once between them.
 
 **The rail.** Once every chair is taken the code still opens the table: board, register, wire and
 paper, read only, riding the same heartbeat the players do. The rail cannot seal, bid or speak.
@@ -385,7 +391,7 @@ printing what they filed.
 
 ### The tests
 
-Forty eight files, four hundred and eighty seven tests. Geometry and the catalogs are checked against
+Forty nine files, five hundred and five tests. Geometry and the catalogs are checked against
 their own contents, so a catalog edit that breaks an assumption fails a test rather than a screen:
 seventy five commodities, seventy five plants, twenty six charters, seventy nine orders, a hundred and
 thirty six event kinds, and every sprite placement inside its sheet. The table's own rules are
@@ -422,10 +428,13 @@ two numbers to a house by the chair it sits in.
 `tests/forgery.test.ts` files a false line through a real wiretap at a live table and sweeps it with
 counter surveillance, and pins which file each line reads in. `tests/poll.test.ts` reads the
 transport schedule as arithmetic and pins the per hour cost of every kind of desk, from the streamed
-one that asks twice a minute to the old one that asked twelve times. `tests/schemes.test.ts` runs a
+one that asks twice a minute to the old one that asked twelve times, and now also the schedule a
+dropped stream is called up on and the standing the stream compares between its ticks. `tests/schemes.test.ts` runs a
 long con from the catalog through the stage pass, the opening window, the two ways it ends, the
 payoff and its floor, the file a rival can read and the order desk at a live table, the errand a
-bench can file and the office an automated director runs, and
+bench can file and the office an automated director runs, `tests/freshness.test.ts` pins the two
+windows the live layer holds a row and a read for, and the relationships that keep them inside the
+lives the stamps are read through, and
 `tests/store-retry.test.ts` pins what the store is
 willing to try again, what it refuses to, how long one attempt is given, and the short wait a read
 of a just founded table is allowed before the registrar's notice is printed.

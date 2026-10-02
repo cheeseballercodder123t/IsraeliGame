@@ -161,6 +161,8 @@ export function Dashboard({
   // the poll falls back to if the stream never opens.
   const {
     live,
+    streamed,
+    subscribed,
     present,
     composers,
     hands,
@@ -564,6 +566,8 @@ export function Dashboard({
         ragTurn={latestIssue ? latestIssue.turn : null}
         onOpenRag={() => setRagOpen(true)}
         live={live}
+        streamed={streamed}
+        subscribed={subscribed}
         present={present}
         sealedAway={sealedAway}
         question={beatQuestion ?? asked}

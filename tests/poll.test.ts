@@ -5,11 +5,15 @@ import {
   POLL_MS,
   REALTIME_POLL_MS,
   STREAM_POLL_MS,
+  STREAM_RETRY_BASE_MS,
+  STREAM_RETRY_MAX_MS,
   STREAM_STALL_MS,
   STREAM_SUMMARY_MS,
   UPGRADED_POLL_FACTOR,
+  beatPrint,
   pollDelayMs,
   streamFrameDue,
+  streamRetryDelayMs,
 } from "@/lib/sync";
 
 /**
@@ -196,9 +200,86 @@ describe("when the stream owes a frame", () => {
     expect(streamFrameDue({ seen: 5, revision: 5, sentAt, now: sentAt + STREAM_SUMMARY_MS })).toBe(true);
   });
 
+  it("sends the moment the standing changes, without waiting on the beat", () => {
+    // A house arriving, a hand going down on the wire, a question gaining a
+    // call: none of them are writes, and all of them are news. Before this the
+    // desk waited out the summary beat for every one of them.
+    expect(streamFrameDue({ seen: 5, revision: 5, changed: true, sentAt, now: sentAt + 1 })).toBe(
+      true,
+    );
+    expect(streamFrameDue({ seen: 5, revision: 5, changed: false, sentAt, now: sentAt + 1 })).toBe(
+      false,
+    );
+  });
+
   it("pushes the roster often enough to be the desk's main wire", () => {
     // The summary beat is a whole hello a desk would otherwise have polled for,
     // so it has to be at least as often as the fastest poll it replaces.
     expect(STREAM_SUMMARY_MS).toBeLessThanOrEqual(SHIPPED_REALTIME_POLL_MS * 4);
+  });
+});
+
+describe("what a stream compares between its ticks", () => {
+  const standing = {
+    revision: 7,
+    present: [{ playerId: "p1", name: "House 1", me: false }],
+    composers: [],
+    question: { called: [], needed: [], ready: false },
+    held: false,
+    newestMessageId: null,
+  };
+
+  it("prints one string for one standing", () => {
+    expect(beatPrint({ ...standing, present: [...standing.present] })).toBe(beatPrint(standing));
+  });
+
+  it("prints a different string when a hand goes down, with nothing written", () => {
+    const hand = { playerId: "p2", name: "House 2", me: false };
+    expect(beatPrint({ ...standing, composers: [hand, hand] })).not.toBe(beatPrint(standing));
+  });
+
+  it("prints a different string when a house arrives", () => {
+    const arrival = { playerId: "p2", name: "House 2", me: false };
+    expect(beatPrint({ ...standing, present: [...standing.present, arrival] })).not.toBe(
+      beatPrint(standing),
+    );
+  });
+
+  it("prints a different string when a call lands or a hold is taken", () => {
+    expect(
+      beatPrint({ ...standing, question: { called: ["p1"], needed: ["p1"], ready: false } }),
+    ).not.toBe(beatPrint(standing));
+    expect(beatPrint({ ...standing, held: true })).not.toBe(beatPrint(standing));
+  });
+});
+
+describe("calling a dropped stream up again", () => {
+  it("starts quick and steps back", () => {
+    expect(streamRetryDelayMs(0)).toBe(STREAM_RETRY_BASE_MS);
+    expect(streamRetryDelayMs(1)).toBe(STREAM_RETRY_BASE_MS * 2);
+    expect(streamRetryDelayMs(2)).toBe(STREAM_RETRY_BASE_MS * 4);
+    for (let attempt = 1; attempt < 8; attempt += 1) {
+      expect(streamRetryDelayMs(attempt)).toBeGreaterThanOrEqual(streamRetryDelayMs(attempt - 1));
+    }
+  });
+
+  it("is back inside a second on the first try", () => {
+    // A dropped socket is usually a moment, and a desk on a live window cannot
+    // sit out a wait measured in tens of seconds to hear the close.
+    expect(streamRetryDelayMs(0)).toBeLessThanOrEqual(1_000);
+  });
+
+  it("never hammers a host that is already unhappy", () => {
+    for (const attempt of [10, 20, 40, 200]) {
+      expect(streamRetryDelayMs(attempt)).toBeLessThanOrEqual(STREAM_RETRY_MAX_MS);
+    }
+    expect(streamRetryDelayMs(20)).toBe(STREAM_RETRY_MAX_MS);
+  });
+
+  it("notices a silent socket inside the net's own beat", () => {
+    // The stall window is how long a quiet socket may hold the table. It has
+    // to be shorter than the poll underneath, or the desk learns nothing until
+    // the beat it was avoiding comes round anyway.
+    expect(STREAM_STALL_MS).toBeLessThan(STREAM_POLL_MS);
   });
 });
