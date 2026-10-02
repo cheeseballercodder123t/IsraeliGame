@@ -37,6 +37,20 @@ import { PLANNING_HANDLERS } from "./planning";
 import { TABLE_HANDLERS } from "./table";
 import type { OrderHandler, OrderPhase } from "./context";
 
+/**
+ * What each drawer of the card is called. It lives here rather than in the desk
+ * that draws it, because the switchboard names the same drawers when it files
+ * an order, and two spellings of "Night work" would be one too many.
+ */
+export const ORDER_CATEGORY_NAME: Record<OrderCategory, string> = {
+  PLANNING: "Planning",
+  COMMERCE: "Commerce",
+  CAPITAL: "Capital",
+  LABOR: "Labor",
+  POLITICS: "City hall",
+  COVERT: "Night work",
+};
+
 export type FieldKind =
   | "MONEY"
   | "UNITS"

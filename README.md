@@ -15,7 +15,7 @@ A live table runs on Vercel at https://bigyahuapproved.vercel.app/.
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # 473 tests in 47 files
+npm test           # 487 tests in 48 files
 npm run typecheck
 npm run build
 ```
@@ -153,6 +153,15 @@ per browser after that.
 
 Around the board itself, the table carries a set of instruments, each one a small rulebook in
 `src/domain` read by a panel on the desk.
+
+**The switchboard.** One slash opens a single field over the whole table. A word or two narrows it to
+the orders on the card, the plots on the ground, the houses on the register, the rooms of the desk
+and the five lenses, best match first. Enter reaches the row that is picked: an order opens on the
+desk, a plot is selected and read in the inspector, a house goes to its row on the register, a room
+goes to its panel, and a lens switches the board. The same board carries the paper, the replay, the
+guide, the share card, the table code and the invitation, so no instrument at the table is more than
+a word or two away. Control and k call it up from inside a field, where a plain slash belongs to the
+text.
 
 **Lenses.** Keys one to five draw the board as five readings of the same ground, and zero puts the
 plain board back. Deeds paints every plot by its owner. Smoke is how foul the air sits on a plot.
@@ -376,7 +385,7 @@ printing what they filed.
 
 ### The tests
 
-Forty seven files, four hundred and seventy three tests. Geometry and the catalogs are checked against
+Forty eight files, four hundred and eighty seven tests. Geometry and the catalogs are checked against
 their own contents, so a catalog edit that breaks an assumption fails a test rather than a screen:
 seventy five commodities, seventy five plants, twenty six charters, seventy nine orders, a hundred and
 thirty six event kinds, and every sprite placement inside its sheet. The table's own rules are
@@ -407,6 +416,9 @@ it can be settled, and then buys a ticket with no chair and pays the book out at
 ladder, including the era that leaves an earlier one standing. `tests/pursuit.test.ts` reads a
 closing condition off every charter on the register, meets each new condition with the plain state
 it watches, and pins that founding to a pursuit stores the condition rather than the pointer to it.
+`tests/switchboard.test.ts` asks the index for every order, plot, house, lens and room at a table,
+and pins what each spelling of a name answers with, from a sludge dump by its words to a plot by its
+two numbers to a house by the chair it sits in.
 `tests/forgery.test.ts` files a false line through a real wiretap at a live table and sweeps it with
 counter surveillance, and pins which file each line reads in. `tests/poll.test.ts` reads the
 transport schedule as arithmetic and pins the per hour cost of every kind of desk, from the streamed
