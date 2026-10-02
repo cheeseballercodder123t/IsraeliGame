@@ -38,10 +38,32 @@ export const UPGRADED_POLL_FACTOR = 6;
 export const MAX_POLL_MS = 60_000;
 /** How often the stream pushes the whole summary with nothing changed. */
 export const STREAM_SUMMARY_MS = 5_000;
-/** Silence this long means the stream is gone, whatever it is still holding. */
-export const STREAM_STALL_MS = 20_000;
-/** How long a desk waits before trying a stream that dropped. */
-export const STREAM_RETRY_MS = 30_000;
+/**
+ * Silence this long means the stream is gone, whatever it is still holding.
+ * A healthy stream speaks at least once a summary beat, so this is three of
+ * them: long enough that a busy table is never mistaken for a dead one, and
+ * short enough that a dead one is noticed before the net poll comes round.
+ */
+export const STREAM_STALL_MS = 15_000;
+/**
+ * The first wait before a dropped stream is called up again, doubling from
+ * there. A dropped socket is usually a moment, so the first try is quick and
+ * the later ones step back rather than hammering a host that is already
+ * unhappy. Every open resets the count, so one bad minute does not slow the
+ * next good hour.
+ */
+export const STREAM_RETRY_BASE_MS = 500;
+/** The ceiling on the doubling, so a long outage still tries twice a minute. */
+export const STREAM_RETRY_MAX_MS = 15_000;
+
+/** How long to wait before try number `attempt` of a stream that dropped. */
+export function streamRetryDelayMs(attempt: number): number {
+  const step = Math.max(0, Math.floor(attempt));
+  // 2 ** 30 or above would overflow the arithmetic, so the exponent is capped
+  // well before the ceiling is reached in practice.
+  const grown = STREAM_RETRY_BASE_MS * 2 ** Math.min(step, 20);
+  return Math.min(STREAM_RETRY_MAX_MS, grown);
+}
 
 /**
  * How long to wait before asking the table again.
@@ -73,20 +95,60 @@ export function pollDelayMs(input: {
 }
 
 /**
- * Whether the stream owes a frame: a write landed, or the summary beat came
- * round. The summary beat is what makes the stream enough on its own, because
- * presence, the composing roster and the question all move without a write, so
- * a stream that only spoke on a revision would be a stream a desk still had to
- * poll behind.
+ * Whether the stream owes a frame: the table's standing changed, a write
+ * landed, or the summary beat came round.
+ *
+ * The standing is the part presence lives in. A house arriving, a hand going
+ * down on the wire, a question gaining a call and a hold landing all move
+ * without touching the revision, so a stream that only spoke on a write would
+ * leave every one of them to the summary beat. A changed standing now goes
+ * out on the same tick the server reads it, which is what makes the roster
+ * live rather than sampled. The summary beat stays as the floor, so a desk
+ * hears from a quiet table often enough to know the stream is still there.
  */
 export function streamFrameDue(input: {
   /** The revision of the last frame sent. */
   seen: number;
   /** The revision the table stands at now. */
   revision: number;
+  /**
+   * Whether anything else a watcher reads in the payload moved since the last
+   * frame, as `beatPrint` reports it.
+   */
+  changed?: boolean;
   /** When the last frame went out. */
   sentAt: number;
   now: number;
 }): boolean {
-  return input.revision !== input.seen || input.now - input.sentAt >= STREAM_SUMMARY_MS;
+  return (
+    input.changed === true ||
+    input.revision !== input.seen ||
+    input.now - input.sentAt >= STREAM_SUMMARY_MS
+  );
+}
+
+/**
+ * Everything in a heartbeat that a watcher can see move without a write: the
+ * roster, the hands on the wire, the question's standing, a hold, and the
+ * newest line's id. Printed as one string so a stream can tell, on every tick
+ * it already pays for, whether the payload it holds is still the payload the
+ * table stands at. The revision is in here as well, so one comparison covers
+ * the whole frame rather than two that could disagree.
+ */
+export function beatPrint(beat: {
+  revision: number;
+  present: unknown;
+  composers: unknown;
+  question: unknown;
+  held: boolean;
+  newestMessageId: string | null;
+}): string {
+  return JSON.stringify([
+    beat.revision,
+    beat.present,
+    beat.composers,
+    beat.question,
+    beat.held,
+    beat.newestMessageId,
+  ]);
 }

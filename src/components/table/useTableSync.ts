@@ -2,7 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { STREAM_RETRY_MS, STREAM_STALL_MS, POLL_MS, REALTIME_POLL_MS, pollDelayMs } from "@/lib/sync";
+import {
+  STREAM_STALL_MS,
+  POLL_MS,
+  REALTIME_POLL_MS,
+  pollDelayMs,
+  streamRetryDelayMs,
+} from "@/lib/sync";
 import type { QuestionState } from "@/domain/question";
 import { arrivalNames, latchNames, wireArrivals } from "@/domain/wire";
 import type { ChatMessage } from "@/domain/types";
@@ -104,6 +110,13 @@ interface Beat {
  * the wire against what this desk has read, and a line that lands while the
  * tab is hidden latches its author's name as unread until the tab is looked at
  * again, which is what turns the title into a message light.
+ *
+ * A stream that drops is called up again rather than waited out: the first
+ * retry is half a second away and each failure doubles it, up to a quarter of
+ * a minute, and any open resets the count. A host that comes back, a laptop
+ * that wakes, a network that returns all announce themselves: the desk asks
+ * at once and forgets the backoff rather than sitting out a wait earned before
+ * the connection was there again.
  */
 export function useTableSync(
   code: string,
@@ -188,8 +201,10 @@ export function useTableSync(
     let timer: ReturnType<typeof setTimeout> | undefined;
     let source: EventSource | null = null;
     let watchdog: ReturnType<typeof setInterval> | undefined;
-    /** When a stream was last opened, so a dropped one is tried again. */
-    let lastAttempt = 0;
+    /** A pending call up of the stream, if one is owed. */
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    /** Tries in a row that have not opened, for the backoff between them. */
+    let attempts = 0;
     /**
      * Whether this run of the effect still owns the schedule. The stopped ref
      * below is shared with the transports that outlive a render, which a
@@ -281,9 +296,10 @@ export function useTableSync(
      */
     const beat = async () => {
       if (!live) return;
-      // A stream that is not open, or that dropped, is worth asking for again:
-      // it is the transport this desk would rather read the table by.
-      if (options.stream && source === null && Date.now() - lastAttempt > STREAM_RETRY_MS) {
+      // A stream that is not open is worth asking for again: it is the
+      // transport this desk would rather read the table by. A retry that is
+      // already on the clock is not due yet, so the beat leaves it alone.
+      if (options.stream && source === null && retryTimer === undefined) {
         openStream();
       }
       try {
@@ -304,20 +320,33 @@ export function useTableSync(
       schedule();
     };
 
-    /** Opens the stream, which carries the whole summary from then on. */
+    /**
+     * Calls up the stream, which carries the whole summary from then on. A
+     * retry that was on the clock is this call, so the clock is cleared first;
+     * a call that fails again schedules the next one from where it left off.
+     */
     const openStream = () => {
+      if (retryTimer) {
+        clearTimeout(retryTimer);
+        retryTimer = undefined;
+      }
       if (!live || source !== null) return;
       if (typeof window === "undefined" || typeof EventSource === "undefined") return;
-      lastAttempt = Date.now();
       let opened: EventSource;
       try {
         opened = new EventSource(`/api/table/${encodeURIComponent(code)}/stream`);
       } catch {
+        attemptLater();
         return;
       }
       source = opened;
-      setStreamed(true);
       lastFrame.current = Date.now();
+      opened.onopen = () => {
+        // The wire is open, so whatever waits were earned before it are done.
+        attempts = 0;
+        setStreamed(true);
+        lastFrame.current = Date.now();
+      };
       opened.onmessage = (event) => {
         lastFrame.current = Date.now();
         try {
@@ -330,17 +359,37 @@ export function useTableSync(
       opened.onerror = () => dropStream();
       // A stream can also go quiet without ever erroring, and quiet is the
       // same news: a socket that is holding a table nobody is pushing. The
-      // watchdog is the only thing that reads it, and it reads it often.
+      // watchdog is the only thing that reads it. It reads on a fifth of the
+      // window rather than on the window itself, so a socket that fell silent
+      // just after a check waits a few seconds to be found rather than a whole
+      // second window on top of the silence that condemned it.
       watchdog = setInterval(() => {
         if (source !== null && Date.now() - lastFrame.current > STREAM_STALL_MS) dropStream();
-      }, STREAM_STALL_MS);
+      }, Math.max(1_000, Math.floor(STREAM_STALL_MS / 5)));
+    };
+
+    /**
+     * Owe the stream another call, at half a second and doubling from there.
+     * The wait is measured from the failure rather than added to a beat, so a
+     * dropped wire is back inside a second on the first try instead of
+     * waiting out whatever schedule the net underneath it was keeping.
+     */
+    const attemptLater = () => {
+      if (!live || !options.stream) return;
+      if (retryTimer) clearTimeout(retryTimer);
+      const wait = streamRetryDelayMs(attempts);
+      attempts += 1;
+      retryTimer = setTimeout(() => {
+        retryTimer = undefined;
+        openStream();
+      }, wait);
     };
 
     /**
      * Gives the table back to the poll, and asks at once rather than waiting
-     * out the slow beat the stream had earned. A dropped socket is usually a
-     * moment, so the stream is tried again on a later beat: the stream is the
-     * desk's own wire and the poll is only the net under it.
+     * out the slow beat the stream had earned. The stream is the desk's own
+     * wire and the poll is only the net under it, so the drop also owes the
+     * wire another call, on the schedule the failures have earned.
      */
     const dropStream = () => {
       if (source === null) return;
@@ -354,6 +403,9 @@ export function useTableSync(
       } catch {
         // A socket that is already closed has nothing left to close.
       }
+      // The net takes the table at once, and the wire is called up again on
+      // its own short schedule rather than waiting for a beat to notice.
+      attemptLater();
       void beat();
     };
 
@@ -380,6 +432,20 @@ export function useTableSync(
     document.addEventListener("visibilitychange", onWake);
     window.addEventListener("focus", onWake);
 
+    // A network that comes back is the same news as a tab that comes back: the
+    // table is checked at once, and the wire is called up without the backoff
+    // it earned while there was nothing to connect to.
+    const onNet = () => {
+      attempts = 0;
+      if (retryTimer) {
+        clearTimeout(retryTimer);
+        retryTimer = undefined;
+      }
+      if (source === null && options.stream) openStream();
+      void beat();
+    };
+    window.addEventListener("online", onNet);
+
     return () => {
       live = false;
       stopped.current = true;
@@ -387,9 +453,11 @@ export function useTableSync(
       applyRef.current = null;
       if (timer) clearTimeout(timer);
       if (watchdog) clearInterval(watchdog);
+      if (retryTimer) clearTimeout(retryTimer);
       source?.close();
       document.removeEventListener("visibilitychange", onWake);
       window.removeEventListener("focus", onWake);
+      window.removeEventListener("online", onNet);
     };
   }, [code, pollMs, router, options.stream]);
 

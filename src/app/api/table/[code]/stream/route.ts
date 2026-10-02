@@ -1,4 +1,4 @@
-import { streamFrameDue } from "@/lib/sync";
+import { beatPrint, streamFrameDue } from "@/lib/sync";
 import { currentSession, tableHeartbeat } from "@/server/heartbeat";
 
 export const dynamic = "force-dynamic";
@@ -13,10 +13,14 @@ export const dynamic = "force-dynamic";
  *
  * The payload is the whole summary, built by the same function the polled
  * route answers with, so a desk can move between the two without changing what
- * it reads. It goes out on every write, and on a summary beat of its own
- * whether or not anything was written, because presence, the composing hands
- * and the question all move without a revision. That cadence is what lets the
- * client keep the poll underneath as a net rather than a second wire.
+ * it reads. It goes out on every write, the moment anything else it carries
+ * moves (a house arriving, a hand going down on the wire, a question gaining a
+ * call, a hold landing), and on a summary beat of its own whether or not
+ * anything moved, because a quiet table still has to say it is alive. The
+ * standing is compared tick by tick rather than left to the beat, so presence
+ * lands within one tick of the read that sees it instead of within five
+ * seconds. That cadence is what lets the client keep the poll underneath as a
+ * net rather than a second wire.
  *
  * It is deliberately boring. There is no broker and no fan out across
  * instances: this process watches the store and writes what it sees. That is
@@ -69,6 +73,7 @@ export async function GET(
       };
 
       let seen = first.revision;
+      let printed = beatPrint(first);
       let sentAt = Date.now();
       send(first);
 
@@ -80,8 +85,11 @@ export async function GET(
             close();
             return;
           }
-          if (streamFrameDue({ seen, revision: beat.revision, sentAt, now: Date.now() })) {
+          const printedNow = beatPrint(beat);
+          const moved = printedNow !== printed;
+          if (streamFrameDue({ seen, revision: beat.revision, changed: moved, sentAt, now: Date.now() })) {
             seen = beat.revision;
+            printed = printedNow;
             sentAt = Date.now();
             send(beat);
           }

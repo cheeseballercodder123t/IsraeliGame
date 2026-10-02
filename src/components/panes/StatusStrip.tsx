@@ -136,6 +136,8 @@ export function StatusStrip({
   ragTurn,
   onOpenRag,
   live = true,
+  streamed = false,
+  subscribed = false,
   present = [],
   sealedAway = 0,
   question = null,
@@ -151,6 +153,10 @@ export function StatusStrip({
   onOpenRag?: () => void;
   /** Whether the last heartbeat reached the table. */
   live?: boolean;
+  /** True while a stream is open and carrying the table. */
+  streamed?: boolean;
+  /** True while the publication's own subscription is live underneath. */
+  subscribed?: boolean;
   /** Houses with a browser on the table, as of the last heartbeat. */
   present?: TablePresence[];
   /**
@@ -173,6 +179,14 @@ export function StatusStrip({
   callBusy?: boolean;
 }) {
   const me = state.players.find((p) => p.id === meId) ?? null;
+  /**
+   * Whether the table is being pushed to this tab rather than asked for. The
+   * distinction is the one a player wants when the room feels slow: a streamed
+   * or subscribed desk hears about a hand on the wire on its own, while a
+   * polled one can only hear on its beat. A desk that has lost the table says
+   * stale whatever else was ever open, because neither wire is answering.
+   */
+  const pushed = streamed || subscribed;
   /** Orders a house has sealed into the window being played. */
   const sealedBy = (playerId: string) =>
     state.queue.filter((order) => order.playerId === playerId && order.turn <= state.game.currentTurn)
@@ -327,18 +341,24 @@ export function StatusStrip({
               {state.game.code}
             </span>
             <span
-              className={`ml-auto flex items-baseline gap-1 ${live ? "text-bile" : "text-hazard"}`}
+              className={`ml-auto flex items-baseline gap-1 ${
+                live ? (pushed ? "text-bile" : "text-dim") : "text-hazard"
+              }`}
               title={
-                live
-                  ? "This tab is keeping up with the table"
-                  : "The table could not be reached; this is the last state seen"
+                !live
+                  ? "The table could not be reached; this is the last state seen"
+                  : pushed
+                    ? "The table is pushed to this tab as it moves, so a hand on the wire and a call on the window arrive without asking"
+                    : "The table is kept up on the beat alone; the wire is being called up again"
               }
             >
               <span
-                className={`inline-block h-2 w-2 ${live ? "lamp bg-bile" : "bg-hazard"}`}
+                className={`inline-block h-2 w-2 ${
+                  live ? (pushed ? "lamp bg-bile" : "lamp bg-brass") : "bg-hazard"
+                }`}
                 aria-hidden
               />
-              {live ? "live" : "stale"}
+              {!live ? "stale" : pushed ? "live" : "polled"}
             </span>
           </p>
           <p className="mt-1 font-slab text-[17px] leading-none text-ink">

@@ -60,7 +60,7 @@ export function SpectatorView({
   // rival naming itself reach the gallery at once rather than on a poll. The
   // clock only decides the base beat the poll falls back to.
   const realtime = state.game.mode === "REALTIME";
-  const { live, present, composers, question } = useTableSync(
+  const { live, streamed, subscribed, present, composers, question } = useTableSync(
     code,
     state.game.revision,
     realtime ? REALTIME_POLL_MS : POLL_MS,
@@ -133,6 +133,8 @@ export function SpectatorView({
         ragTurn={latestIssue ? latestIssue.turn : null}
         onOpenRag={() => setRagOpen(true)}
         live={live}
+        streamed={streamed}
+        subscribed={subscribed}
         present={present}
         question={question}
       />
