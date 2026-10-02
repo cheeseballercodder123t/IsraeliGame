@@ -41,8 +41,15 @@ async function clickWhenLive(page, selector, expect, tries = 25) {
   for (let attempt = 0; attempt < tries; attempt += 1) {
     if (expect && (await page.locator(expect).count()) > 0) return;
     const target = page.locator(selector).first();
-    if ((await target.count()) > 0) await target.click({ timeout: 4_000 }).catch(() => {});
-    await page.waitForTimeout(400);
+    if ((await target.count()) > 0) {
+      // A control the server rendered as disabled has nothing to answer yet, so
+      // waiting on it costs the whole budget: skip it and come back when the
+      // room has caught up. An enabled control is clicked, because a click that
+      // lands before hydration is dropped and needs the retry.
+      const ready = await target.isEnabled().catch(() => false);
+      if (ready) await target.click({ timeout: 4_000 }).catch(() => {});
+    }
+    await page.waitForTimeout(500);
   }
 }
 
@@ -50,6 +57,11 @@ try {
   // ---- Host founds a gathering table.
   const hostCtx = await browser.newContext();
   const host = await hostCtx.newPage();
+  const hostNoise = [];
+  host.on("pageerror", (error) => hostNoise.push(`page error: ${error.message}`));
+  host.on("console", (message) => {
+    if (message.type() === "error") hostNoise.push(`console: ${message.text()}`);
+  });
   await host.goto(BASE, { waitUntil: "domcontentloaded" });
   await host.fill('input[name="name"]', "Cornelius Hale");
   await host.selectOption('select[name="archetype"]', "ROBBER_BARON");
@@ -77,8 +89,33 @@ try {
   log("guest claimed a chair through the lobby");
 
   // ---- The host opens the window; the bench fills and the desk appears.
-  await clickWhenLive(host, "button:has-text('Open the window')", "text=Operations desk");
-  await host.waitForSelector("text=Operations desk", { timeout: 30_000 });
+  // The start button only answers once the host's lobby has seen the second
+  // chair, so the retry runs long enough to cover a slow stream or poll.
+  await clickWhenLive(host, "button:has-text('Open the window')", "text=Operations desk", 60);
+  const opened = await host
+    .waitForSelector("text=Operations desk", { timeout: 30_000 })
+    .then(() => true)
+    .catch(() => false);
+  if (!opened) {
+    const room = (await host.locator("main").innerText().catch(() => "<no main>")) ?? "";
+    const body = (await host.locator("body").innerText().catch(() => "<no body>")) ?? "";
+    const start = host.locator("button:has-text('Open the window')").first();
+    const state =
+      (await start.count()) === 0
+        ? "the start button is not on the page"
+        : (await start.isEnabled())
+          ? "the start button is on the page and enabled"
+          : "the start button is on the page and still disabled";
+    fail(
+      `the host never reached the desk; ${state}.\n` +
+        `  url: ${host.url()}\n` +
+        `  title: ${await host.title()}\n` +
+        `  main: ${room.slice(0, 700)}\n` +
+        `  body: ${body.slice(0, 900)}\n` +
+        `  noise: ${hostNoise.slice(0, 8).join(" | ") || "none"}`,
+    );
+    throw new Error("host desk failed");
+  }
   await host.waitForSelector("text=Industrial grid", { timeout: 30_000 });
   log("host opened the window; dashboard rendered");
 

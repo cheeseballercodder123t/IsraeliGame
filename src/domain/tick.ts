@@ -295,7 +295,11 @@ export function resolveTurnTick(input: GameState, options: TickOptions = {}): Ti
   const closed = settleShorts(state, marketEvents);
   state.shorts = state.shorts.filter((s) => !closed.includes(s));
   events.push(...marketEvents);
-  recordHistory(state);
+  // The prices the close just settled are the prices the next window opens on,
+  // so they are filed under that turn. Filing them under the one that closed
+  // would overwrite the row the world was drawn with and hand the database two
+  // rows for a single turn and resource, which it refuses to write at all.
+  recordHistory(state, turn + 1);
 
   // 12. Paper settles: forwards, supplies, patents, policies and pacts.
   advanceInstruments(state, scratch, streamRng(state.game.seed, turn, "instruments"));
