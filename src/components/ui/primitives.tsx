@@ -21,6 +21,7 @@ export function Panel({
   children,
   className = "",
   id,
+  weight = "normal",
 }: {
   title: string;
   aside?: ReactNode;
@@ -28,9 +29,23 @@ export function Panel({
   className?: string;
   /** Set when something links to the panel rather than to the page. */
   id?: string;
+  /**
+   * How heavy the faceplate is cut. A lead panel is one of the few the desk
+   * works on rather than reads: the board, the lever that seals the window,
+   * the register and the wire. It is cut from the same steel, and given three
+   * things the rest are not: a wider stamp, lettering set a step larger, and
+   * the doubled joint the collar of the table and the front page already
+   * wear. That is the whole difference, and it is enough to find the four
+   * before a word of any of them has been read.
+   */
+  weight?: "normal" | "lead";
 }) {
+  const lead = weight === "lead";
   return (
-    <section id={id} className={`border border-edge/70 bg-steel ${className}`}>
+    <section
+      id={id}
+      className={`border bg-steel ${lead ? "border-edge" : "border-edge/70"} ${className}`}
+    >
       {/*
        * The faceplate bolted over the sheet. It carries three things and no
        * more: the brass stamp at its left edge, the title set in capitals, and
@@ -43,9 +58,22 @@ export function Panel({
        * folded sheet, where the two cannot share a line, the aside drops to a
        * line of its own under the title rather than being cut in half.
        */}
-      <header className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 bg-plate px-3 py-1.5 sm:flex-nowrap">
-        <span className="inline-block h-[11px] w-[2px] shrink-0 self-center bg-brass" aria-hidden />
-        <h2 className="shrink-0 text-[10px] tracking-[0.22em] whitespace-nowrap text-ink uppercase">
+      <header
+        className={`flex flex-wrap items-baseline gap-x-2 gap-y-0.5 bg-plate px-3 sm:flex-nowrap ${
+          lead ? "border-b-[3px] border-double border-edge py-2" : "py-1.5"
+        }`}
+      >
+        <span
+          className={`inline-block shrink-0 self-center bg-brass ${
+            lead ? "h-[13px] w-[3px]" : "h-[11px] w-[2px]"
+          }`}
+          aria-hidden
+        />
+        <h2
+          className={`shrink-0 whitespace-nowrap text-ink uppercase ${
+            lead ? "text-[11px] tracking-[0.26em]" : "text-[10px] tracking-[0.22em]"
+          }`}
+        >
           {title}
         </h2>
         {aside ? (
@@ -57,10 +85,48 @@ export function Panel({
           </>
         ) : null}
       </header>
-      {/* The joint between header plate and body steel. Two hairlines, no blur. */}
-      <div className="seam" aria-hidden />
+      {/*
+       * The joint between header plate and body steel. A normal panel is
+       * closed with the two hairlines; a lead panel carries its doubled rule
+       * on the header itself and needs no seam below it.
+       */}
+      {lead ? null : <div className="seam" aria-hidden />}
       <div className="p-3">{children}</div>
     </section>
+  );
+}
+
+/**
+ * A standing head over a run of panels.
+ *
+ * The desk is long, and a reader crossing it wants to know which part of the
+ * building they are in before they read a single panel title. A section head
+ * is one line: the brass stamp, the name of the part, a leader running out to
+ * the right, and a quiet note saying what is held there. It is set above a run
+ * of panels rather than around them, so it costs one line and no steel.
+ */
+export function Section({
+  label,
+  aside,
+  className = "",
+  id,
+}: {
+  label: string;
+  aside?: string;
+  className?: string;
+  id?: string;
+}) {
+  return (
+    <div id={id} className={`flex flex-wrap items-baseline gap-x-3 gap-y-1 ${className}`}>
+      <h2 className="flex items-baseline gap-2 text-[10px] tracking-[0.26em] whitespace-nowrap text-ink uppercase">
+        <span className="inline-block h-[10px] w-[3px] translate-y-[1px] bg-brass" aria-hidden />
+        {label}
+      </h2>
+      <span className="leader max-sm:hidden" aria-hidden />
+      {aside ? (
+        <span className="text-[9px] tracking-[0.16em] text-faint uppercase">{aside}</span>
+      ) : null}
+    </div>
   );
 }
 
@@ -83,7 +149,7 @@ export function KeyValue({
     dim: "text-dim",
   };
   const body = (
-    <div className="flex items-baseline gap-2 border-b border-rule/60 py-1 last:border-b-0">
+    <div className="flex items-baseline gap-2 border-b border-rule/60 py-1 transition-colors duration-150 last:border-b-0 hover:bg-pit/70">
       <span className="text-[11px] text-faint">{label}</span>
       <span className="leader" aria-hidden />
       <span className={`tabular max-w-[68%] text-right text-[12px] ${tones[tone]}`}>{value}</span>
@@ -120,7 +186,9 @@ export function Meter({
         <span className="text-[10px] tracking-[0.16em] text-faint uppercase">{label}</span>
         <span className="tabular text-[11px] text-dim">{readout ?? value.toFixed(0)}</span>
       </div>
-      <div className="mt-1 h-[4px] w-full border-y border-rule bg-tar">
+      {/* The empty track is the page's own ground, so the column of pigment
+          standing in it reads as the figure and not as a field of tone. */}
+      <div className="mt-1 h-[5px] w-full border-y border-rule bg-void">
         <div className={`h-full ${fills[tone]}`} style={{ width: `${pct}%` }} />
       </div>
     </div>

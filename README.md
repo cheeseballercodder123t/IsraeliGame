@@ -160,6 +160,16 @@ per browser after that.
 Around the board itself, the table carries a set of instruments, each one a small rulebook in
 `src/domain` read by a panel on the desk.
 
+The desk is set in two bands. The working surface is one row, which is as many columns as the screen
+has room for: the orders and the bench down the left, the board and the register through the middle,
+and the wire and the contracts down the right. Everything the desk reads rather than works on is
+under all of it, as one catalogue band set in columns rather than in a third rail: those panels run
+from two hundred pixels to two thousand, and a rail of them ran six thousand pixels down one side of
+the sheet while the columns beside it stopped at seventeen hundred, which is a desk with a column of
+holes in it. Four panels are cut as lead plates, with the doubled joint the collar of the table
+wears, so the board, the lever, the register and the wire are found before a word of any of them is
+read.
+
 **The switchboard.** One slash opens a single field over the whole table. A word or two narrows it to
 the orders on the card, the plots on the ground, the houses on the register, the rooms of the desk
 and the five lenses, best match first. Enter reaches the row that is picked: an order opens on the

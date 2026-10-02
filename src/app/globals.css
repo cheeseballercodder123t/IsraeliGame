@@ -12,10 +12,13 @@
   /* Type on metal */
   --color-ink: #ded4c3;
   --color-dim: #9c9180;
-  /* Faint is lifted one step off the old value: the smallest type in the
-     building is set in it, and it has to read on plate steel, not just on the
-     page. It still sits well below dim, so the ranking of the three stands. */
-  --color-faint: #7d7365;
+  /* Faint is lifted a second step off the old value. The smallest type in the
+     building is set in it and most of the page's figures are labelled in it,
+     so it is measured rather than guessed: at four and a half to one against
+     plate steel it clears the floor small type is owed, and at five to one
+     against pit it clears it on the wells as well. Dim stays above it, so the
+     ranking of the three still reads at a glance. */
+  --color-faint: #90867a;
 
   /* Pigments */
   --color-rust: #a9542a;
@@ -149,7 +152,19 @@ p {
 }
 
 /*
- * A printed index sets a leader between the thing and the figure it carries,
+ * The reference well. Anything the desk reads figure by figure rather than
+ * states in a sentence is sunk into one of these: the page's own ground with a
+ * hairline cut around it, so a column of numbers sits below the plate it is
+ * printed on instead of floating on top of it. It is only ever recessed: a
+ * well is darker than the panel holding it, never brighter.
+ */
+.well {
+  background-color: var(--color-void);
+  border: 1px solid var(--color-rule);
+}
+
+/*
+ * The printed index sets a leader between the thing and the figure it carries,
  * so the eye runs from the left column to the right without a ladder of
  * spaces. It is drawn as a rule rather than as a field of dots, so it keeps
  * the weight of every other hairline in the building.
@@ -414,6 +429,34 @@ input[type="radio"] {
  * scale turns a plate into a zoetrope and a blur is a thing this building does
  * not own.
  */
+/*
+ * The catalogue band. Under the working surface a desk keeps its reference
+ * matter: the books, the files, the plot in hand and the paper. Those panels
+ * are of wildly different lengths, so on a wide screen they are set as a page
+ * of type rather than as a grid: three columns, broken between panels and
+ * never inside one, with a hairline standing between the columns the way a
+ * broadsheet rules off its own. A grid would leave a column of holes wherever
+ * a short panel landed beside a long one, which is exactly the raggedness the
+ * band is there to remove. Below that width the band is a plain two-column
+ * grid, because a measure squeezed out of a narrow sheet stops reading.
+ */
+.mill-columns {
+  column-gap: 16px;
+}
+
+@media (min-width: 1536px) {
+  .mill-columns {
+    display: block;
+    columns: 3;
+    column-rule: 1px solid var(--color-rule);
+  }
+
+  .mill-columns > * {
+    break-inside: avoid;
+    margin-bottom: 16px;
+  }
+}
+
 @keyframes plate-rise {
   from {
     opacity: 0;

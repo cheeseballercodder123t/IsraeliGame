@@ -150,6 +150,8 @@ export function GridCanvas({
   const washing = lens !== "NONE";
   const ready = useSpriteAtlas();
   const holder = useRef<HTMLDivElement | null>(null);
+  /** The plate the board is drawn on: the measured sheet, not the frame around it. */
+  const frame = useRef<HTMLDivElement | null>(null);
   const [scale, setScale] = useState(1);
   // A phone fits the whole frame at a third size, where a plot is art and very
   // little else. The reader can ask for the drawn size instead and scroll the
@@ -160,13 +162,21 @@ export function GridCanvas({
   // The board is drawn at one pitch and scaled as a whole, so a laptop that
   // cannot give it the drawn frame still sees all one hundred and twenty one
   // plots instead of a strip of them.
+  //
+  // The fit is measured against the drawn sheet and not against the box that
+  // frames it. The box carries a border and a padding of its own, and a scale
+  // fitted to the outside of it comes out that much too wide: the board then
+  // overflows a frame that clips, and the last plot of every row and the foot
+  // of the last column are cut off on a screen that had room for all of it.
   useEffect(() => {
-    const element = holder.current;
+    const element = frame.current;
     if (!element) return;
     // Fit, never crop: a phone gets the whole board at a third size rather
     // than a corner of it at full size.
     const fit = () => {
-      const width = element.clientWidth;
+      const style = getComputedStyle(element);
+      const padding = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
+      const width = element.clientWidth - padding;
       if (width < 1) return;
       const next = Math.min(1, width / TOTAL_PX);
       setScale((current) => (Math.abs(current - next) < 0.005 ? current : next));
@@ -224,6 +234,7 @@ export function GridCanvas({
   return (
     <div ref={holder} className="w-full" onKeyDown={walk}>
       <div
+        ref={frame}
         className={`relative border border-edge bg-void p-1.5 ${
           zoomed ? "overflow-x-auto" : "overflow-hidden"
         }`}
@@ -375,7 +386,13 @@ export function GridCanvas({
                       height: ART,
                       boxShadow: inHand
                         ? `inset 0 0 0 2px var(--color-ink)`
-                        : `inset 0 0 0 1px ${tile.ownerId ? color : "var(--color-rule)"}`,
+                        : occupied && tile.ownerId
+                          ? // A plot with a plant on it is held harder than bare
+                            // land, and its ring is drawn at twice the weight so
+                            // a row of works reads as a holding and not as a
+                            // row of neighbours that happen to share a colour.
+                            `inset 0 0 0 2px ${color}`
+                          : `inset 0 0 0 1px ${tile.ownerId ? color : "var(--color-rule)"}`,
                     }}
                   >
                     {ready ? (
@@ -479,7 +496,7 @@ export function GridCanvas({
                       </span>
                     ) : null}
                     {compact ? null : (
-                      <span className="tabular absolute bottom-[3px] left-[4px] text-[8px] text-edge">
+                      <span className="tabular absolute bottom-[3px] left-[4px] text-[8px] text-faint">
                         {tile.x},{tile.y}
                       </span>
                     )}
