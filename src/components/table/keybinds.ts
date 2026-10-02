@@ -28,6 +28,10 @@ export const TABLE_KEYBINDS: Keybind[] = [
     label: "Draw the board as deeds, smoke, wear, yield or reach, and 0 for the plain board",
   },
   { keys: "arrow keys", label: "Walk the board one plot at a time once the grid has focus" },
-  { keys: "/", label: "Jump to an order by name, from the desk" },
+  {
+    keys: "/",
+    label: "The switchboard: an order, a plot, a room, a house or a lens, by name",
+  },
+  { keys: "ctrl k", label: "The switchboard from anywhere, even with a hand in a field" },
   { keys: "?", label: "This card, every key the table answers to" },
 ];

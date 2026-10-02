@@ -19,6 +19,11 @@ export const TABLE_TOUR: TourStep[] = [
     body: "Desk and board is where you plan and build. Floor and register is the exchange: every commodity book, the movers list, and a ticket to buy or sell. Both rooms feed the same sealed window, and nothing either room does takes effect until the countdown reaches zero.",
   },
   {
+    anchor: "switchboard",
+    title: "The switchboard answers to a name",
+    body: "Seventy nine orders is more than anybody reads down, and a hundred and twenty one plots is more than anybody counts. Press the slash key, or the control key with K, and type the name of a thing the way you would say it out loud: an order, a plot by its two numbers, a room by its nameplate, a house by the name on its chair, a lens, or one of the levers on this rail. The row that answers is one press away and the board is carried to it. The button beside this one opens the same board for a hand that would rather click.",
+  },
+  {
     anchor: "first-moves",
     title: "What the desk wants next",
     body: "Seventy five orders and an empty ledger is the hardest moment in the game, so this panel names one thing at a time and takes you to the plot that can do it. It reads your own books, so it disappears the moment there is nothing left to nag about. If you never see it, you are already ahead of it.",

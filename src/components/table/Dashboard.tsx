@@ -49,9 +49,11 @@ import { CountingPane } from "@/components/table/CountingPane";
 import { EraClosing } from "@/components/table/EraClosing";
 import { HelpOverlay } from "@/components/table/HelpOverlay";
 import { HousesRegister } from "@/components/table/HousesRegister";
+import { Switchboard } from "@/components/table/Switchboard";
 import { POLL_MS, REALTIME_POLL_MS, useTableSync } from "@/components/table/useTableSync";
 import { clang, knell, ratchet, siren, thump, ticker, toggleSound, useSound } from "@/lib/sound";
 import { setTableTitle, setUnreadWire } from "@/lib/parts";
+import { switchboardEntries, type SwitchboardEntry } from "@/lib/switchboard";
 import { Tour, startTour } from "@/components/tour/Tour";
 import { TABLE_RECAP, TABLE_TOUR } from "@/components/tour/steps";
 import { Button, KeyValue, Meter, Notice, Panel } from "@/components/ui/primitives";
@@ -118,6 +120,7 @@ export function Dashboard({
   /** The edition on the desk, so the shelf can open any issue and not just the latest. */
   const [ragTurn, setRagTurn] = useState<number | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [switchboardOpen, setSwitchboardOpen] = useState(false);
   const [view, setView] = useState<"DESK" | "FLOOR">("DESK");
   /**
    * The question the board is drawn as. The plain board is the drawing itself,
@@ -327,6 +330,16 @@ export function Dashboard({
   // does any field being typed into.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
+      // The switchboard answers to the control key wherever the hand is, even
+      // with it in a field, so it is read before the guards that keep the plain
+      // keys out of one. It stays down while another sheet is already up.
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        if (!document.querySelector('[role="dialog"]')) {
+          event.preventDefault();
+          setSwitchboardOpen(true);
+        }
+        return;
+      }
       if (event.metaKey || event.ctrlKey || event.altKey) return;
       const target = event.target as HTMLElement | null;
       if (
@@ -382,6 +395,11 @@ export function Dashboard({
         event.preventDefault();
         setView("DESK");
         setLens("NONE");
+      } else if (key === "/") {
+        // The switchboard, which is the card's promise: an order, a plot, a
+        // room or a house, by the name it is said with.
+        event.preventDefault();
+        setSwitchboardOpen(true);
       } else if (key === "t") {
         event.preventDefault();
         startTour();
@@ -446,6 +464,85 @@ export function Dashboard({
     setRagTurn(record.turn);
     setRagOpen(true);
   }, []);
+
+  /** Every row the switchboard can offer at this table, rebuilt as the table moves. */
+  const switchboardRows = useMemo(() => switchboardEntries(state, meId), [state, meId]);
+
+  const copyLine = useCallback(
+    (text: string, said: string) => {
+      navigator.clipboard
+        .writeText(text)
+        .then(() => setReceipt(said))
+        .catch(() => setReceipt(`The clipboard refused. The table code is ${code.toUpperCase()}`));
+    },
+    [code],
+  );
+
+  /**
+   * Opening a row of the switchboard. The row carries where it lives rather
+   * than what to do, so every case here is a hop to a panel: the inspector for
+   * a plot, the order jump the night office already uses for an order, the
+   * view and the handle for a room, and the levers on the rail for a deed.
+   */
+  const runSwitchboard = useCallback(
+    (entry: SwitchboardEntry) => {
+      switch (entry.kind) {
+        case "ORDER":
+          if (entry.order) jumpToOrder(entry.order);
+          return;
+        case "ROOM":
+          if (!entry.room) return;
+          setView(entry.room.view);
+          jumpTo(`[data-tour="${entry.room.anchor}"]`);
+          return;
+        case "PLOT":
+          if (!entry.tileId) return;
+          setView("DESK");
+          setSelectedTileId(entry.tileId);
+          jumpTo('[data-tour="inspector"]');
+          return;
+        case "HOUSE":
+          setView("DESK");
+          jumpTo('[data-tour="register"]');
+          return;
+        case "LENS":
+          if (!entry.lens) return;
+          setView("DESK");
+          setLens(entry.lens);
+          return;
+        default:
+          break;
+      }
+      switch (entry.action) {
+        case "PAPER":
+          setRagOpen(true);
+          return;
+        case "REPLAY":
+          setReplayOpen(true);
+          return;
+        case "CARD":
+          setHelpOpen(true);
+          return;
+        case "TOUR":
+          startTour("full");
+          return;
+        case "CODE":
+          copyLine(code.toUpperCase(), `Table code ${code.toUpperCase()} copied`);
+          return;
+        case "INVITE":
+          // The same line the lobby's invite button copies: the table's own
+          // door, which seats a newcomer whether the window is open or not.
+          copyLine(`${window.location.origin}/table/${code.toUpperCase()}`, "Invitation copied");
+          return;
+        case "QUESTION":
+          handleCallQuestion();
+          return;
+        default:
+          return;
+      }
+    },
+    [code, copyLine, handleCallQuestion, jumpTo, jumpToOrder],
+  );
 
   const held = useMemo(() => (me ? holdingsByFamily(state, me.id) : []), [state, me]);
 
@@ -553,6 +650,15 @@ export function Dashboard({
         </div>
 
         <div className="flex flex-1 flex-wrap items-stretch border-l border-rule sm:flex-none">
+          <button
+            type="button"
+            data-tour="switchboard"
+            onClick={() => setSwitchboardOpen(true)}
+            className="flex-1 border-r border-rule px-3 py-2 text-[10px] tracking-[0.18em] whitespace-nowrap text-dim uppercase transition-colors duration-150 hover:bg-steel hover:text-ink sm:flex-none"
+            title="Every order, plot, room and house by the name it is said with"
+          >
+            Switchboard /
+          </button>
           <button
             type="button"
             onClick={() => toggleSound()}
@@ -1135,6 +1241,12 @@ export function Dashboard({
         onOpenChange={setReplayOpen}
       />
       <HelpOverlay open={helpOpen} onOpenChange={setHelpOpen} />
+      <Switchboard
+        open={switchboardOpen}
+        onOpenChange={setSwitchboardOpen}
+        entries={switchboardRows}
+        onRun={runSwitchboard}
+      />
 
       {/*
        * The colophon. A desk closes its sheet the way a works closes its own
