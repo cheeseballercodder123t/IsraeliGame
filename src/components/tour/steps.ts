@@ -25,8 +25,8 @@ export const TABLE_TOUR: TourStep[] = [
   },
   {
     anchor: "first-moves",
-    title: "What the desk wants next",
-    body: "Seventy five orders and an empty ledger is the hardest moment in the game, so this panel names one thing at a time and takes you to the plot that can do it. It reads your own books, so it disappears the moment there is nothing left to nag about. If you never see it, you are already ahead of it.",
+    title: "The window desk",
+    body: "Seventy nine orders and an empty ledger is the hardest moment in the game, so this panel keeps the short list: the three things on your own books that want an answer before the close, worst first, each tagged with how soon it bites. A line about a plot opens the plot, so the inspector already carries the order it is asking for, and a line about the books or the room carries the desk to the panel it names. The list is read off your state, so it retires itself as the work is done and reads nothing pressing when there is nothing left to say.",
   },
   {
     anchor: "desk",

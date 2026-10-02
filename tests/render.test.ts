@@ -6,11 +6,12 @@ import { MarketTape } from "@/components/panes/MarketTape";
 import { StatusStrip } from "@/components/panes/StatusStrip";
 import { RagShelf } from "@/components/newspaper/RagShelf";
 import { ContractsPanel } from "@/components/table/ContractsPanel";
+import { Briefing } from "@/components/table/Briefing";
 import { HousesRegister } from "@/components/table/HousesRegister";
 import { RecordPane } from "@/components/table/RecordPane";
 import { BOARD } from "@/domain/constants";
 import type { NewspaperRecord } from "@/server/store/types";
-import { build, freshState, tileAt } from "./helpers";
+import { build, freshState, fund, sweepBoard, tileAt } from "./helpers";
 
 /**
  * The surfaces that carry the most markup and the least browser: the strip,
@@ -274,5 +275,41 @@ describe("the board, as painted", () => {
     expect(html).toContain("absolute border border-rule");
     // The fit controls answer on press the way every other control does.
     expect(html).toContain("active:translate-y-[1px]");
+  });
+});
+
+describe("the window desk, as painted", () => {
+  const onShow = () => {};
+  const onJump = () => {};
+
+  function brief(state: ReturnType<typeof freshState>, sealed = 0) {
+    return renderToStaticMarkup(
+      createElement(Briefing, { state, player: state.players[0], sealed, onShow, onJump }),
+    );
+  }
+
+  it("prints the head of the list with its urgency and the way to the work", () => {
+    const state = sweepBoard(freshState());
+    fund(state, "p1", 5_000_000);
+    state.players[0].morale = 60;
+    build(state, 1, 1, "p1", "OIL_DERRICK");
+
+    const html = brief(state);
+    expect(html).toContain("The window desk");
+    expect(html).toContain("1 on the list");
+    expect(html).toContain("before long");
+    expect(html).toContain("Service the plant on 1, 1");
+    expect(html).toContain('data-tour="first-moves"');
+  });
+
+  it("says nothing pressing for a house that is in order", () => {
+    const state = sweepBoard(freshState());
+    fund(state, "p1", 5_000_000);
+    state.players[0].morale = 60;
+    build(state, 1, 1, "p1", "OIL_DERRICK", { autoRepair: true });
+
+    const html = brief(state, 1);
+    expect(html).toContain("nothing pressing");
+    expect(html).toContain("wants an order before the close");
   });
 });

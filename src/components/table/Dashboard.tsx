@@ -33,7 +33,7 @@ import { MarketTape } from "@/components/panes/MarketTape";
 import { OrderDesk } from "@/components/orders/OrderDesk";
 import { OrdersBoard } from "@/components/panes/OrdersBoard";
 import { StatusStrip } from "@/components/panes/StatusStrip";
-import { FirstMoves } from "@/components/table/FirstMoves";
+import { Briefing } from "@/components/table/Briefing";
 import { NewspaperModal } from "@/components/newspaper/NewspaperModal";
 import { RagShelf } from "@/components/newspaper/RagShelf";
 import { ChatPanel } from "@/components/table/ChatPanel";
@@ -313,6 +313,20 @@ export function Dashboard({
       document.querySelector(selector)?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 60);
   }, []);
+
+  /**
+   * The briefing names a room rather than a plot, so the desk is carried to it
+   * the way a walk-around step or a switchboard row is: the view is set first,
+   * because a room on the floor is not mounted while the desk is up, and the
+   * scroll lands once React has painted the room the jump asked for.
+   */
+  const visitAnchor = useCallback(
+    (anchor: string) => {
+      setView("DESK");
+      jumpTo(`[data-tour="${anchor}"]`);
+    },
+    [jumpTo],
+  );
 
   /**
    * The night office hands a stage call to the operations desk. The desk opens
@@ -741,7 +755,13 @@ export function Dashboard({
             data-tour="desk"
             className="order-2 min-w-0 space-y-4 lg:order-none lg:col-start-1 lg:row-span-2 lg:row-start-1 2xl:col-start-1 2xl:row-span-1 2xl:row-start-1"
           >
-            <FirstMoves state={state} player={me} onShow={setSelectedTileId} />
+            <Briefing
+              state={state}
+              player={me}
+              sealed={optimistic.length}
+              onShow={setSelectedTileId}
+              onJump={visitAnchor}
+            />
             <OrderDesk
               state={state}
               player={me}
@@ -945,7 +965,7 @@ export function Dashboard({
            * about.
            */}
           <div className="order-3 grid min-w-0 items-start gap-4 md:grid-cols-2 lg:order-none lg:col-start-2 lg:row-start-2 2xl:col-start-3 2xl:row-start-1 2xl:grid-cols-1">
-            <div className="min-w-0">
+            <div data-tour="wire" className="min-w-0">
               <ChatPanel
                 code={code}
                 state={state}
