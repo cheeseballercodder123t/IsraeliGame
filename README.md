@@ -15,7 +15,7 @@ A live table runs on Vercel at https://bigyahuapproved.vercel.app/.
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # 520 tests in 49 files
+npm test           # 538 tests in 50 files
 npm run typecheck
 npm run build
 ```
@@ -169,6 +169,19 @@ the sheet while the columns beside it stopped at seventeen hundred, which is a d
 holes in it. Four panels are cut as lead plates, with the doubled joint the collar of the table
 wears, so the board, the lever, the register and the wire are found before a word of any of them is
 read.
+
+**The window desk.** The head of the left column is not one line of advice but a short list: the
+three things on this house's own books that want an answer before the close, worst first, each
+tagged with how soon it bites and a button that either opens the plot on the inspector or carries
+the desk to the room the work lives in. The rules are pure and live in `src/domain/advice.ts`:
+whether the desk has sealed nothing while the clock runs out, a wage bill the till cannot clear,
+debt in its third window, the yard under the picket line, a night office over the alarm line,
+waste in the yard, plants out of contract, a forced sale with one window left, a contract offer
+waiting on a signature, a rival past half of this house's paper, a convertible note coming due, the
+clean air movement near a vote, and lines on the wire this desk has not read. It reads the house
+and not the rivals, so it retires itself as the work is done and says nothing pressing when there
+is nothing left to say. The first of the same rules still stands alone for a house that has not
+started, which is what `advise` has always been.
 
 **The switchboard.** One slash opens a single field over the whole table. A word or two narrows it to
 the orders on the card, the plots on the ground, the houses on the register, the rooms of the desk
