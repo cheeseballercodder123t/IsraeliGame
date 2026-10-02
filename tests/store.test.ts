@@ -155,6 +155,42 @@ describe("choosing a store", () => {
  * own path to this value, so the doubled slash makes the database reject every
  * request as an invalid path and the store looks broken rather than mistyped.
  */
+describe("the table's dial", () => {
+  it("answers with the counter, the turn and the deadline on the document's own row", async () => {
+    process.env.CONGLOMERATE_STORE = "memory";
+    const store = getStore();
+    const state = await store.createGame({
+      code: "PULSE1",
+      seed: 20261002,
+      tickIntervalHours: 24,
+      nextTickAt: new Date(Date.now() + 3_600_000).toISOString(),
+      status: "ACTIVE",
+      seats: [
+        { userId: "pulse-host", name: "Cornelius Hale", archetype: "ROBBER_BARON", isBot: false },
+      ],
+    });
+
+    expect(await store.gamePulseByCode("pulse1")).toEqual({
+      id: state.game.id,
+      revision: state.game.revision,
+      currentTurn: state.game.currentTurn,
+      nextTickAt: state.game.nextTickAt,
+      status: "ACTIVE",
+    });
+    expect(await store.gamePulseByCode("NOPE99")).toBeNull();
+
+    // The dial moves with the write that moved the table, and says nothing
+    // about the document behind it.
+    state.game.currentTurn = 3;
+    state.game.status = "FINISHED";
+    await store.saveGame(state);
+    const moved = await store.gamePulseByCode("PULSE1");
+    expect(moved?.currentTurn).toBe(3);
+    expect(moved?.status).toBe("FINISHED");
+    expect(moved?.revision).toBe(state.game.revision);
+  });
+});
+
 describe("reading the Supabase credentials", () => {
   it("answers nothing until both halves are present", () => {
     process.env.SUPABASE_URL = "https://example.supabase.co";

@@ -87,7 +87,46 @@ export const MAX_WINDOW_HOLDS = Math.floor(envCount(process.env.FAIRNESS_HOLDS, 
 const HOLD_RULES: HoldRules = { graceSeconds: SEAL_GRACE_SECONDS, maxHolds: MAX_WINDOW_HOLDS };
 
 /** How many times a losing writer re-reads before it gives the table up. */
-const COMMIT_ATTEMPTS = 6;
+export const COMMIT_ATTEMPTS = 6;
+
+/**
+ * The longest one guarded round may run, whole.
+ *
+ * A lost round is cheap and meant to be: re-read, re-decide, write again, all
+ * inside a few hundred milliseconds under an ordinary wire. It stops being
+ * cheap when the store itself is slow, because each attempt then sits behind
+ * a retry ladder of its own while the table keeps moving, so the writer keeps
+ * arriving late and the loop keeps paying. That is a struggling database
+ * rather than a busy table, and the desk is owed an answer in seconds rather
+ * than minutes. Past this budget the loop gives the table up and says so.
+ */
+export const COMMIT_BUDGET_MS = 20_000;
+
+/**
+ * How long one attempt inside a guarded round may take.
+ *
+ * The retry policy lives in the loop here and not in the store call, because
+ * the loop already re-reads and re-decides after a failure: a transient fault
+ * costs one more round, which is cheaper than a long ladder of retries spent
+ * on a snapshot that is going stale while it climbs.
+ */
+export const COMMIT_ATTEMPT = {
+  attempts: 2,
+  timeoutMs: 6_000,
+  baseDelayMs: 120,
+  maxDelayMs: 800,
+};
+
+/**
+ * Whether a guarded round has spent its whole budget.
+ *
+ * The first attempt is never refused: a round has to read the table at least
+ * once before it knows anything, and a caller who has already waited is owed
+ * that read. From the second attempt on, the clock decides.
+ */
+export function guardedRoundSpent(started: number, now: number, attempt: number): boolean {
+  return attempt > 0 && now - started >= COMMIT_BUDGET_MS;
+}
 
 /** The window length a mode plays at, in hours, since the engine counts in hours. */
 export function windowHoursFor(mode: GameMode): number {
@@ -137,13 +176,15 @@ async function commit<T>(
   mutate: (state: GameState) => Decision<T>,
 ): Promise<CommitOutcome<T>> {
   const store = getStore();
+  const started = Date.now();
   for (let attempt = 0; attempt < COMMIT_ATTEMPTS; attempt += 1) {
-    const state = await store.getGame(gameId);
+    if (guardedRoundSpent(started, Date.now(), attempt)) break;
+    const state = await store.getGame(gameId, COMMIT_ATTEMPT);
     if (!state) return { ok: false, error: "No such table." };
     const seen = state.game.revision;
     const decision = mutate(state);
     if (!decision.ok) return { ok: false, error: decision.error };
-    if (await store.saveGame(state, seen)) {
+    if (await store.saveGame(state, seen, COMMIT_ATTEMPT)) {
       // The winning write announces itself, so a browser subscribed to the
       // publication hears the table move before its next poll would. The
       // losing attempts never reach this line, so a write that had to retry
@@ -557,15 +598,28 @@ export async function queueOrder(
     createdAt: new Date().toISOString(),
   };
 
-  // Appended to the window rather than folded into a whole-snapshot rewrite, so
-  // a rival sealing at the same moment cannot lose their order to this one. The
-  // id is fresh, so a refused append only means the table vanished mid-write.
-  await store.appendOrder(gameId, queued);
-  // Timestamp the seal on the table itself, which is what the fairness rule
-  // reads when a window closes on a desk that is still typing. A bot seals
-  // during resolution and does not go through here. The seal is also filed in
-  // the Record, which is how the window can say who filed before the bell.
-  await commit(gameId, (live) => {
+  // The order and the seal are filed in the one guarded write.
+  //
+  // The id is minted out here, so a round that had to retry still files the
+  // order exactly once: the mutator re-runs against the freshest snapshot and
+  // adds it only when it is not already on the desk. One write also means a
+  // seal can no longer land half filed, with the order in the window and the
+  // stamp the fairness rule reads still missing, which was possible when the
+  // append and the stamp were two trips and the second one lost.
+  const outcome = await commit(gameId, (live) => {
+    if (live.game.status === "FINISHED") {
+      return { ok: false as const, error: "The era has closed. No further orders are taken." };
+    }
+    const seat = live.players.find((entry) => entry.id === playerId);
+    if (!seat) return { ok: false as const, error: "You are not seated at this table." };
+    if (seat.isBankrupt) {
+      return { ok: false as const, error: "The court has closed your operation." };
+    }
+    if (!live.queue.some((q) => q.id === queued.id)) live.queue.push(queued);
+    // Timestamp the seal on the table itself, which is what the fairness rule
+    // reads when a window closes on a desk that is still typing. A bot seals
+    // during resolution and does not go through here. The seal is also filed in
+    // the Record, which is how the window can say who filed before the bell.
     live.game.lastSealAt = queued.createdAt;
     const filed = live.seals.some(
       (seal) => seal.playerId === playerId && seal.at === queued.createdAt,
@@ -576,6 +630,8 @@ export async function queueOrder(
     }
     return { ok: true as const, value: true };
   });
+
+  if (!outcome.ok) return { ok: false, error: outcome.error };
   return { ok: true, order: queued };
 }
 
@@ -643,6 +699,7 @@ export async function advanceTurn(state: GameState): Promise<TurnOutcome> {
   const store = getStore();
   const gameId = state.game.id;
   const turn = state.game.currentTurn;
+  const started = Date.now();
 
   // A closed era takes no more windows. The closing edition is the last paper.
   if (state.game.status === "FINISHED") {
@@ -650,7 +707,8 @@ export async function advanceTurn(state: GameState): Promise<TurnOutcome> {
   }
 
   for (let attempt = 0; attempt < COMMIT_ATTEMPTS; attempt += 1) {
-    const current = await store.getGame(gameId);
+    if (guardedRoundSpent(started, Date.now(), attempt)) break;
+    const current = await store.getGame(gameId, COMMIT_ATTEMPT);
     if (!current || current.game.currentTurn > turn) {
       return { state: current ?? state, issue: null, turn, alreadyResolved: true };
     }
@@ -669,15 +727,19 @@ export async function advanceTurn(state: GameState): Promise<TurnOutcome> {
       result.state.game.status = "FINISHED";
       result.state.gallery = settleGallery(result.state.gallery, eraResults(result.state));
     }
-    const issue = closing
-      ? await composeClosingIssue(result.state, turn)
-      : await composeIssue(current, result.events, turn);
 
-    if (await store.saveGame(result.state, seen)) {
+    if (await store.saveGame(result.state, seen, COMMIT_ATTEMPT)) {
       // The winning resolver announces the turn, the same way a sealing write
       // announces itself: one publication row, and a watching browser with the
       // public keys learns the books have closed before its poll wakes up.
       publishRevision(gameId, turn, result.state.game.revision);
+      // The paper is written once the window it describes has landed, because
+      // the prose can be slow (a provider may be asked for it) and a round the
+      // table refused must not pay for it twice. The closing edition is written
+      // off the finished ledger and never waits on a provider at all.
+      const issue = closing
+        ? await composeClosingIssue(result.state, turn)
+        : await composeIssue(current, result.events, turn);
       const record: NewspaperRecord = {
         turn,
         headline: issue.headline,

@@ -2,6 +2,7 @@ import { normalizeWinCondition } from "@/domain/endgame";
 import type { LadderEntry } from "@/domain/ladder";
 import type { Archetype, GameState, QueuedOrder, WinCondition } from "@/domain/types";
 import type { Scandal } from "@/server/rag/template";
+import type { RetryOptions } from "./resilience";
 
 /**
  * Tables written before revisions existed carry no counter, so a loaded
@@ -106,6 +107,22 @@ export interface GameSummary {
 }
 
 /**
+ * The table's dial, without its document.
+ *
+ * Everything on it lives on the same row the revision guard already reads, so
+ * a watcher can ask "has anything moved, and is the window due" for the price
+ * of one indexed row rather than a full snapshot. The streamed transport ticks
+ * on this and only pays for the whole document when the answer says it must.
+ */
+export interface GamePulse {
+  id: string;
+  revision: number;
+  currentTurn: number;
+  nextTickAt: string;
+  status: GameState["game"]["status"];
+}
+
+/**
  * What one probe of a store says about it. A store is only interesting when it
  * is healthy, so this is deliberately small: whether a round trip landed, how
  * long it took, and one line a desk can read.
@@ -122,8 +139,20 @@ export interface StoreHealth {
 export interface GameStore {
   readonly kind: "memory" | "file" | "supabase";
   createGame(input: CreateGameInput): Promise<GameState>;
-  getGame(id: string): Promise<GameState | null>;
+  /**
+   * One table, whole. `options` tightens the store's own retry policy, which
+   * the guarded write loop uses to keep a single round quick: a loop that
+   * re-reads and re-decides on a conflict does not also want each attempt to
+   * sit inside a long retry ladder of its own.
+   */
+  getGame(id: string, options?: RetryOptions): Promise<GameState | null>;
   getGameByCode(code: string): Promise<GameState | null>;
+  /**
+   * The table's dial on its own: revision, turn, status and the window's
+   * deadline, read from the row the guard already lives on. It is what lets a
+   * watching transport tick without paying for the whole document.
+   */
+  gamePulseByCode(code: string): Promise<GamePulse | null>;
   /**
    * Writes the snapshot and stamps it with the next revision. When `expected`
    * is given the write only lands while the stored revision still matches what
@@ -131,7 +160,7 @@ export interface GameStore {
    * loser is handed back `false` and re-reads. Returns whether it landed, and
    * on success updates `state.game.revision` to the revision now stored.
    */
-  saveGame(state: GameState, expected?: number): Promise<boolean>;
+  saveGame(state: GameState, expected?: number, options?: RetryOptions): Promise<boolean>;
   listGames(): Promise<GameSummary[]>;
   /**
    * Adds one order to the window without rewriting anybody else's, and bumps

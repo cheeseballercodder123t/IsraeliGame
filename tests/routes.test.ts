@@ -29,6 +29,7 @@ import { GET as summaryGET } from "@/app/api/table/[code]/summary/route";
 import { GET as tickGET, POST as tickPOST } from "@/app/api/tick/route";
 import { POST as ragPOST } from "@/app/api/rag/route";
 import {
+  callQuestion,
   claimSeatByCode,
   listIssues,
   loadGameByCode,
@@ -217,6 +218,46 @@ describe("GET /api/table/[code]/stream", () => {
     expect(typeof frame.maxHolds).toBe("number");
     expect(typeof frame.held).toBe("boolean");
     expect(Array.isArray(frame.present)).toBe(true);
+  });
+
+  it("ticks on the table's dial instead of loading the document every beat", async () => {
+    const state = await activeTable();
+    session(host.userId, host.name);
+    const store = getStore();
+    // One beat is one snapshot. What this pins is that a tick which has no
+    // reason to look at the table does not pay for the snapshot at all, because
+    // a desk watching a quiet table used to load the whole document once a
+    // second and that load is what made a busy table slow to write to.
+    const document = vi.spyOn(store, "getGameByCode");
+    const dial = vi.spyOn(store, "gamePulseByCode");
+
+    vi.useFakeTimers();
+    try {
+      const streaming = await streamGET(new Request("http://test/stream"), {
+        params: Promise.resolve({ code: state.game.code }),
+      });
+      expect(streaming.status).toBe(200);
+      expect(document.mock.calls.length).toBe(1);
+
+      // A tick later nothing has moved, so the dial is read and the document
+      // is left where it is.
+      await vi.advanceTimersByTimeAsync(1_300);
+      expect(dial.mock.calls.length).toBe(1);
+      expect(document.mock.calls.length).toBe(1);
+
+      // A write moves the dial, and the next tick carries it to the desk.
+      const seat = state.players.find((player) => player.userId === host.userId)!;
+      await callQuestion(state.game.id, seat.id);
+      await vi.advanceTimersByTimeAsync(1_300);
+      expect(dial.mock.calls.length).toBe(2);
+      expect(document.mock.calls.length).toBe(2);
+
+      await streaming.body!.cancel();
+    } finally {
+      vi.useRealTimers();
+      document.mockRestore();
+      dial.mockRestore();
+    }
   });
 
   it("keeps a hand that is down rather than clearing it with a streamed beat", async () => {

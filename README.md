@@ -15,7 +15,7 @@ A live table runs on Vercel at https://bigyahuapproved.vercel.app/.
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # 505 tests in 49 files
+npm test           # 520 tests in 49 files
 npm run typecheck
 npm run build
 ```
@@ -466,7 +466,15 @@ table's own feed for a revision, a call on the question and a hold on a late sea
 `useTableSync` treats a subscribed stream as the main road: every desk rides the stream, which
 carries the whole summary the polled route serves and pushes it on every write and on a five second
 summary beat of its own, so presence, the hands down on the wire and the question all stay live
-without anybody asking. How long the poll underneath waits is plain arithmetic in `src/lib/sync.ts`:
+without anybody asking. A tick does not read the table's document: the store answers a dial instead,
+which is the revision, the turn, the status and the window's deadline off the row the revision
+guard already writes, and the room is read from its own small presence rows. Only a dial that moved,
+a room that moved, a window whose clock has run out or the summary beat pays for the whole
+snapshot, so a desk watching a quiet table costs one row read per tick rather than the entire
+document once a second, and the database is left to the writes the table is actually making. The
+guarded write itself is time boxed for the same reason: a round that keeps losing the revision race
+is retried inside a fixed budget and then the desk is told, rather than being held for minutes
+while the store is slow. How long the poll underneath waits is plain arithmetic in `src/lib/sync.ts`:
 half a minute while the stream is up, ten seconds with nothing underneath it, three on a short window
 table, and a factor longer again while a revision subscription is also live. A stream that errors or
 goes twenty seconds quiet is dropped, covered by its own beat and tried again. At a desk at rest that

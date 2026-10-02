@@ -4,6 +4,7 @@ import { createGameState } from "@/domain/world";
 import type { GameState, QueuedOrder } from "@/domain/types";
 import type {
   CreateGameInput,
+  GamePulse,
   GameStore,
   GameSummary,
   NewspaperRecord,
@@ -186,6 +187,7 @@ export class SupabaseStore implements GameStore {
     state: GameState,
     events: unknown[],
     expected?: number,
+    options?: RetryOptions,
   ): Promise<boolean> {
     const expectedRevision = expected ?? state.game.revision ?? 0;
 
@@ -199,7 +201,7 @@ export class SupabaseStore implements GameStore {
             p_expected: expectedRevision,
             p_events: events,
           }),
-          { attempts: 3 },
+          { attempts: 3, ...options },
         );
         if (data === null || data === undefined) return false;
         state.game.revision = Number(data);
@@ -214,13 +216,15 @@ export class SupabaseStore implements GameStore {
       }
     }
 
-    const { data, error } = await withRetry(async () =>
-      this.client.rpc("save_game_state_rev", {
-        p_game_id: state.game.id,
-        p_turn: state.game.currentTurn,
-        p_snapshot: state,
-        p_expected: expectedRevision,
-      }),
+    const { data, error } = await withRetry(
+      async () =>
+        this.client.rpc("save_game_state_rev", {
+          p_game_id: state.game.id,
+          p_turn: state.game.currentTurn,
+          p_snapshot: state,
+          p_expected: expectedRevision,
+        }),
+      options,
     );
     if (error) throw new StoreRequestError("save_game_state_rev", error.message, error.code ?? null);
     if (data === null || data === undefined) return false;
@@ -246,21 +250,23 @@ export class SupabaseStore implements GameStore {
     return true;
   }
 
-  async getGame(id: string): Promise<GameState | null> {
+  async getGame(id: string, options?: RetryOptions): Promise<GameState | null> {
     // Reads are deduplicated while they are in flight. A heartbeat, a summary
     // and a resolver on one window otherwise load the same document three
     // times over the same link, and the revision guard already covers the case
     // where a write lands between two of them.
     const pending = this.inflight.get(id);
     if (pending) return pending;
-    const work = this.loadGame(id).finally(() => this.inflight.delete(id));
+    const work = this.loadGame(id, options).finally(() => this.inflight.delete(id));
     this.inflight.set(id, work);
     return work;
   }
 
-  private async loadGame(id: string): Promise<GameState | null> {
-    const data = await this.call("load_game_state", () =>
-      this.client.rpc("load_game_state", { p_game_id: id }),
+  private async loadGame(id: string, options?: RetryOptions): Promise<GameState | null> {
+    const data = await this.call(
+      "load_game_state",
+      () => this.client.rpc("load_game_state", { p_game_id: id }),
+      options,
     );
     const state = (data as GameState | null) ?? null;
     return state ? withRevision(state) : null;
@@ -281,8 +287,44 @@ export class SupabaseStore implements GameStore {
     return this.getGame(row.id);
   }
 
-  async saveGame(state: GameState, expected?: number): Promise<boolean> {
-    return this.persist(state, [], expected);
+  /**
+   * The dial without the document.
+   *
+   * Every field on it is a column of `games`, which is the row the revision
+   * guard already writes: the deadline the window resolves by, the turn, the
+   * status and the counter. One indexed row is all a watching transport needs
+   * to know whether it must pay for the snapshot, which is what keeps a table
+   * with people in front of it from loading the whole document once a second.
+   */
+  async gamePulseByCode(code: string): Promise<GamePulse | null> {
+    const upper = code.toUpperCase();
+    const known = this.codes.get(upper);
+    const row = await this.call<{
+      id: string;
+      revision: number | string | null;
+      current_turn: number;
+      next_tick_at: string;
+      status: GamePulse["status"];
+    } | null>("games.select(pulse)", () =>
+      this.client
+        .from("games")
+        .select("id, revision, current_turn, next_tick_at, status")
+        .eq(known ? "id" : "code", known ?? upper)
+        .maybeSingle(),
+    );
+    if (!row) return null;
+    this.codes.set(upper, row.id);
+    return {
+      id: row.id,
+      revision: Number(row.revision ?? 0),
+      currentTurn: row.current_turn,
+      nextTickAt: row.next_tick_at,
+      status: row.status,
+    };
+  }
+
+  async saveGame(state: GameState, expected?: number, options?: RetryOptions): Promise<boolean> {
+    return this.persist(state, [], expected, options);
   }
 
   async listGames(): Promise<GameSummary[]> {

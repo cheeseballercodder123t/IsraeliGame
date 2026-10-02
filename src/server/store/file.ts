@@ -5,6 +5,7 @@ import { createGameState } from "@/domain/world";
 import type { GameState, QueuedOrder } from "@/domain/types";
 import type {
   CreateGameInput,
+  GamePulse,
   GameStore,
   GameSummary,
   NewspaperRecord,
@@ -21,6 +22,12 @@ import { withRevision } from "./types";
 
 interface IndexEntry extends Omit<GameSummary, "id"> {
   id: string;
+  /**
+   * The table's counter, so the pulse can be answered from the index alone.
+   * An index written before the field existed has none, and the pulse pays for
+   * the document it cannot summarize instead.
+   */
+  revision?: number;
 }
 
 interface StoreIndex {
@@ -115,6 +122,7 @@ export class FileStore implements GameStore {
         nextTickAt: state.game.nextTickAt,
         players: state.players.length,
         humans: state.players.filter((p) => !p.isBot).length,
+        revision: state.game.revision ?? 0,
       };
       const at = index.games.findIndex((game) => game.id === state.game.id);
       if (at >= 0) index.games[at] = entry;
@@ -166,6 +174,36 @@ export class FileStore implements GameStore {
       if (state?.game.code === upper) return state;
     }
     return null;
+  }
+
+  /**
+   * The table's dial, answered from the index the adapter already keeps: one
+   * small JSON read rather than the whole document. An index from before it
+   * carried the revision, or one that missed a table the directory still
+   * holds, falls back to the document itself.
+   */
+  async gamePulseByCode(code: string): Promise<GamePulse | null> {
+    const upper = code.toUpperCase();
+    const index = await this.readIndex();
+    const hit = index.games.find((game) => game.code === upper);
+    if (hit && typeof hit.revision === "number") {
+      return {
+        id: hit.id,
+        revision: hit.revision,
+        currentTurn: hit.turn,
+        nextTickAt: hit.nextTickAt,
+        status: hit.status,
+      };
+    }
+    const state = hit ? await this.getGame(hit.id) : await this.getGameByCode(upper);
+    if (!state) return null;
+    return {
+      id: state.game.id,
+      revision: state.game.revision ?? 0,
+      currentTurn: state.game.currentTurn,
+      nextTickAt: state.game.nextTickAt,
+      status: state.game.status,
+    };
   }
 
   /**
