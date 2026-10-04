@@ -635,17 +635,34 @@ export async function queueOrder(
   return { ok: true, order: queued };
 }
 
+/**
+ * Takes one order back off the window.
+ *
+ * The pull goes through the same guarded write as every other change to a
+ * table. The single statement patch it used to take is cheaper, but the
+ * Supabase version of that patch moves the row's write counter without
+ * carrying the number into the snapshot, which is where the guard's expected
+ * value is read from. One cancelled order therefore left the document's
+ * counter behind the row's for good, and every later guarded write on that
+ * table handed in the stale number and lost, so the table never resolved
+ * another window. One read and one write per cancelled order is the cheaper
+ * trade. Migration 0013 fixes the patch itself, and every table already
+ * stranded that way is repaired by the same migration.
+ */
 export async function cancelOrder(
   gameId: string,
   playerId: string,
   orderId: string,
 ): Promise<boolean> {
-  const store = getStore();
-  const state = await store.getGame(gameId);
-  if (!state) return false;
-  const target = state.queue.find((q) => q.id === orderId);
-  if (!target || target.playerId !== playerId) return false;
-  return store.removeOrder(gameId, orderId);
+  const outcome = await commit(gameId, (state) => {
+    const target = state.queue.find((q) => q.id === orderId);
+    if (!target || target.playerId !== playerId) {
+      return { ok: false as const, error: "That order is not on your desk." };
+    }
+    state.queue = state.queue.filter((q) => q.id !== orderId);
+    return { ok: true as const, value: true };
+  });
+  return outcome.ok;
 }
 
 /** The bench's line for the window, appended to the wire before the tick. */
