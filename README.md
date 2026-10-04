@@ -566,7 +566,9 @@ snapshot, fans the order mirror and appends the window's events in one transacti
 trip; a database without it falls back to the three calls it replaced and says so once. Reads are
 deduplicated while they are in flight, a table code is resolved to its id once, and every store now
 answers a `health()` probe that `/api/health` and the lamp in the front page's footer print as a
-figure rather than a mood.
+figure rather than a mood. The same route keeps a free Supabase project from being paused over a
+quiet week: `vercel.json` has Vercel call it three times a day, eight hours apart, and those are the
+few real row reads a day the free plan's inactivity scan wants to see.
 
 The instruments make a noise. `src/lib/sound.ts` keeps the flat clicks the house uses: a ratchet for
 changing lens, a quarter tick for the window going late, and a knock when a call lands on the
