@@ -353,9 +353,18 @@ export class SupabaseStore implements GameStore {
   }
 
   /**
-   * One order onto one row, patched into the snapshot in the same transaction.
-   * Nothing else in the window is read or rewritten, so a rival's desk cannot
-   * be clobbered by the act of sealing your own.
+   * The two single statement patches: one order on, one order off.
+   *
+   * Each patches the queue into the snapshot in the same transaction and
+   * leaves every other desk alone, so a rival's write cannot be clobbered by
+   * the act of sealing or pulling your own. What they must also do is stamp
+   * the counter they bump into the document the guard reads: without that,
+   * one patch leaves the table's own revision behind its row's and every
+   * guarded write on it loses from then on. Migration 0013 gives both the
+   * stamp and repairs any table that drifted while they did not, so they are
+   * safe once it has been applied. The game's own cancel still goes through
+   * the guarded write, because that is the path every other change to a table
+   * takes and it needs nothing applied to be correct.
    */
   async appendOrder(gameId: string, order: QueuedOrder): Promise<boolean> {
     const data = await this.call("append_queued_action", () =>

@@ -586,12 +586,18 @@ schedules the sweep is `supabase/migrations/0007_sweep_settings.sql`, which supe
 `app.tick_url` setting: it keeps the endpoint and its secret in `app_settings`, so after applying it
 a deployment is armed with `select set_tick_endpoint('https://<deployment>/api/tick',
 '<TICK_SECRET>')`, and the application reads that same row, so the value never has to be set in the
-environment as well. The whole set is applied in order, `0007` through `0011`, and none of the last four
+environment as well. The whole set is applied in order, `0007` through `0013`, and none of them
 carries a setting: `0008_presence.sql` is the durable roster and its trim job, `0009_ladder_ledger.sql`
 is the era's books on the ladder, `0010_redact_wiretap.sql` adds the wiretap orders to the
-read mask, and `0011_night_offices_and_one_write.sql` is the single round trip save plus the mask that
-keeps a quiet night office out of a rival's snapshot. A deployment that has not run `0011` still plays:
-the store falls back to the three call write and says so in `/api/health`. The ladder is `supabase/migrations/0005_ladder.sql`, and it is the one table that is not
+read mask, `0011_night_offices_and_one_write.sql` is the single round trip save plus the mask that
+keeps a quiet night office out of a rival's snapshot, and `0012_text_columns.sql` repairs the order
+mirror's text comparison, which had been failing the one write entry point outright. The one to run if
+a table looks stuck is `0013_revision_guard.sql`: the single statement order patches bump the row's
+write counter without stamping it into the document a guarded write reads its expected revision from,
+so one cancelled order could leave a table's own revision behind its row's and every later save
+losing. The migration stamps the counter from then on and aligns every table that drifted, so the fix
+for a stuck table is one paste, and it is safe to run on its own. A deployment that has not run
+`0011` still plays: the store falls back to the three call write and says so in `/api/health`. The ladder is `supabase/migrations/0005_ladder.sql`, and it is the one table that is not
 scoped to a game: it is world readable and written only by the service role. Notices need
 `RESEND_API_KEY` and `RESEND_EMAIL_FROM` (the provider's test sender works as the from address until
 a domain is verified); without them the desk holds the letters rather than failing a window over

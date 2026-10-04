@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import type { Archetype, QueuedOrder } from "@/domain/types";
 import { FileStore } from "@/server/store/file";
@@ -11,6 +11,7 @@ import {
   COMMIT_ATTEMPTS,
   COMMIT_BUDGET_MS,
   advanceTurn,
+  cancelOrder,
   claimSeatByCode,
   guardedRoundSpent,
   queueOrder,
@@ -234,6 +235,39 @@ describe("two desks sealing at once", () => {
     const after = (await store.getGame(state.game.id))!;
     expect(after.queue).toHaveLength(2);
     expect(new Set(after.queue.map((q) => q.playerId))).toEqual(new Set([a.id, b.id]));
+  });
+});
+
+describe("pulling an order off the window", () => {
+  it("goes through a guarded write rather than the single statement patch", async () => {
+    const store = new FileStore(dir);
+    const state = await table(store, "DESK05");
+    const [a, b] = state.players;
+    await queueOrder(state.game.id, a.id, { type: "SET_WAGE", percent: 100 });
+    await queueOrder(state.game.id, b.id, { type: "SET_WAGE", percent: 110 });
+    const before = (await store.getGame(state.game.id))!;
+    const target = before.queue.find((q) => q.playerId === b.id)!;
+
+    // The patch is the path that bumps a Supabase row's write counter without
+    // stamping the new revision into the document the guard reads, which is
+    // what strands a table: after one pull, every guarded write on it hands in
+    // a number the row no longer carries and loses. The game's own cancel must
+    // not take that path, whatever store it is standing on.
+    const patch = vi.spyOn(FileStore.prototype, "removeOrder");
+    try {
+      // A rival cannot pull another house's order, the owner can pull once,
+      // and the same pull again is refused rather than rewriting the table.
+      expect(await cancelOrder(state.game.id, a.id, target.id)).toBe(false);
+      expect(await cancelOrder(state.game.id, b.id, target.id)).toBe(true);
+      expect(await cancelOrder(state.game.id, b.id, target.id)).toBe(false);
+      expect(patch).not.toHaveBeenCalled();
+    } finally {
+      patch.mockRestore();
+    }
+
+    const after = (await store.getGame(state.game.id))!;
+    expect(after.queue.map((q) => q.playerId)).toEqual([a.id]);
+    expect(after.game.revision).toBeGreaterThan(before.game.revision);
   });
 });
 
